@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[package]
+name = "sursum-slide"
+description = "Slide rendering shared by the sursum screen and the remote preview (Leptos)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+sursum-protocol.workspace = true
+leptos.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+web-sys = { workspace = true, features = [
+    "Animation", "AnimationEffect", "Document", "DomRect", "Element", "FontFaceSet", "HtmlElement",
+    "HtmlImageElement", "KeyframeAnimationOptions", "Window", "CssStyleDeclaration", "FillMode",
+] }
+
+[dev-dependencies]
+proptest.workspace = true
+wasm-bindgen-test.workspace = true
+
+[lints]
+workspace = true

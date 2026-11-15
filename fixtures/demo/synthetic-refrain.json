@@ -1,0 +1,66 @@
+{
+  "id": "demo-synthetic-refrain",
+  "titles": ["Pieśń przykładowa z refrenem"],
+  "authors": ["sursum (tekst syntetyczny)"],
+  "songbooks": [{ "songbook": "Przykładowy", "entry": "1" }],
+  "verse_order": ["v1", "c", "v2", "c", "b", "c"],
+  "verses": [
+    {
+      "name": "v1",
+      "blocks": [
+        {
+          "lines": [
+            "Zażółć gęślą jaźń o świcie,",
+            "pierwsza zwrotka próbna płynie,",
+            "każdy wiersz ma polskie znaki:",
+            "ą, ę, ć, ł, ń, ó, ś, ź, ż."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "c",
+      "blocks": [
+        {
+          "lines": [
+            "Refren krótki, łatwy, równy,",
+            "śpiewa go cały kościół."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "v2",
+      "blocks": [
+        {
+          "lines": [
+            "Druga zwrotka jest dłuższa niż pierwsza,",
+            "żeby sprawdzić dobór rozmiaru czcionki,",
+            "który ma być jeden dla całej pieśni,",
+            "a nie skakać między zwrotkami,"
+          ],
+          "break_after": "optional"
+        },
+        {
+          "lines": [
+            "więc ma też drugą część,",
+            "którą wolno przenieść na osobny slajd,",
+            "gdyby całość się nie zmieściła."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "b",
+      "blocks": [
+        {
+          "lines": ["Most przed ostatnim refrenem,"],
+          "break_after": "forced"
+        },
+        {
+          "lines": ["a po wymuszonym podziale – druga linia."]
+        }
+      ]
+    }
+  ]
+}

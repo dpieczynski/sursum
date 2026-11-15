@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[package]
+name = "sursum-formats"
+description = "Import and export of song formats (OpenSong, OpenLyrics) for sursum."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+sursum-core.workspace = true
+
+[lints]
+workspace = true

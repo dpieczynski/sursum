@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/screen", "apps/remote", "e2e"]
+# Native crates only. The apps are built for wasm32 by Trunk (`just build`).
+default-members = [
+    "crates/sursum-protocol",
+    "crates/sursum-core",
+    "crates/sursum-formats",
+    "crates/sursum-server",
+    "e2e",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/dpieczynski/sursum"
+publish = false
+
+[workspace.dependencies]
+# Internal crates
+sursum-protocol = { path = "crates/sursum-protocol" }
+sursum-core = { path = "crates/sursum-core" }
+# sursum-formats is used by the server from M2 (OpenSong import).
+sursum-slide = { path = "crates/sursum-slide" }
+sursum-client = { path = "crates/sursum-client" }
+
+# Shared
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+
+# Server (native)
+anyhow = "1.0.104"
+axum = { version = "0.8.9", features = ["ws"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+rust-embed = "8.14.0"
+mime_guess = "2.0.5"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+clap = { version = "4.6.7", features = ["derive"] }
+toml = "1.2.1"
+rusqlite = { version = "0.43.0", features = ["bundled"] }
+sha2 = "0.11.1"
+unicode-normalization = "0.1.26"
+
+# Frontend (wasm32)
+leptos = { version = "0.8.23", features = ["csr"] }
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+js-sys = "0.3.107"
+web-sys = "0.3.107"
+console_error_panic_hook = "0.1.7"
+gloo-timers = { version = "0.4.1", features = ["futures"] }
+
+# Tests
+insta = { version = "1.49.0", features = ["json"] }
+proptest = "1.12.0"
+tempfile = "3.27.0"
+tokio-tungstenite = "0.30.0"
+futures-util = "0.3.34"
+thirtyfour = "0.38.3"
+wasm-bindgen-test = "0.3.80"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+needless_pass_by_value = "warn"
+redundant_else = "warn"
+semicolon_if_nothing_returned = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+# Small WebAssembly for the screen and the remote.
+[profile.release.package.sursum-screen]
+opt-level = "z"
+
+[profile.release.package.sursum-remote]
+opt-level = "z"

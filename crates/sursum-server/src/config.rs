@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Server configuration: command-line flags plus an optional `config.toml` in the data directory.
+
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+
+use anyhow::Context as _;
+use serde::Deserialize;
+use sursum_protocol::{Insets, ScreenProfile};
+
+/// Effective configuration of one server instance.
+#[derive(Debug, Clone)]
+pub struct Config {
+    /// Address to listen on.
+    pub listen: SocketAddr,
+    /// Directory for the database, backups and assets (`/var/lib/sursum` on the device).
+    pub data_dir: PathBuf,
+    /// Extra `Origin` values allowed to open WebSockets (e.g. Trunk dev servers).
+    pub allowed_origins: Vec<String>,
+    /// Physical description of the screen (safe area, exclusion zones).
+    pub screen_profile: ScreenProfile,
+    /// Crossfade duration in milliseconds; 0 for instant cuts.
+    pub transition_ms: u32,
+    /// Accept connections from any address, not only private networks (for special setups).
+    pub allow_public_clients: bool,
+    /// Test-only: delay serving WebAssembly by this many milliseconds (`e2e-hooks` feature).
+    pub wasm_delay_ms: u64,
+}
+
+impl Config {
+    /// Defaults for a data directory, before reading `config.toml`.
+    pub fn with_data_dir(data_dir: impl Into<PathBuf>) -> Self {
+        Config {
+            listen: SocketAddr::from(([0, 0, 0, 0], 8080)),
+            data_dir: data_dir.into(),
+            allowed_origins: Vec::new(),
+            screen_profile: ScreenProfile { safe_area: Insets::uniform(48), exclusions: Vec::new() },
+            transition_ms: 250,
+            allow_public_clients: false,
+            wasm_delay_ms: 0,
+        }
+    }
+
+    /// Applies `config.toml` from the data directory, if it exists.
+    pub fn load_file(mut self) -> anyhow::Result<Self> {
+        let path = self.data_dir.join("config.toml");
+        let Some(file) = read_file(&path)? else {
+            return Ok(self);
+        };
+        if let Some(listen) = file.listen {
+            self.listen = listen;
+        }
+        if let Some(origins) = file.allowed_origins {
+            self.allowed_origins = origins;
+        }
+        if let Some(profile) = file.screen_profile {
+            self.screen_profile = profile;
+        }
+        if let Some(transition_ms) = file.transition_ms {
+            self.transition_ms = transition_ms;
+        }
+        if let Some(allow) = file.allow_public_clients {
+            self.allow_public_clients = allow;
+        }
+        Ok(self)
+    }
+}
+
+/// The subset of settings `config.toml` may contain.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileConfig {
+    listen: Option<SocketAddr>,
+    allowed_origins: Option<Vec<String>>,
+    screen_profile: Option<ScreenProfile>,
+    transition_ms: Option<u32>,
+    allow_public_clients: Option<bool>,
+}
+
+fn read_file(path: &Path) -> anyhow::Result<Option<FileConfig>> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => toml::from_str(&text).map(Some).with_context(|| format!("parsing {}", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_file_keeps_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config::with_data_dir(dir.path()).load_file().unwrap();
+        assert_eq!(config.transition_ms, 250);
+    }
+
+    #[test]
+    fn file_overrides_defaults_including_exclusion_zones() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("config.toml"),
+            r#"
+listen = "127.0.0.1:9000"
+transition_ms = 0
+
+[screen_profile]
+safe_area = { top = 10, right = 10, bottom = 10, left = 10 }
+
+[[screen_profile.exclusions]]
+name = "słup"
+rect = { x = 0, y = 0, width = 300, height = 1080 }
+"#,
+        )
+        .unwrap();
+        let config = Config::with_data_dir(dir.path()).load_file().unwrap();
+        assert_eq!(config.listen.port(), 9000);
+        assert_eq!(config.transition_ms, 0);
+        assert_eq!(config.screen_profile.exclusions[0].name, "słup");
+    }
+
+    #[test]
+    fn unknown_keys_are_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("config.toml"), "colour = 'red'\n").unwrap();
+        assert!(Config::with_data_dir(dir.path()).load_file().is_err());
+    }
+}

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[package]
+name = "sursum-client"
+description = "WebSocket client and state store shared by the sursum web apps (Leptos)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+sursum-protocol.workspace = true
+leptos.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+gloo-timers.workspace = true
+web-sys = { workspace = true, features = [
+    "BinaryType", "CloseEvent", "Event", "Location", "MessageEvent", "Storage", "WebSocket", "Window",
+] }
+
+[lints]
+workspace = true
