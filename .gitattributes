@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+# Binary assets
+*.woff2 binary
+*.woff  binary
+*.ttf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.bin   binary
+
+# OpenSong fixtures must keep their exact bytes (CRLF, BOM, legacy encodings are test cases)
+fixtures/opensong/** -text

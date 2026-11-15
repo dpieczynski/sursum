@@ -1,0 +1,54 @@
+# --- Rust ---
+/target/
+**/*.rs.bk
+
+# --- Node / frontend ---
+node_modules/
+frontend/**/dist/
+.vite/
+*.tsbuildinfo
+.pnpm-store/
+
+# --- Tests ---
+playwright-report/
+test-results/
+blob-report/
+/e2e/.cache/
+coverage/
+# insta: snapshots waiting for review (accepted *.snap files ARE committed)
+*.snap.new
+*.pending-snap
+
+# --- Runtime data (never commit) ---
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+/data/
+# song library export bundles
+*.sursum
+
+# --- Private song libraries: copyrighted, local only ---
+/local/
+
+# --- Secrets and certificates ---
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# --- Editors / OS ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- Logs ---
+*.log
+
+# --- Claude Code: shared settings are committed, personal ones are not ---
+.claude/settings.local.json
