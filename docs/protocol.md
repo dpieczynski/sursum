@@ -1,7 +1,8 @@
 # WebSocket protocol
 
-Draft for M0/M1. Rust types in `sursum-core::protocol` are the source of truth; TypeScript is
-generated with ts-rs into `frontend/packages/protocol/src/generated/`.
+Draft for M0/M1. The types live in the shared crate `crates/sursum-protocol`, compiled by the
+server (native) and by both Leptos apps (wasm32). There is no code generation: both sides use the
+same Rust types, so they cannot drift apart within one build.
 
 ## Endpoints
 
@@ -11,11 +12,12 @@ generated with ts-rs into `frontend/packages/protocol/src/generated/`.
 - REST under `/api/…` for large or on-demand data: search, song details, import/export, assets,
   pairing, `POST /api/songs/compile` (editor preview).
 
-JSON text frames; serde enums tagged with `"t"`, camelCase fields.
+JSON text frames (`serde_json` on both sides, readable in browser dev tools); serde enums tagged
+with `"t"`; default Rust (snake_case) field names, since no JavaScript consumes them.
 
 ## Client → server
 
-```
+```text
 Hello   { protocol, role: "screen"|"remote", clientId, buildId, clientTime? }
 Cmd     { seq, baseRev, cmd: Command }
 Ping    { }
@@ -26,14 +28,16 @@ Command = Next | Prev | NextItem | PrevItem
         | ShowNow { songId }            // insert after the live item and go live
         | ActivateSet { setId }
         | SetOp { setId, op: Add{after?, item} | Remove{itemId} | Move{itemId, before?} | UpdateItem{itemId, item} }
+        | DisplayPower { action: "on"|"standby" }   // HDMI-CEC / PJLink, ADR 0012
 ```
 
 ## Server → client
 
-```
+```text
 Welcome   { protocol, buildId, device?, serverTime }
 Screen    { rev, live?: { deck, slideIndex }, upcoming?: Deck, overlay, theme, transitionMs, logo?, layout: ScreenLayout }
-Remote    { rev, program: ProgramView, preview?: SlideRef, activeSet?: SetView, presence: [DeviceView] }
+Remote    { rev, program: ProgramView, preview?: SlideRef, activeSet?: SetView, presence: [DeviceView],
+            displayPower: "unknown"|"on"|"standby"|"warmingUp"|"coolingDown"|{ unavailable: reason } }
 CmdResult { seq, outcome: Applied{rev} | Stale{rev} | Rejected{code} | Conflict{current} }
 Notice    { code, params }              // i18n codes, never ready-made text
 Pong      { }
@@ -53,6 +57,8 @@ last one seen.
 - **Absolute commands** (`GoTo…`, `SetOverlay`, `ShowNow`) always apply; last writer wins.
 - **Set operations** address items by stable IDs; a missing ID returns `Rejected(NotFound)`.
 - **Song edits** use optimistic locking on `revision`; a mismatch returns `Conflict`.
+- **Display power** commands are executed asynchronously; failures return
+  `Rejected(DisplayUnreachable | DisplayBusy | DisplayAuthFailed)` and never block navigation.
 
 ## Reconnect
 
@@ -63,7 +69,11 @@ every 5 s; no pong for 15 s → reconnect. A different `protocol` or `buildId` m
 
 ## Type notes
 
-- Counters are `u32`. Any `u64` needs `#[ts(type = "number")]` ⚠ (verify ts-rs 12 mapping in M0).
-- Generated: messages, commands, snapshots, `Deck`/`Slide`, `Theme`, `Overlay`, `ScreenLayout`,
-  `ScreenProfile`, `Rect`, REST DTOs, error and notice codes. Not generated: DB rows, parser AST,
-  the internal `Program`.
+- In `sursum-protocol`: messages, commands, snapshots, `Deck`/`Slide`, `Theme`, `Overlay`,
+  `ScreenLayout`, `ScreenProfile`, `Rect`, `DisplayPowerState`, REST DTOs, error and notice codes.
+  Not in it (server only): DB rows, parser AST, the internal `Program`, any logic.
+- The crate depends only on `serde` (plus e.g. `uuid` with the `serde` feature) so it compiles for
+  `wasm32-unknown-unknown` without tokio or `getrandom`; CI builds it for both targets.
+- `insta` JSON snapshots of every message guard the wire format: after an update, a screen may
+  still run old code until it reloads, so field renames must be deliberate.
+- Field names in the pseudo-code above are illustrative; the Rust structs are authoritative.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-```
+```text
  Android tablet (Chrome)  ─┐  Wi-Fi / LAN               Raspberry Pi 5 (next to the projector)
  Linux PC (Chromium)      ─┤
  Windows PC (Chrome/Edge) ─┼──────── router ── Ethernet (+PoE) ──┐
@@ -11,7 +11,8 @@
                                         │ sursum-server (one binary, systemd)       │
                                         │  axum: HTTP API + WebSocket + embedded UI │
                                         │  StateActor: sole owner of state          │
-                                        │  SQLite (WAL) on the /data partition      │
+                                        │  SQLite (WAL) in /var/lib/sursum          │
+                                        │  (immutable A/B image, /persistent)       │
                                         └─────────▲─────────────────────────────────┘
                                                   │ ws://localhost (read-only)
                                         cage + Chromium --kiosk → HDMI-A-1 (forced 1080p60)
@@ -20,6 +21,22 @@
 **All logic lives on the server**: parsing, slide splitting, order, navigation, program and
 preview, search, editor validation and the screen layout (exclusion zones). Browsers draw and pick
 font sizes (that needs font metrics). Nothing is implemented twice.
+
+## Crates and apps (ADR 0014)
+
+Everything is Rust. The apps are Leptos 0.8 CSR compiled to WebAssembly with Trunk.
+
+| Crate | Role | Targets |
+|---|---|---|
+| `sursum-protocol` | shared serde types (data only) | native + wasm32 |
+| `sursum-core` | domain logic | native (server) |
+| `sursum-formats` | OpenSong / OpenLyrics | native |
+| `sursum-server` | axum, WebSocket, SQLite, embedded apps | native |
+| `sursum-slide` | shared slide rendering + font fitting | wasm32 (pure fit algorithm also native) |
+| `sursum-client` | shared WebSocket client + state store | wasm32 |
+| `apps/screen`, `apps/remote` | Leptos CSR apps | wasm32 (Trunk) |
+
+Shared wasm crates share data and drawing, never domain logic.
 
 ## Server state
 
@@ -52,8 +69,15 @@ with the logo overlay; one tap shows the slide again. No dependency on the clock
 - Black/logo overlay above everything; masks for exclusion zones below the overlay.
 - One font size per song (`fit_group`): binary search over integer px, **no line wrapping**
   first (lines come from the server), wrapping only if the minimum size does not fit.
-- The remote preview uses the same `@sursum/render` components, CSS, fonts and stage; all target
-  clients use Blink, so the preview matches the screen.
+- The remote preview uses the same `sursum-slide` Leptos components, CSS, fonts and stage; all
+  target clients use Blink, so the preview matches the screen.
+
+## Display engine portability (ADRs 0009, 0015)
+
+Chromium under cage is the default. The screen follows an API contract that WPE WebKit (cog) also
+supports, and the screen subset of the WebDriver tests runs blocking on WPE in CI, so switching to
+`cog --platform=drm` stays a configuration change in the image (`kiosk.engine`), decided by
+hardware measurements.
 
 ## Exclusion zones (ADR 0008)
 
@@ -61,10 +85,26 @@ A per-device `ScreenProfile` lists rectangles of the 1920×1080 frame that are u
 pillar in Tulce). `sursum-core::layout::content_region` picks the largest free rectangle inside the
 safe area; the screen fits text into it and paints black masks over the zones.
 
+## Display power (ADR 0012)
+
+The remote can turn the display on or put it to standby, because infrared remotes do not reach
+the operator. `sursum-server::display_power` defines a `DisplayPower` trait with `CecDisplay`
+(Linux kernel CEC API via `cec_linux`, `/dev/cec0`), `PjLinkDisplay` (TCP 4352), `NoDisplay` and a
+test-only `FakeDisplay`; the backend is chosen in `config.toml`. Frame encoding and PJLink parsing
+are pure functions in `sursum-core::display_power`. Commands run in their own task; the state
+actor only receives the resulting `DisplayPowerState`, so navigation never waits for a display.
+
 ## Persistence
 
 SQLite in WAL mode with `synchronous=FULL`, `foreign_keys=ON`; daily and pre-import backups with
-`VACUUM INTO`; `quick_check` at startup with automatic restore of the last good backup. The root
-filesystem on the Pi is read-only; all writable data lives on `/data`.
+`VACUUM INTO`; `quick_check` at startup with automatic restore of the last good backup.
+
+## Device image and updates (ADR 0013)
+
+The Pi runs our own immutable image built with rpi-image-gen (`trixie-minbase-ab`, `image-rota`
+layout): read-only A/B system slots, all writable state on `/persistent`. `/var/lib/sursum` is
+slot-shared and holds the database, backups, assets, configuration and the application releases.
+Application updates are signed `.sursum-app` bundles switched atomically with automatic rollback;
+system updates (M7) flip A/B slots with a trial boot.
 
 See also: [protocol.md](protocol.md), [roadmap.md](roadmap.md), [decisions/](decisions/).

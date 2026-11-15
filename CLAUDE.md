@@ -1,70 +1,80 @@
 # sursum — guidance for Claude
 
 Offline church lyrics display. A Raspberry Pi 5 next to the projector runs one Rust binary
-(`sursum-server`) that holds all state and serves two embedded Svelte apps: the **screen**
-(Chromium kiosk under cage, read-only) and the **remote** (Android tablet, Linux/Windows PC).
-Two churches of one parish are the first users (Tulce, Gowarzewo). License: GPL-3.0-or-later.
+(`sursum-server`) that holds all state and serves two embedded Leptos (CSR, WebAssembly) apps:
+the **screen** (Chromium kiosk under cage, read-only) and the **remote** (Android tablet,
+Linux/Windows PC). Everything is Rust; there is no Node/npm. Two churches of one parish are the
+first users (Tulce, Gowarzewo). License: GPL-3.0-or-later.
 
 Start of every session: read [docs/roadmap.md](docs/roadmap.md) (where we are) and skim
 [docs/decisions/](docs/decisions/) (what is already decided — do not re-litigate without a
-strong reason; if you have one, propose a new ADR). The original plan (Polish) is
-[docs/plan-2026-11.md](docs/plan-2026-11.md); it is a historical record, not kept up to date.
+strong reason; if you have one, propose a new ADR). The planning document (Polish) is
+[docs/plan-2026-11.md](docs/plan-2026-11.md); roadmap and ADRs win where they differ.
 
 ## Map
 
 | Path | What |
 |---|---|
-| `crates/sursum-core` | pure domain: song model, slide compiler, program state machine, set ops, search, screen layout, protocol types (ts-rs) |
+| `crates/sursum-protocol` | **shared** serde types (WS messages, snapshots, `Deck`/`Slide`, `Theme`, `ScreenLayout`, REST DTOs); data only; native + wasm32 |
+| `crates/sursum-core` | pure domain (server only): song model, slide compiler, program state machine, set ops, search, layout |
 | `crates/sursum-formats` | OpenSong import, OpenLyrics export |
-| `crates/sursum-server` | binary: axum, WebSocket, SQLite, auth, embedded frontend, platform |
-| `frontend/packages/{protocol,render,i18n}` | generated types + WS client; shared slide rendering; messages |
-| `frontend/apps/{screen,remote}` | audience screen; operator remote |
-| `e2e/` | Playwright tests against the real binary |
-| `deploy/` | systemd units, Pi setup, Windows pilot script |
+| `crates/sursum-server` | binary: axum, WebSocket, SQLite, auth, embedded frontend, display power, platform |
+| `crates/sursum-slide` | **shared** Leptos slide rendering for screen and remote preview (`Stage`, `LayeredStage`, `fit_deck`) |
+| `crates/sursum-client` | **shared** Leptos WebSocket client (reconnect, heartbeat) and state store |
+| `apps/screen`, `apps/remote` | Leptos CSR apps built with Trunk |
+| `e2e/` | WebDriver tests (thirtyfour) against the real binary |
+| `image/` | device image (rpi-image-gen config and layers; immutable A/B, ADR 0013) |
+| `deploy/` | app bundle signing/deploy, EDID, Windows pilot script |
+| `assets/fonts/` | bundled OFL fonts with licenses |
 | `fixtures/` | public-domain or synthetic test data only |
 | `docs/` | architecture, protocol, roadmap, ADRs, formats, testing |
 
 ## Commands (from milestone M0; `justfile` is the source of truth)
 
-`just dev` · `just build` · `just test` · `just e2e` · `just bindings` · `just lint` ·
-`just cross-pi` · `just cross-win` · `just deploy <host>`
+`just dev` · `just build` · `just test` · `just e2e` · `just lint` · `just cross-pi` ·
+`just cross-win` · `just image` · `just app-bundle` · `just deploy <host>`
 
 ## Hard rules
 
 1. **All logic lives on the server** (parsing, slide splitting, order, navigation, program and
    preview, search, editor validation, screen layout). Browsers only draw and pick font sizes.
-   Nothing is implemented twice in two languages.
-2. **Never edit generated files** in `frontend/packages/protocol/src/generated/`; change the Rust
-   types and run `just bindings`.
+   Shared wasm crates share **data** (`sursum-protocol`) and **drawing** (`sursum-slide`),
+   never domain logic — even though Rust would make that easy.
+2. **`sursum-protocol` stays data-only**: serde types, no Leptos, no tokio, no logic; it must
+   compile for both the native and the `wasm32-unknown-unknown` target.
 3. **The screen never shows anything but content, black or logo**: no error UI, no cursor, no
-   network resources, black background inline in `<head>`.
+   network resources, black background inline in `apps/screen/index.html` `<head>`.
 4. **Editing the set never changes the program.** The live deck is a frozen copy; see ADR 0005.
 5. **No copyrighted song texts** in the repo, tests, docs or commit messages. Fixtures are
    public-domain or synthetic and listed in `fixtures/LICENSES.md`. Real libraries stay in `/local/`.
-6. **Languages**: code, comments, commits, technical docs in English; UI in Polish via i18n.
+6. **Languages**: code, comments, commits, technical docs in English; UI in Polish via
+   `leptos_i18n` (never hard-coded strings).
 7. **Licensing**: SPDX header `GPL-3.0-or-later` in every source file; dependencies must pass
    `cargo deny`; never copy code from other projects (OpenSong, FreeShow) without an ADR.
-8. **Verify, don't recall**: check crate/npm versions and APIs on crates.io, docs.rs, npm before
-   using them. Items marked ⚠ in the plan are unverified until a spike confirms them.
+8. **Verify, don't recall**: check crate versions and APIs on crates.io and docs.rs before using
+   them. Items marked ⚠ in the plan are unverified until a spike confirms them.
 
 ## Code principles (readability first)
 
 - Pure functions in `sursum-core` (input → output, no I/O, no tokio): `compile_deck`,
-  `content_region`, `normalize`.
+  `content_region`, `normalize`. Same for the fit algorithm in `sursum-slide`
+  (`fit_font_size` takes a measuring closure; only the closure touches the DOM).
 - Small single-purpose modules; domain names (`Program`, `Deck`, `ExclusionZone`), never
   `Manager`/`Helper`/`Utils`.
-- Newtypes over bare values (`SongId`, `ItemId`, `SlideKey`); enums over boolean flags.
+- Newtypes over bare values (`SongId`, `ItemId`, `SlideKey`, `Px`); enums over boolean flags.
 - No custom proc macros, no speculative generics. A trait only with ≥2 implementations or for
-  test injection (`Platform`, `Clock`).
+  test injection (`Platform`, `Clock`, `DisplayPower`).
 - `thiserror` in libraries, `anyhow` only in `main`/CLI; errors carry context.
-- `///` docs on every public item in core, explaining *why*.
-- Svelte components ≲150 lines; logic in plain `.ts` modules; one store fed by the WebSocket.
+- `///` docs on every public item in core, protocol and slide, explaining *why*.
+- Leptos components ≲150 lines; logic outside `view!` in plain functions; one signal-based store
+  fed by the WebSocket; `web-sys` over hand-written `wasm_bindgen` externs; no `unsafe`.
 
 ## Definition of done
 
-Tests added/updated and passing (`just test`, `just e2e` when UI changes) · `clippy -D warnings`,
-`svelte-check`, eslint, prettier clean · bindings up to date · roadmap checkbox updated · ADR
-added if a decision was made · commit message in English with sign-off (`-s`).
+Tests added/updated and passing (`just test`, `just e2e` when UI changes) · `cargo fmt`,
+`leptosfmt --check`, `clippy -D warnings` for native **and** `wasm32-unknown-unknown` · protocol
+JSON snapshots reviewed if types changed · roadmap checkbox updated · ADR added if a decision was
+made · commit message in English with sign-off (`-s`).
 
 ## Git
 

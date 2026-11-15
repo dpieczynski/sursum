@@ -17,3 +17,7 @@ supersedes the old one instead of editing it.
 | [0009](0009-display-engine-chromium.md) | Chromium under cage as the display engine |
 | [0010](0010-license-gpl3.md) | GPL-3.0-or-later and dependency license policy |
 | [0011](0011-github-and-dco.md) | GitHub hosting, DCO for contributions |
+| [0012](0012-display-power-cec-pjlink.md) | Display power control via HDMI-CEC, PJLink fallback |
+| [0013](0013-immutable-ab-image.md) | Immutable A/B device image (rpi-image-gen), signed app bundles |
+| [0014](0014-rust-frontend-leptos.md) | Rust frontend: Leptos 0.8 CSR, Trunk, shared protocol/slide crates, WebDriver tests; no Dioxus |
+| [0015](0015-screen-engine-portability.md) | Screen portability to WPE WebKit (cog): API contract, blocking WPE tests, engine switch in the image |
