@@ -17,6 +17,6 @@ alternatives; the Pi platform optimizes Chromium first; ESR lags features); nati
 (would break "nothing implemented twice", the preview would need the same renderer in WASM).
 
 ## Consequences
-The screen uses only standard web APIs; the kiosk command lives in `/data/sursum/kiosk.env`. A
+The screen uses only standard web APIs; the kiosk command lives in `/var/lib/sursum/kiosk.env`. A
 half-day comparison spike with WPE/cog runs in M1 and M4 (boot to first frame, RAM after 8 h,
 1080p60 crossfade, white frame at start, HDMI replug). Revisit only with measurements.
