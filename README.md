@@ -16,16 +16,18 @@ shows lyrics to the congregation, and a one-hand remote in a tablet or PC browse
 
 ## Architecture in one paragraph
 
-A single Rust binary (`sursum-server`: axum, tokio, SQLite) holds all state and logic. It serves two
-web apps built with Svelte 5 + Vite and embedded in the binary: the **screen** (Chromium kiosk
-under cage on the Pi, read-only) and the **remote** (tablet or PC browser). Clients receive state
-snapshots over WebSocket; protocol types are generated from Rust with ts-rs. Details:
-[docs/architecture.md](docs/architecture.md).
+Everything is written in Rust. A single binary (`sursum-server`: axum, tokio, SQLite) holds all
+state and logic. It serves two web apps written with Leptos (client-side rendering, compiled to
+WebAssembly with Trunk) and embedded in the binary: the **screen** (Chromium kiosk under cage on
+the Pi, read-only) and the **remote** (tablet or PC browser). Server and apps share the protocol
+types (`sursum-protocol`) and the apps share the slide renderer (`sursum-slide`), so the remote
+preview is the same component as the screen. Details: [docs/architecture.md](docs/architecture.md).
 
 ## Development
 
-The dev environment is a devcontainer (Rust, Node 26, pnpm, Playwright). Setup instructions arrive
-with milestone M0; see [docs/testing.md](docs/testing.md) and [CLAUDE.md](CLAUDE.md) for commands.
+The dev environment is a devcontainer (Rust with the `wasm32-unknown-unknown` target, Trunk,
+Chromium + chromedriver for WebDriver tests). No Node or npm. Setup instructions arrive with
+milestone M0; see [docs/testing.md](docs/testing.md) and [CLAUDE.md](CLAUDE.md) for commands.
 
 ## Contributing
 

@@ -8,8 +8,8 @@
   boolean flags.
 - Every new parser/markup rule gets a synthetic fixture and a test. Fixtures must be listed in
   `fixtures/LICENSES.md`.
-- Protocol types derive `ts_rs::TS` behind the `ts` feature. Changing them means running
-  `just bindings` and committing the regenerated TypeScript.
+- Wire types live in `sursum-protocol`, not here. Core may use them (e.g. `Deck`, `Slide`) but
+  must not add logic to them; protocol stays data-only so it compiles to wasm32.
 - Prefer simple, readable algorithms over clever ones (e.g. `content_region` enumerates candidate
   rectangles; that is intentional).
 - Invariants worth protecting get a `proptest` (set operations, navigation bounds, layout).

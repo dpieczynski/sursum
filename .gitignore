@@ -2,18 +2,12 @@
 /target/
 **/*.rs.bk
 
-# --- Node / frontend ---
-node_modules/
-frontend/**/dist/
-.vite/
-*.tsbuildinfo
-.pnpm-store/
+# --- Frontend (Trunk / WASM) ---
+/apps/*/dist/
 
 # --- Tests ---
-playwright-report/
-test-results/
-blob-report/
-/e2e/.cache/
+# screenshots saved by failing WebDriver tests
+/e2e/screenshots/
 coverage/
 # insta: snapshots waiting for review (accepted *.snap files ARE committed)
 *.snap.new

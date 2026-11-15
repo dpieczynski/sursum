@@ -34,5 +34,6 @@ change or otherwise have the right to submit it under the project license.
 - Code, comments, commit messages and technical docs: **English**. User interface: **Polish**,
   through the i18n layer (never hard-coded strings).
 - Readable code over clever code. See the principles in [CLAUDE.md](CLAUDE.md).
-- A change is done when tests, `clippy`, `svelte-check` and lints pass, generated protocol types
-  are up to date, and [docs/roadmap.md](docs/roadmap.md) reflects the progress.
+- A change is done when tests pass, `cargo fmt`, `leptosfmt --check` and `clippy -D warnings`
+  (native and `wasm32-unknown-unknown`) are clean, and [docs/roadmap.md](docs/roadmap.md)
+  reflects the progress.
