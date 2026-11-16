@@ -29,3 +29,17 @@ operator position. Operators need to switch the display on and to standby from t
   RS-232 on both displays and records the chosen backend here.
 - Protocol: command `DisplayPower { action }`, `RemoteState.displayPower`, error codes
   `DisplayUnreachable`, `DisplayBusy`, `DisplayAuthFailed`.
+
+## Amendment (2026-11-16): PJLink as built
+- PJLink class 1 is implemented from the JBMIA specification 1.04 (2013-12-10): a pure codec in
+  `sursum_core::display_power` (greeting, MD5 digest of seed‖password — checked against the
+  specification's own example — power commands and replies) and a background task in
+  `sursum-server::display_power` that opens one connection per exchange, polls every 30 s
+  (every 5 s while warming up or cooling down) and reports only changes to the state actor.
+- Configuration: `[display_power] backend = "pjlink"`, `host = "address[:port]"`, optional
+  `password` in `config.toml` (device only).
+- The backends are an enum, not a trait object: with one real backend so far, tests use a fake
+  PJLink projector over TCP, which exercises the real code. CEC becomes a second variant after
+  the hardware spike (M4); `cec_linux` and the CEC frames are still unverified ⚠.
+- Standby uses a 1.5 s hold in the remote and warns while a slide is on screen; "on" is
+  disabled while a projector cools down.

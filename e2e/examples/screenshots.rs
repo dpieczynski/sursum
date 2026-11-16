@@ -14,7 +14,10 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&output)?;
     let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 48, right = 48, bottom = 48, left = 48 }\n\n\
                   [[screen_profile.exclusions]]\nname = \"pillar\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
-    let server = Server::start_with(&[], Some(config)).await?;
+    // A fake PJLink projector, so the display power controls show too.
+    let projector = sursum_e2e::fake_projector().await?;
+    let config = format!("{config}\n[display_power]\nbackend = \"pjlink\"\nhost = \"{projector}\"\n");
+    let server = Server::start_with(&[], Some(&config)).await?;
     let browser = Browser::from_env();
     let screen = browser.open(1920, 1080).await?;
     screen.goto(server.url("/screen/")).await?;

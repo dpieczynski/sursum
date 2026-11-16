@@ -18,7 +18,9 @@ pub use ids::{AssetId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{
     ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH, ScreenLayout, ScreenProfile,
 };
-pub use message::{ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, Role, ServerMsg};
+pub use message::{
+    ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, PowerAction, Role, ServerMsg,
+};
 pub use pairing::{AdminRequest, DeviceView, PairOutcome, PairRequest, SessionInfo};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{

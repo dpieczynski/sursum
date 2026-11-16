@@ -343,3 +343,42 @@ pub fn is_black(image: &image::RgbaImage, x: u32, y: u32, width: u32, height: u3
         .flat_map(|row| (x..(x + width).min(image.width())).map(move |column| (column, row)))
         .all(|(column, row)| image.get_pixel(column, row).0[..3].iter().all(|channel| *channel < 12))
 }
+
+/// A fake PJLink projector without a password (`PJLINK 0`) that remembers its power state, for
+/// testing the remote's display power buttons. Returns its address for `config.toml`.
+pub async fn fake_projector() -> anyhow::Result<SocketAddr> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let power = std::sync::Arc::new(std::sync::Mutex::new('0'));
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            let power = power.clone();
+            tokio::spawn(async move {
+                let (reader, mut writer) = stream.into_split();
+                let mut reader = BufReader::new(reader);
+                if writer.write_all(b"PJLINK 0\r").await.is_err() {
+                    return;
+                }
+                let mut line = Vec::new();
+                if reader.read_until(b'\r', &mut line).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                let reply = match String::from_utf8_lossy(&line).trim_end_matches('\r') {
+                    "%1POWR 1" => {
+                        *power.lock().expect("not poisoned") = '1';
+                        "%1POWR=OK".to_owned()
+                    }
+                    "%1POWR 0" => {
+                        *power.lock().expect("not poisoned") = '0';
+                        "%1POWR=OK".to_owned()
+                    }
+                    "%1POWR ?" => format!("%1POWR={}", power.lock().expect("not poisoned")),
+                    _ => "%1POWR=ERR1".to_owned(),
+                };
+                let _ = writer.write_all(format!("{reply}\r").as_bytes()).await;
+            });
+        }
+    });
+    Ok(address)
+}

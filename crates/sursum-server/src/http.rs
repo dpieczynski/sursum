@@ -42,13 +42,20 @@ struct App {
     data_dir: Arc<std::path::PathBuf>,
     access: Arc<Access>,
     allowed_origins: Arc<Vec<String>>,
+    power: crate::display_power::PowerHandle,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
 }
 
 /// Builds the router.
-pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Router {
+pub fn router(
+    state: StateHandle,
+    config: &Config,
+    access: Arc<Access>,
+    power: crate::display_power::PowerHandle,
+) -> Router {
     let app = App {
+        power,
         state,
         data_dir: Arc::new(config.data_dir.clone()),
         access,
@@ -382,7 +389,7 @@ fn socket(app: App, headers: &HeaderMap, upgrade: WebSocketUpgrade, role: Role) 
     if !ws::origin_allowed(headers, &app.allowed_origins) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let guard = ws::Guard { access: app.access.clone(), headers: headers.clone() };
+    let guard = ws::Guard { access: app.access.clone(), headers: headers.clone(), power: app.power.clone() };
     upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
 }
 

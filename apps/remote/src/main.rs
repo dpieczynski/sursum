@@ -17,6 +17,7 @@ mod import;
 mod messages;
 mod pairing;
 mod picture;
+mod power;
 mod search;
 mod set_list;
 
@@ -81,19 +82,12 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         ServerMsg::CmdResult { outcome: CmdOutcome::Stale { .. }, .. } => {
             notice.set(Some(Msg::AlreadyAdvanced));
         }
-        ServerMsg::CmdResult {
-            outcome: CmdOutcome::Rejected { code: sursum_protocol::ErrorCode::InvalidProfile },
-            ..
-        } => notice.set(Some(Msg::InvalidProfile)),
-        ServerMsg::CmdResult {
-            outcome: CmdOutcome::Rejected { code: sursum_protocol::ErrorCode::Forbidden },
-            ..
-        } => {
-            notice.set(Some(Msg::AdminRequired));
-            session.refresh();
-        }
-        ServerMsg::CmdResult { outcome: CmdOutcome::Rejected { .. }, .. } => {
-            notice.set(Some(Msg::NotPossible));
+        ServerMsg::CmdResult { outcome: CmdOutcome::Rejected { code }, .. } => {
+            notice.set(Some(messages::rejection(code)));
+            if code == sursum_protocol::ErrorCode::Forbidden {
+                // Perhaps admin mode expired: show the right tools again.
+                session.refresh();
+            }
         }
         ServerMsg::CmdResult { outcome: CmdOutcome::Applied { .. }, .. } => notice.set(None),
         _ => {}
@@ -116,6 +110,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         {calibration_view}
         <main class="remote">
             <TopBar status notice state />
+            <power::DisplayPowerBar state commands />
             <Previews state />
             <SectionChips state commands />
             <Library state commands />

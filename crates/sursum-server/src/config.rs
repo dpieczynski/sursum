@@ -25,6 +25,21 @@ pub struct Config {
     pub allow_public_clients: bool,
     /// Test-only: delay serving WebAssembly by this many milliseconds (`e2e-hooks` feature).
     pub wasm_delay_ms: u64,
+    /// How the server switches the display on and off (ADR 0012).
+    pub display_power: DisplayPowerConfig,
+}
+
+/// `[display_power]` in `config.toml`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(tag = "backend", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DisplayPowerConfig {
+    /// No power control (the remote hides its buttons).
+    #[default]
+    None,
+    /// A projector with a LAN port. `host` is `address` or `address:port` (port 4352 by
+    /// default); `password` only if one is set on the projector. Kept in `config.toml` on the
+    /// device only, never in the database or the repository.
+    Pjlink { host: String, password: Option<String> },
 }
 
 impl Config {
@@ -38,6 +53,7 @@ impl Config {
             transition_ms: 250,
             allow_public_clients: false,
             wasm_delay_ms: 0,
+            display_power: DisplayPowerConfig::None,
         }
     }
 
@@ -62,6 +78,9 @@ impl Config {
         if let Some(allow) = file.allow_public_clients {
             self.allow_public_clients = allow;
         }
+        if let Some(display_power) = file.display_power {
+            self.display_power = display_power;
+        }
         Ok(self)
     }
 }
@@ -75,6 +94,7 @@ struct FileConfig {
     screen_profile: Option<ScreenProfile>,
     transition_ms: Option<u32>,
     allow_public_clients: Option<bool>,
+    display_power: Option<DisplayPowerConfig>,
 }
 
 fn read_file(path: &Path) -> anyhow::Result<Option<FileConfig>> {
@@ -94,6 +114,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let config = Config::with_data_dir(dir.path()).load_file().unwrap();
         assert_eq!(config.transition_ms, 250);
+    }
+
+    #[test]
+    fn pjlink_projector_is_configured_in_its_own_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = "[display_power]\nbackend = \"pjlink\"\nhost = \"192.168.1.50\"\npassword = \"tajne\"\n";
+        std::fs::write(dir.path().join("config.toml"), text).unwrap();
+        let config = Config::with_data_dir(dir.path()).load_file().unwrap();
+        assert_eq!(
+            config.display_power,
+            DisplayPowerConfig::Pjlink { host: "192.168.1.50".into(), password: Some("tajne".into()) }
+        );
     }
 
     #[test]

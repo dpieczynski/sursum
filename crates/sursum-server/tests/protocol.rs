@@ -728,3 +728,106 @@ async fn uploaded_pictures_and_pauses_become_set_items_and_reach_the_screen() {
     );
     server.stop().await.unwrap();
 }
+
+/// A fake PJLink projector with a password: it greets with the spec's seed, checks the digest and
+/// keeps its power state. Returns its address.
+async fn fake_projector(password: &'static str) -> std::net::SocketAddr {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let power = std::sync::Arc::new(std::sync::Mutex::new('0'));
+    tokio::spawn(async move {
+        loop {
+            let Ok((stream, _)) = listener.accept().await else { return };
+            let power = power.clone();
+            tokio::spawn(async move {
+                let (reader, mut writer) = stream.into_split();
+                let mut reader = BufReader::new(reader);
+                writer.write_all(b"PJLINK 1 498e4a67\r").await.unwrap();
+                let mut line = Vec::new();
+                if reader.read_until(b'\r', &mut line).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                let line = String::from_utf8(line).unwrap();
+                let expected = sursum_core::display_power::auth_prefix("498e4a67", password);
+                let Some(command) = line.strip_prefix(&expected) else {
+                    writer.write_all(b"PJLINK ERRA\r").await.unwrap();
+                    return;
+                };
+                let reply = match command.trim_end_matches('\r') {
+                    "%1POWR 1" => {
+                        *power.lock().unwrap() = '1';
+                        "%1POWR=OK".to_owned()
+                    }
+                    "%1POWR 0" => {
+                        *power.lock().unwrap() = '0';
+                        "%1POWR=OK".to_owned()
+                    }
+                    "%1POWR ?" => format!("%1POWR={}", power.lock().unwrap()),
+                    _ => "%1POWR=ERR1".to_owned(),
+                };
+                writer.write_all(format!("{reply}\r").as_bytes()).await.unwrap();
+            });
+        }
+    });
+    address
+}
+
+async fn start_with_projector(
+    dir: &std::path::Path,
+    password: &str,
+    projector: std::net::SocketAddr,
+) -> RunningServer {
+    let mut config = Config::with_data_dir(dir);
+    config.listen = "127.0.0.1:0".parse().unwrap();
+    config.display_power = sursum_server::config::DisplayPowerConfig::Pjlink {
+        host: projector.to_string(),
+        password: Some(password.to_owned()),
+    };
+    sursum_server::start(config, &FixedPlatform(Some("boot-1".to_owned()))).await.unwrap()
+}
+
+async fn wait_for_power(socket: &mut Socket, wanted: &sursum_protocol::DisplayPowerState) {
+    loop {
+        if &next_remote_state(socket).await.display_power == wanted {
+            return;
+        }
+    }
+}
+
+#[tokio::test]
+async fn the_remote_switches_a_pjlink_projector_on_and_sees_its_state() {
+    use sursum_protocol::{DisplayPowerState, ErrorCode, PowerAction};
+    let projector = fake_projector("tajne").await;
+    let dir = tempfile::tempdir().unwrap();
+    let server = start_with_projector(dir.path(), "tajne", projector).await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    wait_for_power(&mut remote, &DisplayPowerState::Standby).await;
+    let outcome = command(&mut remote, 1, Rev(0), Command::DisplayPower { action: PowerAction::On }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    wait_for_power(&mut remote, &DisplayPowerState::On).await;
+    server.stop().await.unwrap();
+
+    // A wrong password is reported, never retried blindly.
+    let dir = tempfile::tempdir().unwrap();
+    let server = start_with_projector(dir.path(), "zle", projector).await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let unavailable = DisplayPowerState::Unavailable { reason: "auth_failed".into() };
+    wait_for_power(&mut remote, &unavailable).await;
+    let outcome =
+        command(&mut remote, 1, Rev(0), Command::DisplayPower { action: PowerAction::Standby }).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::DisplayAuthFailed });
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn without_power_control_the_remote_is_told_so() {
+    use sursum_protocol::{DisplayPowerState, ErrorCode, PowerAction};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    wait_for_power(&mut remote, &DisplayPowerState::Unavailable { reason: "not_configured".into() }).await;
+    let outcome = command(&mut remote, 1, Rev(0), Command::DisplayPower { action: PowerAction::On }).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::DisplayUnreachable });
+    server.stop().await.unwrap();
+}

@@ -28,6 +28,8 @@ use crate::auth::{Access, Rights};
 pub struct Guard {
     pub access: Arc<Access>,
     pub headers: HeaderMap,
+    /// Display power commands go to their own task, not to the state actor (ADR 0012).
+    pub power: crate::display_power::PowerHandle,
 }
 
 impl Guard {
@@ -54,6 +56,12 @@ impl Control<'_> {
         let required = if needs_admin(&cmd) { Rights::Admin } else { Rights::Operator };
         if self.guard.rights() < required {
             return CmdOutcome::Rejected { code: ErrorCode::Forbidden };
+        }
+        if let Command::DisplayPower { action } = cmd {
+            return match self.guard.power.run(action).await {
+                Ok(()) => CmdOutcome::Applied { rev: self.state.remote.borrow().rev },
+                Err(error) => CmdOutcome::Rejected { code: error.code() },
+            };
         }
         self.state.command(self.client_id.clone(), base_rev, cmd).await
     }

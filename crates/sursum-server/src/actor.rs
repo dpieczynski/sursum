@@ -86,6 +86,11 @@ impl StateHandle {
         stored.await.unwrap_or(false)
     }
 
+    /// Records the display's power state (from the display power task).
+    pub async fn display_power_changed(&self, state: DisplayPowerState) {
+        let _ = self.requests.send(Request::DisplayPower { state }).await;
+    }
+
     /// Paired devices: `(id, name, token_hash, paired_at)`.
     pub async fn devices(&self) -> Vec<(String, String, String, String)> {
         let (reply, devices) = oneshot::channel();
@@ -164,6 +169,9 @@ enum Request {
         token_hash: String,
         reply: oneshot::Sender<bool>,
     },
+    DisplayPower {
+        state: DisplayPowerState,
+    },
     Devices {
         reply: oneshot::Sender<Vec<(String, String, String, String)>>,
     },
@@ -214,6 +222,7 @@ pub fn spawn(
         layout: layout_or_fallback(&profile),
         profile,
         calibrating: false,
+        display_power: DisplayPowerState::Unknown,
         transition_ms: config.transition_ms,
         rules: SlideRules::default(),
         boot_id: platform.boot_id(),
@@ -259,6 +268,11 @@ pub fn spawn(
                             remote_tx.send_replace(Arc::new(state.remote_state()));
                         }
                         let _ = reply.send(report);
+                    }
+                    Request::DisplayPower { state: power } => {
+                        state.display_power = power;
+                        state.rev = state.rev.next();
+                        remote_tx.send_replace(Arc::new(state.remote_state()));
                     }
                     Request::AddDevice { name, token_hash, reply } => {
                         let id = format!("device-{}", uuid::Uuid::new_v4());
@@ -321,6 +335,8 @@ struct AppState {
     profile: ScreenProfile,
     /// True while the screen shows the calibration pattern; never persisted.
     calibrating: bool,
+    /// Last state reported by the display power task.
+    display_power: DisplayPowerState,
     transition_ms: u32,
     rules: SlideRules,
     boot_id: Option<String>,
@@ -658,7 +674,7 @@ impl AppState {
             active_set: self.sets.active().map(|set| self.set_view(set)),
             sets: self.sets.summaries(),
             can_undo: self.sets.can_undo(),
-            display_power: DisplayPowerState::Unavailable { reason: "not_configured".to_owned() },
+            display_power: self.display_power.clone(),
             screen_profile: self.profile.clone(),
         }
     }

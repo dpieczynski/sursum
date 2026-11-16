@@ -474,12 +474,16 @@ label.set-tool {
 @media (orientation: landscape) and (min-width: 1000px) {
   .remote {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       "top top"
       "previews library"
       "chips library"
+      "power library"
       "controls controls";
+  }
+  .power {
+    grid-area: power;
   }
   .topbar {
     grid-area: top;
@@ -670,4 +674,31 @@ label.set-tool {
 .device-date,
 .device-self {
   color: var(--muted);
+}
+
+/* Display power (ADR 0012). */
+.power {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+.power-state {
+  color: var(--muted);
+}
+.power-on {
+  min-height: 48px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--ok);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+.power-on:disabled {
+  opacity: 0.4;
+}
+.power-warning {
+  color: #facc15;
 }

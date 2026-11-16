@@ -12,6 +12,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod demo;
+pub mod display_power;
 pub mod editor;
 pub mod http;
 pub mod import;
@@ -68,7 +69,8 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     }
     let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?));
     let state = actor::spawn(&config, database, platform)?;
-    let router = http::router(state, &config, access);
+    let power = display_power::spawn(&config.display_power, state.clone());
+    let router = http::router(state, &config, access, power);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;

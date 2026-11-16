@@ -81,6 +81,16 @@ pub enum Command {
     SetScreenProfile { profile: ScreenProfile },
     /// Show or hide the calibration pattern on the screen (outside services only).
     Calibrate { on: bool },
+    /// Switch the projector or monitor on, or to standby (ADR 0012).
+    DisplayPower { action: PowerAction },
+}
+
+/// What to do with the display's power.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PowerAction {
+    On,
+    Standby,
 }
 
 impl Command {
@@ -100,6 +110,12 @@ pub enum ErrorCode {
     Unsupported,
     /// The screen profile leaves no room for text (or the safe area is empty).
     InvalidProfile,
+    /// The display does not answer (wrong address, unplugged, no power control configured).
+    DisplayUnreachable,
+    /// The display refuses for now, e.g. a projector still cooling down.
+    DisplayBusy,
+    /// The display rejected the configured password.
+    DisplayAuthFailed,
 }
 
 /// Result of one command.

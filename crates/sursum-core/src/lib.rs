@@ -5,6 +5,7 @@
 //! as parameters and returns a value. That keeps the rules of the system (how songs become
 //! slides, how navigation works, where text may be drawn) easy to read and to test.
 
+pub mod display_power;
 pub mod layout;
 pub mod model;
 pub mod program;

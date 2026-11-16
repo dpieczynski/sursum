@@ -128,7 +128,8 @@ impl Program {
             | Command::NewSet { .. }
             | Command::ActivateSet { .. }
             | Command::SetScreenProfile { .. }
-            | Command::Calibrate { .. } => Err(Rejection::NotAProgramCommand),
+            | Command::Calibrate { .. }
+            | Command::DisplayPower { .. } => Err(Rejection::NotAProgramCommand),
         }
     }
 

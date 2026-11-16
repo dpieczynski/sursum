@@ -89,7 +89,8 @@ no data loss; the pillar zone can be set from the remote in < 2 minutes.
 - [ ] Signed application bundles (`.sursum-app`, Ed25519): browser upload, USB stick, `just deploy`; DB snapshot before migration; automatic rollback
 - [ ] `kiosk.engine = chromium | cog` in the `sursum-kiosk` layer; weekly CI build of the cog image variant
 - [ ] PoE evaluation
-- [ ] Display power (ADR 0012): `CecDisplay`, `PjLinkDisplay`, state indicator and buttons in the remote, udev rule for `/dev/cec0` (PJLink may land earlier, it does not need the Pi)
+- [x] Display power, PJLink part (ADR 0012 amendment): codec checked against the JBMIA 1.04 example, background task with polling, state indicator, "on" tap and 1.5 s standby hold in the remote, tested against a fake projector (integration + e2e)
+- [ ] Display power, CEC part: `cec_linux` backend, udev rule for `/dev/cec0` (needs the hardware spike)
 
 **Done when:** a device flashed from the CI image needs no manual steps beyond configuration (PIN,
 address, screen profile) and `apt install` on it fails (read-only root); app updates via browser

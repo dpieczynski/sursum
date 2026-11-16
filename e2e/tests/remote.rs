@@ -343,3 +343,42 @@ async fn pillar_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> anyhow
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn display_goes_on_with_a_tap_and_to_standby_only_with_a_long_hold() -> anyhow::Result<()> {
+    let projector = sursum_e2e::fake_projector().await?;
+    let config = format!("[display_power]\nbackend = \"pjlink\"\nhost = \"{projector}\"\n");
+    let server = Server::start_with(&[], Some(&config)).await?;
+    with_engine(Browser::Chromium, 1280, 900, async |remote| {
+        remote.goto(server.url("/remote/")).await?;
+        let wait_for = async |text: &'static str| {
+            wait_until(Duration::from_secs(10), || async { power_state(remote).await == text })
+                .await
+                .map_err(|error| error.context(format!("never showed {text:?}")))
+        };
+        wait_for("Ekran: uśpiony").await?;
+        remote.find(By::Css(".power-on")).await?.click().await?;
+        wait_for("Ekran: włączony").await?;
+        // A tap on "standby" does nothing…
+        let standby = remote.find(By::XPath("//button[contains(text(), 'Uśpij ekran')]")).await?;
+        standby.click().await?;
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        wait_for("Ekran: włączony").await?;
+        // …only a long hold does.
+        remote.action_chain().click_and_hold_element(&standby).perform().await?;
+        tokio::time::sleep(Duration::from_millis(1800)).await;
+        remote.action_chain().release().perform().await?;
+        wait_for("Ekran: uśpiony").await?;
+        Ok(())
+    })
+    .await
+}
+
+/// The display power state as the remote shows it (empty if not shown).
+async fn power_state(remote: &WebDriver) -> String {
+    match remote.find(By::Css("[data-testid=display-power] .power-state")).await {
+        Ok(element) => element.text().await.unwrap_or_default(),
+        Err(_) => String::new(),
+    }
+}

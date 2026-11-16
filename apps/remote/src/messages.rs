@@ -79,6 +79,18 @@ pub enum Msg {
     Picture,
     PictureFailed,
     Pause,
+    DisplayOn,
+    DisplayStandby,
+    SlideOnScreen,
+    ProjectorCooling,
+    DisplayUnknown,
+    DisplayIsOn,
+    DisplayIsStandby,
+    DisplayWarming,
+    DisplayCooling,
+    DisplayNoAnswer,
+    DisplayBusy,
+    DisplayAuthFailed,
     EditSet,
     DoneEditing,
     Remove,
@@ -193,6 +205,31 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Picture => "Obraz",
         Msg::PictureFailed => "Nie udało się dodać obrazu (PNG, JPEG lub WebP, do 25 MB)",
         Msg::Pause => "Przerwa",
+        Msg::DisplayOn => "Włącz ekran",
+        Msg::DisplayStandby => "Uśpij ekran (przytrzymaj)",
+        Msg::SlideOnScreen => "Uwaga: na ekranie jest slajd",
+        Msg::ProjectorCooling => "Projektor stygnie, spróbuj za chwilę",
+        Msg::DisplayUnknown => "Ekran: …",
+        Msg::DisplayIsOn => "Ekran: włączony",
+        Msg::DisplayIsStandby => "Ekran: uśpiony",
+        Msg::DisplayWarming => "Ekran: rozgrzewa się",
+        Msg::DisplayCooling => "Ekran: stygnie",
+        Msg::DisplayNoAnswer => "Ekran: brak odpowiedzi",
+        Msg::DisplayBusy => "Ekran jest zajęty – spróbuj za chwilę",
+        Msg::DisplayAuthFailed => "Ekran odrzucił hasło – sprawdź config.toml",
+    }
+}
+
+/// What to tell the operator when the server refuses a command.
+pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
+    use sursum_protocol::ErrorCode;
+    match code {
+        ErrorCode::InvalidProfile => Msg::InvalidProfile,
+        ErrorCode::Forbidden => Msg::AdminRequired,
+        ErrorCode::DisplayBusy => Msg::DisplayBusy,
+        ErrorCode::DisplayAuthFailed => Msg::DisplayAuthFailed,
+        ErrorCode::DisplayUnreachable => Msg::DisplayNoAnswer,
+        ErrorCode::NotFound | ErrorCode::NoActiveSet | ErrorCode::Unsupported => Msg::NotPossible,
     }
 }
 
