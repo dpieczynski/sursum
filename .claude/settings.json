@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(just build)",
+      "Bash(just build-web)",
+      "Bash(just test)",
+      "Bash(just test-wasm)",
+      "Bash(just e2e)",
+      "Bash(just e2e *)",
+      "Bash(just lint)",
+      "Bash(just licenses-check)",
+      "Bash(just cross-pi)",
+      "Bash(just cross-win)",
+      "Bash(just browsers)",
+      "Bash(just browsers-stop)",
+      "Bash(cargo build *)",
+      "Bash(cargo test *)",
+      "Bash(cargo nextest *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo check *)",
+      "Bash(cargo tree *)",
+      "Bash(cargo deny *)",
+      "Bash(cargo insta test *)",
+      "Bash(leptosfmt *)",
+      "Bash(trunk build *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch)"
+    ]
+  }
+}

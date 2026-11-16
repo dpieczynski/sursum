@@ -43,7 +43,8 @@ strong reason; if you have one, propose a new ADR). The planning document (Polis
 2. **`sursum-protocol` stays data-only**: serde types, no Leptos, no tokio, no logic; it must
    compile for both the native and the `wasm32-unknown-unknown` target.
 3. **The screen never shows anything but content, black or logo**: no error UI, no cursor, no
-   network resources, black background inline in `apps/screen/index.html` `<head>`.
+   network resources, black background inline in `apps/screen/index.html` `<head>`. The one
+   exception is the calibration test card while an admin is calibrating (ADR 0008).
 4. **Editing the set never changes the program.** The live deck is a frozen copy; see ADR 0005.
 5. **No copyrighted song texts** in the repo, tests, docs or commit messages. Fixtures are
    public-domain or synthetic and listed in `fixtures/LICENSES.md`. Real libraries stay in `/local/`.
