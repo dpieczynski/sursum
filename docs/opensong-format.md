@@ -96,3 +96,18 @@ Missing `presentation`; reference to a missing section; duplicate sections; numb
 gaps; chord-only lines; empty sections; `||` at start, end and twice; CRLF and BOM; unknown
 elements; declared windows-1250; set referencing a missing song; sets with custom, scripture and
 image groups.
+
+## The song editor (not the import)
+
+The remote's editor accepts more than OpenSong, so nobody has to learn the markup first
+(`sursum_formats::opensong::editor_markup`, tests in `editor_text.rs`):
+
+- **Plain text** (no `[section]` line): blocks separated by an empty line are verses; a block
+  starting with "Ref.", "Ref:", "Ref", "Refren", "R." or "R:" is the refrain, and a block that is
+  only such a marker repeats it there (the presentation order is then generated, unless one is
+  typed under "Zaawansowane"). "Most:" or "Bridge" starts a bridge. A leading verse number
+  ("1. ", "2) ") is dropped.
+- **Markup**: as above, but lyric lines may omit the leading space; it is added before parsing.
+  Songs without chords are shown in the editor without those spaces.
+
+The import keeps the strict OpenSong rules and reports lines without the leading space.

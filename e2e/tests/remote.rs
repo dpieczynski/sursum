@@ -169,7 +169,7 @@ async fn new_song_typed_in_the_editor_goes_on_screen() -> anyhow::Result<()> {
                 remote.find_all(By::Css(".editor-slide")).await.map(|slides| slides.len()).unwrap_or(0) == 2
             })
             .await?;
-            remote.find(By::Css(".editor-buttons .primary")).await?.click().await?;
+            remote.find(By::Css("[data-testid=save-and-show]")).await?.click().await?;
             wait_for_slide(screen, "v1#").await?;
             wait_until(Duration::from_secs(5), || async { remote.find(By::Css(".editor")).await.is_err() })
                 .await?;

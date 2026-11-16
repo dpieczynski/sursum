@@ -4,8 +4,11 @@
 
 use sursum_core::model::{Song, SongbookEntry};
 use sursum_core::slides::{SlideRules, compile_song};
-use sursum_formats::opensong::{lyrics_markup, parse_lyrics, parse_presentation, presentation_markup};
-use sursum_protocol::{DraftPreview, ItemId, SongDraft, SongId};
+use sursum_formats::opensong::{
+    Warning, WarningKind, editor_markup, lyrics_markup, markup_for_editor, parse_lyrics, parse_presentation,
+    presentation_markup,
+};
+use sursum_protocol::{DraftPreview, ItemId, MarkupWarning, MarkupWarningCode, SongDraft, SongId};
 
 /// Songbook name used for numbers entered in the editor when the song had none before.
 const DEFAULT_SONGBOOK: &str = "Śpiewnik parafialny";
@@ -18,16 +21,23 @@ pub fn draft_of(song: &Song, revision: u32) -> SongDraft {
         title: song.title().to_owned(),
         number: song.songbooks.first().map(|entry| entry.entry.clone()),
         presentation: presentation_markup(song),
-        lyrics: lyrics_markup(song),
+        lyrics: markup_for_editor(&lyrics_markup(song)),
     }
 }
 
 /// Builds a song from a draft. Fields the editor does not show (authors, other titles,
 /// imported extras) are kept from `existing`. Returns the song and the markup warnings.
-pub fn song_from_draft(draft: &SongDraft, id: SongId, existing: Option<&Song>) -> (Song, Vec<String>) {
-    let parsed = parse_lyrics(&draft.lyrics);
-    let (verse_order, order_warnings) = parse_presentation(&draft.presentation, &parsed.names);
-    let warnings = parsed.warnings.iter().chain(&order_warnings).map(ToString::to_string).collect();
+pub fn song_from_draft(draft: &SongDraft, id: SongId, existing: Option<&Song>) -> (Song, Vec<MarkupWarning>) {
+    let converted = editor_markup(&draft.lyrics);
+    let parsed = parse_lyrics(&converted.markup);
+    // The order typed in "Kolejność" wins; else the one implied by repeated refrains.
+    let order = if draft.presentation.trim().is_empty() {
+        converted.order.unwrap_or_default()
+    } else {
+        draft.presentation.clone()
+    };
+    let (verse_order, order_warnings) = parse_presentation(&order, &parsed.names);
+    let warnings = parsed.warnings.iter().chain(&order_warnings).map(markup_warning).collect();
 
     let mut song = existing.cloned().unwrap_or_else(|| Song {
         id: id.clone(),
@@ -51,6 +61,20 @@ pub fn song_from_draft(draft: &SongDraft, id: SongId, existing: Option<&Song>) -
     song.verse_order = verse_order;
     song.verses = parsed.verses;
     (song, warnings)
+}
+
+/// A parser warning as the remote gets it. Line numbers of plain text are not reported (the
+/// converted markup has extra header lines), so a warning without a line is the safe choice.
+fn markup_warning(warning: &Warning) -> MarkupWarning {
+    let (code, detail) = match &warning.kind {
+        WarningKind::LinesBeforeFirstSection => (MarkupWarningCode::LinesBeforeFirstSection, String::new()),
+        WarningKind::DuplicateSection(name) => (MarkupWarningCode::DuplicateSection, name.clone()),
+        WarningKind::UnknownSectionInPresentation(name) => {
+            (MarkupWarningCode::UnknownSectionInOrder, name.clone())
+        }
+        other => (MarkupWarningCode::Other, other.to_string()),
+    };
+    MarkupWarning { line: warning.line.and_then(|line| u32::try_from(line).ok()), code, detail }
 }
 
 /// The slides a draft produces.
@@ -113,6 +137,30 @@ mod tests {
         assert_eq!(song.titles, ["Nowa pieśń", "Inny tytuł"]);
         assert_eq!(song.verses[0].blocks[0].lines[0].text, "b");
         assert_eq!(song.songbooks[0].entry, "42");
+    }
+
+    #[test]
+    fn plain_text_becomes_verses_and_a_repeated_refrain() {
+        let mut typed = draft("1. Pierwsza zwrotka\n\nRef. Refren\n\n2. Druga zwrotka\n\nRef.");
+        typed.presentation = String::new();
+        let preview = preview(&typed);
+        let keys: Vec<&str> = preview.deck.slides.iter().map(|slide| slide.key.as_str()).collect();
+        assert_eq!(keys, ["v1#0@0", "c#0@0", "v2#0@0", "c#0@1"]);
+        assert!(preview.warnings.is_empty(), "{:?}", preview.warnings);
+        let (song, _) = song_from_draft(&typed, SongId::from("s"), None);
+        let shown = draft_of(&song, 1);
+        assert!(shown.lyrics.starts_with("[V1]\nPierwsza zwrotka"), "no markup spaces: {}", shown.lyrics);
+    }
+
+    #[test]
+    fn warnings_are_codes() {
+        let mut with_typo = draft("[V1]\n zwrotka");
+        with_typo.presentation = "V1 V9".into();
+        let warnings = preview(&with_typo).warnings;
+        assert_eq!(
+            (warnings[0].code, warnings[0].detail.as_str()),
+            (MarkupWarningCode::UnknownSectionInOrder, "V9")
+        );
     }
 
     #[test]

@@ -127,7 +127,7 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] Shell and the Msza view: tabs, three layouts, now/slides/set/controls, problem banners, search sheet, live strip, button side, controls disabled without a connection; "#" keypad removed (e2e: `remote_live.rs`)
 - [x] Zestaw view: set picker (newest first), new/rename/delete (hold), items always editable (tap opens the song card, never the screen), search that stays open with an "in the set" mark, "new song: <query>" when nothing is found, song card (e2e: `remote_sets.rs`)
 - [x] Ustawienia view: screen (power, logo, calibration behind a confirmation), display (gap after an item), this device (button side, vibration, full screen, pedal keys), song library (export; merge and import with reports in a sheet), devices, about; admin items always visible with a lock that asks for the PIN in place
-- [ ] Editor: plain text, section buttons, Polish warnings, unsaved-changes guard
+- [x] Editor: plain text (verses by empty lines, "Ref." refrains and repeats), buttons inserting a verse, refrain, bridge or slide break at the cursor, "how to write" help, order under "Zaawansowane", "Zapisz" as the main action, warnings as codes worded in Polish, unsaved-changes guard
 - [ ] Docs: ADR 0017, operator guide rewritten with screenshots
 
 ## Later

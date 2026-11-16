@@ -27,7 +27,32 @@ pub struct SongDraft {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DraftPreview {
     pub deck: Deck,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<MarkupWarning>,
+}
+
+/// A problem in the editor's text, as a code the remote puts into words (in its language).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkupWarning {
+    /// 1-based line of the editor's text, if the problem is on one line.
+    pub line: Option<u32>,
+    pub code: MarkupWarningCode,
+    /// The section or character involved, e.g. `V9`.
+    #[serde(default)]
+    pub detail: String,
+}
+
+/// What kind of problem a [`MarkupWarning`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MarkupWarningCode {
+    /// Text before the first `[section]`; it became verse 1.
+    LinesBeforeFirstSection,
+    /// The same `[section]` twice; the second was appended to the first.
+    DuplicateSection,
+    /// The order names a section that does not exist; it was skipped.
+    UnknownSectionInOrder,
+    /// Anything else (rare; the detail says what).
+    Other,
 }
 
 /// What an import of songs did.

@@ -153,3 +153,48 @@ async fn sets_are_created_renamed_switched_and_deleted() -> anyhow::Result<()> {
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn plain_text_becomes_slides_and_closing_asks_before_losing_it() -> anyhow::Result<()> {
+    with_sets(async |_, _, remote| {
+        remote.find(By::Css("[data-testid=new-song]")).await?.click().await?;
+        let title = remote.query(By::Css("[data-testid=editor-title]")).first().await?;
+        title.send_keys("Pieśń wklejona").await?;
+        let lyrics = remote.find(By::Css("[data-testid=editor-lyrics]")).await?;
+        lyrics
+            .send_keys("1. Pierwsza zwrotka bez spacji\n\nRef. Refren wklejony\n\n2. Druga zwrotka\n\nRef.")
+            .await?;
+        wait_until(Duration::from_secs(5), || async {
+            remote.find_all(By::Css(".editor-slide")).await.map(|slides| slides.len()).unwrap_or(0) == 4
+        })
+        .await
+        .context("plain text did not become verse, refrain, verse, refrain")?;
+        anyhow::ensure!(
+            remote.find_all(By::Css(".editor-warnings li")).await?.is_empty(),
+            "plain text must not produce warnings"
+        );
+        // Unsaved: closing asks first, and "back to editing" keeps the text.
+        remote.find(By::Css("[data-testid=editor-close]")).await?.click().await?;
+        let ask = remote.query(By::Css("[data-testid=discard]")).first().await.context("no question")?;
+        ask.find(By::Css(".sheet-actions .btn:not(.btn--danger)")).await?.click().await?;
+        anyhow::ensure!(
+            lyrics.prop("value").await?.unwrap_or_default().contains("Refren wklejony"),
+            "text lost"
+        );
+        // Saved: closing does not ask.
+        remote.find(By::Css("[data-testid=save]")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            match remote.find(By::Css("[data-testid=editor-status]")).await {
+                Ok(status) => status.text().await.unwrap_or_default() == "Zapisano",
+                Err(_) => false,
+            }
+        })
+        .await?;
+        remote.find(By::Css("[data-testid=editor-close]")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async { remote.find(By::Css(".editor")).await.is_err() })
+            .await?;
+        Ok(())
+    })
+    .await
+}
