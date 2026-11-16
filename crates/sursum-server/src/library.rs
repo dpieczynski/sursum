@@ -5,7 +5,9 @@
 //! - a song that does not exist here is added;
 //! - identical content changes nothing;
 //! - if one side's current version appears in the other side's history, the newer one wins;
-//! - if both changed independently, the incoming version is stored as a separate copy.
+//! - if both changed independently, the incoming version is stored as a separate copy;
+//! - a deletion travels as a tombstone: it deletes the song here only if this device has the
+//!   same or an older version; a version edited after the deletion wins and stays (or comes back).
 
 use std::collections::HashMap;
 use std::io::Write as _;
@@ -15,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use sursum_core::model::Song;
 use sursum_protocol::{MergeReport, SongId};
 
-use crate::db::Database;
+use crate::db::{Database, StoredSong};
 
 /// Version of the `.sursum` bundle format.
 const FORMAT_VERSION: u32 = 1;
@@ -26,6 +28,9 @@ pub struct BundleSong {
     pub song: Song,
     pub content_hash: String,
     pub history: Vec<String>,
+    /// A tombstone: the song was deleted on the exporting device.
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -36,7 +41,7 @@ struct Manifest {
 
 /// Writes all songs into a `.sursum` file (a ZIP with `manifest.json` and `songs.jsonl`).
 pub fn export(database: &Database) -> anyhow::Result<Vec<u8>> {
-    let songs = database.songs_with_history()?;
+    let songs = database.stored_songs()?;
     let mut buffer = std::io::Cursor::new(Vec::new());
     let mut zip = zip::ZipWriter::new(&mut buffer);
     let options =
@@ -44,8 +49,9 @@ pub fn export(database: &Database) -> anyhow::Result<Vec<u8>> {
     zip.start_file("manifest.json", options)?;
     zip.write_all(&serde_json::to_vec(&Manifest { format: FORMAT_VERSION, songs: songs.len() })?)?;
     zip.start_file("songs.jsonl", options)?;
-    for (song, content_hash, history) in songs {
-        serde_json::to_writer(&mut zip, &BundleSong { song, content_hash, history })?;
+    for stored in songs {
+        let StoredSong { song, content_hash, history, deleted } = stored;
+        serde_json::to_writer(&mut zip, &BundleSong { song, content_hash, history, deleted })?;
         zip.write_all(b"\n")?;
     }
     zip.finish()?;
@@ -88,28 +94,49 @@ enum Decision {
     FastForward,
     KeepLocal,
     Conflict,
+    /// The other device deleted the version this device has (or an older one).
+    Delete,
+}
+
+/// What this device has of a song.
+struct Local {
+    hash: String,
+    history: Vec<String>,
+    deleted: bool,
 }
 
 /// Compares an incoming song with the local one (`None` if there is none).
-fn decide(incoming: &BundleSong, local: Option<&(String, Vec<String>)>) -> Decision {
-    let Some((local_hash, local_history)) = local else { return Decision::Add };
-    if &incoming.content_hash == local_hash {
-        Decision::Unchanged
-    } else if local_history.contains(&incoming.content_hash) {
-        Decision::KeepLocal
-    } else if incoming.history.contains(local_hash) {
-        Decision::FastForward
-    } else {
-        Decision::Conflict
+fn decide(incoming: &BundleSong, local: Option<&Local>) -> Decision {
+    let known_there =
+        |local: &Local| incoming.content_hash == local.hash || incoming.history.contains(&local.hash);
+    let known_here =
+        |local: &Local| incoming.content_hash == local.hash || local.history.contains(&incoming.content_hash);
+    match (local, incoming.deleted) {
+        (None, false) => Decision::Add,
+        (None, true) => Decision::Unchanged,
+        (Some(local), true) if local.deleted => Decision::Unchanged,
+        (Some(local), true) if known_there(local) => Decision::Delete,
+        // Edited here after (or apart from) the version deleted there: keep it.
+        (Some(_), true) => Decision::KeepLocal,
+        (Some(local), false) if local.deleted && known_here(local) => Decision::KeepLocal,
+        // Edited there after this device deleted it: the newer song comes back.
+        (Some(local), false) if local.deleted => Decision::FastForward,
+        (Some(local), false) if incoming.content_hash == local.hash => Decision::Unchanged,
+        (Some(local), false) if local.history.contains(&incoming.content_hash) => Decision::KeepLocal,
+        (Some(local), false) if incoming.history.contains(&local.hash) => Decision::FastForward,
+        (Some(_), false) => Decision::Conflict,
     }
 }
 
 /// Merges a bundle. With `dry_run` nothing is written.
 pub fn merge(database: &mut Database, incoming: &[BundleSong], dry_run: bool) -> anyhow::Result<MergeReport> {
-    let local: HashMap<SongId, (String, Vec<String>)> = database
-        .songs_with_history()?
+    let local: HashMap<SongId, Local> = database
+        .stored_songs()?
         .into_iter()
-        .map(|(song, hash, history)| (song.id.clone(), (hash, history)))
+        .map(|stored| {
+            let local = Local { hash: stored.content_hash, history: stored.history, deleted: stored.deleted };
+            (stored.song.id, local)
+        })
         .collect();
     let mut report = MergeReport::default();
     for bundle_song in incoming {
@@ -129,6 +156,13 @@ pub fn merge(database: &mut Database, incoming: &[BundleSong], dry_run: bool) ->
             }
             Decision::KeepLocal => {
                 report.kept_local += 1;
+                None
+            }
+            Decision::Delete => {
+                report.deleted += 1;
+                if !dry_run {
+                    database.delete_song(bundle_song.song.id.as_str())?;
+                }
                 None
             }
             Decision::Conflict => {
@@ -212,6 +246,7 @@ mod tests {
             song: song("a", "pierwsza wersja"),
             content_hash: bundle[0].history[0].clone(),
             history: vec![bundle[0].history[0].clone()],
+            deleted: false,
         };
         assert_eq!(merge(&mut tulce, &[old], false).unwrap().kept_local, 1);
 
@@ -225,6 +260,35 @@ mod tests {
         assert!(again.conflicts.is_empty(), "the same conflict is reported once: {again:?}");
         assert_eq!(text_of(&tulce, "b"), "zmiana w Tulcach");
         assert_eq!(tulce.load_songs().unwrap().len(), 3);
+    }
+
+    fn live_ids(database: &Database) -> Vec<String> {
+        database.load_songs().unwrap().into_iter().map(|song| song.id.as_str().to_owned()).collect()
+    }
+
+    #[test]
+    fn deletions_travel_but_never_take_a_newer_edit_with_them() {
+        let (mut tulce, mut gowarzewo) = (Database::in_memory().unwrap(), Database::in_memory().unwrap());
+        tulce.upsert_song(&song("c", "duplikat"), "editor").unwrap();
+        tulce.upsert_song(&song("d", "wspólna"), "editor").unwrap();
+        merge(&mut gowarzewo, &read_bundle(&export(&tulce).unwrap()).unwrap(), false).unwrap();
+
+        // Gowarzewo deletes both; Tulce edits "d" meanwhile.
+        assert!(gowarzewo.delete_song("c").unwrap() && gowarzewo.delete_song("d").unwrap());
+        assert!(!gowarzewo.delete_song("c").unwrap(), "already deleted");
+        tulce.upsert_song(&song("d", "poprawiona w Tulcach"), "editor").unwrap();
+
+        let tombstones = read_bundle(&export(&gowarzewo).unwrap()).unwrap();
+        let report = merge(&mut tulce, &tombstones, false).unwrap();
+        assert_eq!((report.deleted, report.kept_local), (1, 1), "{report:?}");
+        assert_eq!(live_ids(&tulce), ["d"], "the edited song stays");
+        assert_eq!(merge(&mut tulce, &tombstones, false).unwrap().deleted, 0, "nothing more to delete");
+
+        // Back the other way: the newer "d" returns to Gowarzewo, the deleted "c" stays deleted.
+        let report = merge(&mut gowarzewo, &read_bundle(&export(&tulce).unwrap()).unwrap(), false).unwrap();
+        assert_eq!(report.updated, 1, "{report:?}");
+        assert_eq!(live_ids(&gowarzewo), ["d"]);
+        assert_eq!(text_of(&gowarzewo, "d"), "poprawiona w Tulcach");
     }
 
     #[test]
@@ -255,6 +319,7 @@ mod tests {
             song: song("a", "z pliku"),
             content_hash: String::new(),
             history: vec![],
+            deleted: false,
         })
         .unwrap();
         line["content_hash"] = "aąąąąąąąą".into();

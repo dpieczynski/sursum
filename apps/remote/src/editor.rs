@@ -98,6 +98,16 @@ fn EditorForm(
         }
     };
     let title = move || draft.with(|draft| draft.title.clone());
+    // Deleting needs admin mode and an existing song; the server checks both again.
+    let session = expect_context::<crate::admin::Session>();
+    let commands = expect_context::<crate::Commands>();
+    let can_delete = move || session.0.get().admin && draft.with(|draft| draft.song_id.is_some());
+    let delete = move || {
+        if let Some(song_id) = draft.get_untracked().song_id {
+            commands.send(sursum_protocol::Command::DeleteSong { song_id });
+            editing.set(None);
+        }
+    };
     let number = move || draft.with(|draft| draft.number.clone().unwrap_or_default());
     let order = move || draft.with(|draft| draft.presentation.clone());
     let lyrics = move || draft.with(|draft| draft.lyrics.clone());
@@ -127,6 +137,9 @@ fn EditorForm(
                 <button type="button" on:click=move |_| editing.set(None)>
                     {pl(Msg::Close)}
                 </button>
+                <Show when=can_delete>
+                    <crate::hold::HoldButton label=pl(Msg::DeleteSong) on_hold=delete />
+                </Show>
                 <button type="button" on:click=move |_| save(false)>
                     {pl(Msg::Save)}
                 </button>

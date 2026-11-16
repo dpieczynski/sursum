@@ -98,5 +98,5 @@ fn status_text(step: &Step) -> String {
 }
 
 fn summary(report: &MergeReport) -> String {
-    merge_summary(report.added, report.updated, report.unchanged, report.kept_local, &report.conflicts)
+    merge_summary(report)
 }

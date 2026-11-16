@@ -42,7 +42,13 @@ impl Guard {
 
 /// Commands that change the device's setup rather than the service: admin mode only.
 fn needs_admin(command: &Command) -> bool {
-    matches!(command, Command::SetScreenProfile { .. } | Command::Calibrate { .. } | Command::SetLogo { .. })
+    matches!(
+        command,
+        Command::SetScreenProfile { .. }
+            | Command::Calibrate { .. }
+            | Command::SetLogo { .. }
+            | Command::DeleteSong { .. }
+    )
 }
 
 /// A remote's right to send commands.

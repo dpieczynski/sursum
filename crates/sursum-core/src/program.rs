@@ -130,7 +130,8 @@ impl Program {
             | Command::SetScreenProfile { .. }
             | Command::Calibrate { .. }
             | Command::DisplayPower { .. }
-            | Command::SetLogo { .. } => Err(Rejection::NotAProgramCommand),
+            | Command::SetLogo { .. }
+            | Command::DeleteSong { .. } => Err(Rejection::NotAProgramCommand),
         }
     }
 

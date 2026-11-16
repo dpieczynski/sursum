@@ -351,26 +351,36 @@ impl Database {
         Ok(())
     }
 
-    /// Every stored song with its content hash and the hashes of all its earlier revisions
-    /// (for merging libraries between devices).
-    pub fn songs_with_history(&self) -> anyhow::Result<Vec<(Song, String, Vec<String>)>> {
+    /// Every song with its content hash, the hashes of all its revisions and whether it was
+    /// deleted (deleted songs stay as tombstones, so a deletion can travel to another device).
+    pub fn stored_songs(&self) -> anyhow::Result<Vec<StoredSong>> {
         let mut songs = self
             .connection
-            .prepare("SELECT id, body_json, content_hash FROM songs WHERE deleted_at IS NULL ORDER BY id")?;
+            .prepare("SELECT id, body_json, content_hash, deleted_at IS NOT NULL FROM songs ORDER BY id")?;
         let mut history = self
             .connection
             .prepare("SELECT content_hash FROM song_history WHERE song_id = ?1 ORDER BY revision")?;
-        let rows: Vec<(String, String, String)> = songs
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        let rows: Vec<(String, String, String, bool)> = songs
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
             .collect::<Result<_, _>>()?;
         rows.into_iter()
-            .map(|(id, body, hash)| {
+            .map(|(id, body, content_hash, deleted)| {
                 let song: Song = serde_json::from_str(&body).context("decoding a stored song")?;
-                let hashes =
+                let history =
                     history.query_map([&id], |row| row.get(0))?.collect::<Result<Vec<String>, _>>()?;
-                Ok((song, hash, hashes))
+                Ok(StoredSong { song, content_hash, history, deleted })
             })
             .collect()
+    }
+
+    /// Marks a song as deleted (it keeps its history and comes back if a newer version is
+    /// imported or merged); false if there is no such live song.
+    pub fn delete_song(&self, id: &str) -> anyhow::Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE songs SET deleted_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL",
+            [id],
+        )?;
+        Ok(changed == 1)
     }
 
     /// The current revision of a song, if it exists.
@@ -449,6 +459,16 @@ fn restore_newest_backup(data_dir: &Path) -> anyhow::Result<()> {
     std::fs::copy(&newest, data_dir.join(DATABASE_FILE))?;
     tracing::warn!(backup = %newest.display(), "restored the database from a backup");
     Ok(())
+}
+
+/// A song as stored, for sharing libraries between devices.
+#[derive(Debug, Clone)]
+pub struct StoredSong {
+    pub song: Song,
+    pub content_hash: String,
+    /// Hashes of every revision, oldest first (includes the current one).
+    pub history: Vec<String>,
+    pub deleted: bool,
 }
 
 /// The content hash the database stores for a song (to check hashes from other devices).

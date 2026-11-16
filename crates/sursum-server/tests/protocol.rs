@@ -902,3 +902,31 @@ async fn a_screen_that_stays_away_gets_its_kiosk_restarted_and_remotes_know() {
     assert!(marker.exists(), "the kiosk restart command ran");
     server.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn a_deleted_song_leaves_search_but_not_the_screen() {
+    use sursum_protocol::SongSummary;
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "admin").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    next_screen_state(&mut screen).await;
+    command(&mut remote, 1, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
+    let shown = next_screen_state(&mut screen).await.live.unwrap();
+
+    let found: Vec<SongSummary> =
+        serde_json::from_str(&http_get(&server, "/api/songs?q=zorze").await).unwrap();
+    let song_id = found[0].song_id.clone();
+    let outcome =
+        command(&mut remote, 2, Rev(u32::MAX), Command::DeleteSong { song_id: song_id.clone() }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    let found: Vec<SongSummary> =
+        serde_json::from_str(&http_get(&server, "/api/songs?q=zorze").await).unwrap();
+    assert!(found.is_empty(), "gone from search");
+    let again = command(&mut remote, 3, Rev(u32::MAX), Command::DeleteSong { song_id }).await;
+    assert!(matches!(again, CmdOutcome::Rejected { .. }));
+    // The screen keeps the frozen deck that was live (ADR 0005).
+    let state = next_screen_state(&mut screen).await;
+    assert_eq!(state.live.unwrap().deck.deck_id, shown.deck.deck_id);
+    server.stop().await.unwrap();
+}

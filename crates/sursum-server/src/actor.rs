@@ -430,6 +430,18 @@ impl AppState {
                 }
             }
             Command::SetScreenProfile { profile } => self.set_screen_profile(profile),
+            Command::DeleteSong { song_id } => match self.database.delete_song(song_id.as_str()) {
+                Ok(true) => {
+                    tracing::info!(%song_id, "song deleted");
+                    self.reload_library();
+                    Ok(None)
+                }
+                Ok(false) => Err(ErrorCode::NotFound),
+                Err(error) => {
+                    tracing::error!(?error, "could not delete a song");
+                    Err(ErrorCode::NotFound)
+                }
+            },
             Command::SetLogo { asset_id } => {
                 if asset_id.as_ref().is_some_and(|id| !crate::assets::exists(&self.data_dir, id)) {
                     return (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false);

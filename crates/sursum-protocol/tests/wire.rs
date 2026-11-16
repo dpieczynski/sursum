@@ -123,6 +123,7 @@ fn merge_report() {
         updated: 1,
         unchanged: 40,
         kept_local: 1,
+        deleted: 1,
         conflicts: vec!["Pieśń zmieniona w obu kościołach".into()],
     };
     insta::assert_json_snapshot!(report);

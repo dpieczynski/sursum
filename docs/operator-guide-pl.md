@@ -102,6 +102,9 @@ spróbuj za chwilę”) — to normalne.
   i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć słup lub inną przeszkodę
   (czerwona strefa) — tekst będzie ją omijał, a sama strefa będzie czarna. Zielona ramka pokazuje,
   gdzie zmieści się tekst. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
+- **Usuń pieśń z bazy (przytrzymaj)** — w edytorze pieśni, np. dla duplikatów po imporcie.
+  Pieśń znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca. Przy
+  scalaniu baz usunięcie przechodzi do drugiego kościoła, chyba że tam pieśń poprawiono później.
 - **Urządzenia** — lista sparowanych pilotów; **Odłącz (przytrzymaj)** usuwa zgubiony lub obcy
   tablet (będzie musiał ponownie podać PIN).
 - **Zakończ tryb administratora** — po skończonej pracy.

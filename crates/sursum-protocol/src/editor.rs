@@ -52,6 +52,9 @@ pub struct MergeReport {
     pub unchanged: u32,
     /// Songs where this device already has a newer version.
     pub kept_local: u32,
+    /// Songs deleted on the other device (in the version this device had).
+    #[serde(default)]
+    pub deleted: u32,
     /// Titles of songs changed on both sides; the incoming version is stored as a copy.
     pub conflicts: Vec<String>,
 }

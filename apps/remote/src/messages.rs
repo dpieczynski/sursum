@@ -100,6 +100,7 @@ pub enum Msg {
     ParishLogo,
     ItemNumber,
     ScreenMissing,
+    DeleteSong,
     EditSet,
     DoneEditing,
     Remove,
@@ -238,6 +239,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ParishLogo => "Logo parafii",
         Msg::ItemNumber => "Numer pozycji w zestawie",
         Msg::ScreenMissing => "Uwaga: ekran nie jest połączony z sursum",
+        Msg::DeleteSong => "Usuń pieśń z bazy (przytrzymaj)",
     }
 }
 
@@ -269,21 +271,16 @@ pub fn import_summary(
 }
 
 /// One-line merge report; conflicting titles are listed because they need a human decision.
-pub fn merge_summary(
-    added: u32,
-    updated: u32,
-    unchanged: u32,
-    kept_local: u32,
-    conflicts: &[String],
-) -> String {
+pub fn merge_summary(report: &sursum_protocol::MergeReport) -> String {
     let mut text = format!(
-        "{added} nowych, {updated} zaktualizowanych, {unchanged} bez zmian, {kept_local} nowszych tutaj"
+        "{} nowych, {} zaktualizowanych, {} usuniętych, {} bez zmian, {} nowszych tutaj",
+        report.added, report.updated, report.deleted, report.unchanged, report.kept_local
     );
-    if !conflicts.is_empty() {
+    if !report.conflicts.is_empty() {
         text.push_str(&format!(
             ", {} konfliktów (zapisane jako kopie): {}",
-            conflicts.len(),
-            conflicts.join(", ")
+            report.conflicts.len(),
+            report.conflicts.join(", ")
         ));
     }
     text
