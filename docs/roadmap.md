@@ -89,7 +89,8 @@ no data loss; the pillar zone can be set from the remote in < 2 minutes.
 - [ ] Device image with rpi-image-gen (ADR 0013): `trixie-minbase-ab` + `image-rota`, layers `sursum-kiosk` and `sursum-device`, slot-shared `/var/lib/sursum`, pinned tool version
 - [ ] In the image: systemd units, silent boot + splash, forced HDMI + fallback EDID ⚠, nftables, Avahi, kiosk watchdog, hardware/systemd watchdogs
 - [ ] Image build in CI on arm64 ⚠ (runner availability, privileged container); artifacts `.img` and `.update.tar.zst`
-- [ ] Signed application bundles (`.sursum-app`, Ed25519): browser upload, USB stick, `just deploy`; DB snapshot before migration; automatic rollback
+- [x] Signed application bundles, core (ADR 0013 amendment): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
+- [ ] Bundles on the device: systemd units on `current/`, restart + `/healthz` with automatic rollback, browser upload, USB stick, `just deploy`
 - [ ] `kiosk.engine = chromium | cog` in the `sursum-kiosk` layer; weekly CI build of the cog image variant
 - [ ] PoE evaluation
 - [x] Display power, PJLink part (ADR 0012 amendment): codec checked against the JBMIA 1.04 example, background task with polling, state indicator, "on" tap and 1.5 s standby hold in the remote, tested against a fake projector (integration + e2e)

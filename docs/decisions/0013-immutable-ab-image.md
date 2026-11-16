@@ -53,3 +53,18 @@ Debian Trixie container, or a spare Pi 5. QEMU builds on x86 laptops are a conve
 - The rpi-image-gen version is pinned (submodule or commit in CI).
 - Distributing images requires providing sources (or a written offer) for GPL packages
   (ADR 0010).
+
+## Amendment (2026-11-16): application bundles as built
+- Container: **ZIP** instead of tar.zst — the server already uses `zip` (deflate) for library files
+  and OpenSong imports, so no tar and zstd crates are added, and single entries can be read with
+  hard size limits. Entries: `manifest.json` (format, version, build id, SHA-256 of the binary),
+  `manifest.sig` (hex Ed25519 signature of the manifest bytes), `sursum-server`.
+- Signing with `ed25519-dalek` 3.0 (BSD-3-Clause, `verify_strict`). The public key is compiled in
+  from `SURSUM_BUNDLE_KEY` at build time; builds without it refuse every bundle. The secret key is
+  created by `sursum-server bundle keygen` (file mode 0600) and stays outside the repository (CI
+  secret).
+- `sursum-server bundle install <file>` verifies, backs up the database (`before-<version>`),
+  writes `releases/<version>/sursum-server` atomically and switches the relative symlinks
+  `current`/`previous` by rename; `bundle rollback` swaps them back. Still to do on the device (M4):
+  systemd units running `current/sursum-server`, the restart, the `/healthz` check with automatic
+  rollback, and the browser/USB upload paths.

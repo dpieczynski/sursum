@@ -87,6 +87,13 @@ lint:
 cross-pi: build-web
     cargo zigbuild --release -p sursum-server --target aarch64-unknown-linux-gnu.2.36
 
+# Signed application bundle for the Pi (ADR 0013): needs SURSUM_BUNDLE_KEY (public, compiled in)
+# and SURSUM_BUNDLE_SIGNING_KEY (path of the secret key file, never in the repository).
+app-bundle version: cross-pi
+    test -n "$SURSUM_BUNDLE_KEY" && test -n "$SURSUM_BUNDLE_SIGNING_KEY"
+    cargo run -q -p sursum-server -- bundle create --key "$SURSUM_BUNDLE_SIGNING_KEY" --version {{version}} \
+        target/aarch64-unknown-linux-gnu/release/sursum-server target/sursum-{{version}}.sursum-app
+
 # Cross-compile the server for Windows (needs zig and cargo-zigbuild).
 cross-win: build-web
     cargo zigbuild --release -p sursum-server --target x86_64-pc-windows-gnu

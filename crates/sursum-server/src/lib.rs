@@ -9,6 +9,7 @@
 pub mod actor;
 pub mod assets;
 pub mod auth;
+pub mod bundle;
 pub mod config;
 pub mod db;
 pub mod demo;

@@ -42,12 +42,12 @@ struct Args {
 /// One-off tasks instead of running the server.
 #[derive(Debug, Subcommand)]
 enum Task {
-    /// Import (or update) songs from an OpenSong `Songs` folder, then exit.
     /// Set the PIN that remotes must enter to pair (6-12 digits), then exit.
     SetPin {
         /// The new PIN.
         pin: String,
     },
+    /// Import (or update) songs from an OpenSong `Songs` folder (and `Sets` next to it), then exit.
     ImportOpensong {
         /// The OpenSong `Songs` folder.
         songs_dir: PathBuf,
@@ -55,6 +55,30 @@ enum Task {
         #[arg(long, default_value = "OpenSong")]
         songbook: String,
     },
+    /// Signed application bundles (`.sursum-app`, ADR 0013).
+    #[command(subcommand)]
+    Bundle(BundleTask),
+}
+
+/// Making, installing and rolling back application bundles.
+#[derive(Debug, Subcommand)]
+enum BundleTask {
+    /// Create a signing key: the secret goes to KEY_FILE (keep it out of the repository), the
+    /// public key is printed for `SURSUM_BUNDLE_KEY` at build time.
+    Keygen { key_file: PathBuf },
+    /// Sign a server binary into a bundle.
+    Create {
+        #[arg(long)]
+        key: PathBuf,
+        #[arg(long)]
+        version: String,
+        binary: PathBuf,
+        output: PathBuf,
+    },
+    /// Verify a bundle against this build's key and make it the current release in DATA_DIR.
+    Install { bundle: PathBuf },
+    /// Make the previous release current again.
+    Rollback,
 }
 
 #[tokio::main]
@@ -91,6 +115,10 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if let Some(Task::Bundle(task)) = &args.command {
+        return run_bundle_task(task, &args.data_dir);
+    }
+
     let mut config = Config::with_data_dir(&args.data_dir).load_file()?;
     if let Some(listen) = args.listen {
         config.listen = listen;
@@ -103,4 +131,47 @@ async fn main() -> anyhow::Result<()> {
     tokio::signal::ctrl_c().await?;
     tracing::info!("shutting down");
     server.stop().await
+}
+
+fn run_bundle_task(task: &BundleTask, data_dir: &std::path::Path) -> anyhow::Result<()> {
+    use sursum_server::bundle;
+    match task {
+        BundleTask::Keygen { key_file } => {
+            let (secret, public) = bundle::new_key()?;
+            write_secret(key_file, &secret)?;
+            println!("SURSUM_BUNDLE_KEY={public}");
+        }
+        BundleTask::Create { key, version, binary, output } => {
+            let key = bundle::signing_key(&std::fs::read_to_string(key)?)?;
+            let bytes = bundle::create(&std::fs::read(binary)?, version, BUILD_ID, &key)?;
+            std::fs::write(output, bytes)?;
+            println!("wrote {}", output.display());
+        }
+        BundleTask::Install { bundle: path } => {
+            let trusted = bundle::trusted_key().ok_or_else(|| {
+                anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no bundles")
+            })?;
+            let verified = bundle::verify(&std::fs::read(path)?, &trusted)?;
+            let database = sursum_server::db::Database::open(data_dir)?;
+            database.backup(data_dir, &format!("before-{}", verified.manifest.version))?;
+            let release = bundle::install(&verified, data_dir)?;
+            println!("installed {}; restart the service to run it", release.display());
+        }
+        BundleTask::Rollback => {
+            let previous = bundle::rollback(data_dir)?;
+            println!("current is {} again; restart the service", previous.display());
+        }
+    }
+    Ok(())
+}
+
+/// Writes a secret readable only by its owner.
+fn write_secret(path: &std::path::Path, secret: &str) -> anyhow::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    use std::io::Write as _;
+    options.open(path)?.write_all(secret.as_bytes())?;
+    Ok(())
 }
