@@ -144,7 +144,7 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
 }
 
 /// Name of the first element, skipping the XML declaration, comments and doctype.
-fn root_element(text: &str) -> Option<&str> {
+pub(super) fn root_element(text: &str) -> Option<&str> {
     let mut rest = text.trim_start_matches('\u{feff}');
     loop {
         rest = rest.trim_start();

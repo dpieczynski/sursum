@@ -35,6 +35,11 @@ presentation tokens `1` meaning `V1`; a single `|` at the end of lines; occasion
 lines; typos in presentation orders (`CV2`, `V78`). The importer now handles all of these (typos are
 reported). Result: 875 songs, 0 failures, 6291 slides, 9 warnings (all genuine typos).
 
+A local OpenSong 3.4.8 installation (2026-11-16, structure only): the set root `<set>` had **no
+`name` attribute**; song groups had only `name` and `type` (**no `path`, no `presentation`**);
+`custom` groups carry `seconds`, `loop`, `title`, `subtitle`, `notes`, `slides/slide/body`;
+`scripture` groups appeared. All four song entries matched a library file by name.
+
 ## Implemented rules (`crates/sursum-formats/src/opensong/`)
 
 - Section headers map to OpenLyrics names: `V1`→`v1`, `C`→`c`, **`R`→`c`** (Polish refrain),
@@ -50,11 +55,20 @@ reported). Result: 875 songs, 0 failures, 6291 slides, 9 warnings (all genuine t
 - Duplicate section headers are merged with a slide break and a warning.
 - Encoding: BOM, then the declared encoding, then UTF-8, then windows-1250 (with a warning).
 - Song ids derive from the path inside `Songs/`, so re-importing updates instead of duplicating.
+- **Sets** (`Sets/<file>`, read from the folder next to `Songs/` or from the uploaded ZIP): the set
+  name is the `name` attribute, else the file name. Song groups are found in the library by
+  `path` + `name` when `path` exists, else by file name (shortest path wins, reported when
+  ambiguous), else by title (songs typed in sursum). A `presentation` attribute becomes the item's
+  verse order (same token rules as songs). `custom` and `scripture` groups become text items (one
+  slide per `<body>`). `image` and other groups are skipped with a report line; missing songs are
+  skipped and reported. Set and item ids derive from the file name, so re-importing a set replaces
+  it and keeps item ids.
 
 ## Still to verify ⚠
 
 - `_` and `-` inside lyric lines (not seen in the sample; kept as text);
-- set files: `image` slide groups, `presentation` override on song entries, `style` groups;
+- set files: `image` slide groups (structure guessed in the fixture), `presentation` override and
+  `path` on song entries (not seen locally), `style` groups;
 - legacy encodings in real parish files.
 
 ## Mapping to the internal model (OpenLyrics 0.9-compatible)

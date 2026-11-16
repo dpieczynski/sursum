@@ -85,8 +85,8 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("{line}");
         }
         println!(
-            "imported: {} new, {} updated, {} unchanged, {} failed",
-            report.inserted, report.updated, report.unchanged, report.failed
+            "imported: {} new, {} updated, {} unchanged, {} failed, {} sets",
+            report.inserted, report.updated, report.unchanged, report.failed, report.sets
         );
         return Ok(());
     }

@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use sursum_core::slides::{SlideRules, compile_song};
-use sursum_formats::opensong::read_library;
+use sursum_formats::opensong::{SetEntry, read_library, read_sets};
 use sursum_protocol::ItemId;
 
 #[test]
@@ -33,4 +33,36 @@ fn real_library_imports_without_failures() {
         println!("failed: {} chars in path, reason: {reason}", path.chars().count());
     }
     assert!(import.failures.is_empty(), "{} files failed to import", import.failures.len());
+
+    // Sets next to `Songs/`: how many song entries can be found, by path or by file name.
+    let mut import = import;
+    let sets_dir = std::path::Path::new(&dir).join("../Sets");
+    if sets_dir.is_dir() {
+        read_sets(&mut import, &sets_dir).expect("sets folder readable");
+        let paths: Vec<&str> = import.songs.iter().map(|(path, _)| path.as_str()).collect();
+        let (mut by_path, mut by_name, mut missing, mut texts, mut skipped) = (0, 0, 0, 0, 0);
+        for set in &import.sets {
+            skipped += set.skipped.len();
+            for entry in &set.entries {
+                match entry {
+                    SetEntry::Text { .. } => texts += 1,
+                    SetEntry::Song { name, .. } => {
+                        if entry.song_path().is_some_and(|path| paths.contains(&path.as_str())) {
+                            by_path += 1;
+                        } else if paths.iter().any(|path| path.rsplit('/').next() == Some(name.as_str())) {
+                            by_name += 1;
+                        } else {
+                            missing += 1;
+                        }
+                    }
+                }
+            }
+        }
+        println!(
+            "sets: {}, songs by path: {by_path}, by name: {by_name}, missing: {missing}, texts: {texts}, skipped groups: {skipped}, failures: {}",
+            import.sets.len(),
+            import.failures.len()
+        );
+        assert!(import.failures.is_empty(), "set files failed to import");
+    }
 }

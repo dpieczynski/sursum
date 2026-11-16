@@ -37,6 +37,9 @@ pub struct ImportReport {
     pub updated: u32,
     pub unchanged: u32,
     pub failed: u32,
+    /// Sets imported from the `Sets/` folder (re-importing a set replaces it).
+    #[serde(default)]
+    pub sets: u32,
     /// Warnings and failures, one line each (at most a few hundred).
     pub problems: Vec<String>,
 }

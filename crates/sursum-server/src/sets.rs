@@ -83,6 +83,17 @@ impl SetStore {
         self.sets.last().expect("just pushed")
     }
 
+    /// Adds a set, or replaces the set with the same id (re-importing). The active set stays.
+    pub fn upsert(&mut self, set: ServiceSet) {
+        match self.sets.iter_mut().find(|existing| existing.id == set.id) {
+            Some(existing) => *existing = set,
+            None => self.sets.push(set),
+        }
+        if self.active.is_none() {
+            self.active = self.sets.first().map(|set| set.id.clone());
+        }
+    }
+
     /// Inserts an item into the active set after `anchor` (or at the end).
     pub fn insert(
         &mut self,

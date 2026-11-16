@@ -64,7 +64,7 @@ without a mouse.
 
 - [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items); image and blank items still open
 - [x] Remote: two-column landscape layout (previews left, library/set right, controls bottom)
-- [ ] OpenSong set import
+- [x] OpenSong set import (folder and ZIP): songs by path/file name/title, `presentation` override, custom and scripture groups as text items, image groups reported; re-import replaces the set
 - [x] Multi-remote `Stale` rule (M1)
 - [x] PIN pairing: `sursum-server set-pin`, salted hash, rate-limited `/api/pair` with doubling lockout, `HttpOnly; SameSite=Strict` device cookie (only its hash stored), protected `/ws/remote` and `/api/*`, pairing screen in the remote; screen stays open
 - [ ] Roles (operator vs admin) and the device list with revocation

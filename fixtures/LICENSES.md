@@ -18,3 +18,4 @@ from `/local/` (git-ignored), see [docs/testing.md](../docs/testing.md).
 | `opensong/Songs/Synthetic CP1250` | synthetic | Declared windows-1250 encoding, every Polish letter, empty presentation. |
 | `opensong/Songs/Synthetic Broken` | synthetic | Malformed XML (must be reported, not crash). |
 | `opensong/Songs/cover.jpg` | synthetic | Not an image at all; skipped by extension. |
+| `opensong/Sets/Synthetic Sunday` | synthetic | Set with song entries (with and without `path`, with a `presentation` override, one missing), a custom announcement, a scripture group with invented text and an image group (skipped with a warning). |

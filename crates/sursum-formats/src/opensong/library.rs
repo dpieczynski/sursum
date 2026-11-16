@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::set::{ImportedSet, parse_set};
 use super::song::{ImportedSong, parse_song};
 
 /// Everything found in a `Songs/` folder.
@@ -10,6 +11,8 @@ use super::song::{ImportedSong, parse_song};
 pub struct LibraryImport {
     /// Imported songs with their path inside the folder (`/`-separated).
     pub songs: Vec<(String, ImportedSong)>,
+    /// Sets found in a `Sets/` folder next to `Songs/`.
+    pub sets: Vec<ImportedSet>,
     /// Files that could not be imported, with the reason.
     pub failures: Vec<(String, String)>,
 }
@@ -24,6 +27,34 @@ pub fn add_file(import: &mut LibraryImport, relative: String, bytes: &[u8], song
         Ok(song) => import.songs.push((relative, song)),
         Err(error) => import.failures.push((relative, error.to_string())),
     }
+}
+
+/// Parses one set file into `import`; `file_name` is its name inside `Sets/`.
+pub fn add_set_file(import: &mut LibraryImport, file_name: &str, bytes: &[u8]) {
+    match parse_set(bytes, file_name) {
+        Ok(set) => import.sets.push(set),
+        Err(error) => import.failures.push((format!("Sets/{file_name}"), error.to_string())),
+    }
+}
+
+/// Reads every set file directly inside `sets_dir` (OpenSong keeps sets in one flat folder),
+/// in a stable (sorted) order.
+pub fn read_sets(import: &mut LibraryImport, sets_dir: &Path) -> std::io::Result<()> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(sets_dir)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<_, _>>()?;
+    files.sort();
+    for file in files {
+        let Some(name) = file.file_name().and_then(|name| name.to_str()).map(str::to_owned) else { continue };
+        if name.starts_with('.') || file.is_dir() || is_skipped(&name) {
+            continue;
+        }
+        match std::fs::read(&file) {
+            Ok(bytes) => add_set_file(import, &name, &bytes),
+            Err(error) => import.failures.push((format!("Sets/{name}"), error.to_string())),
+        }
+    }
+    Ok(())
 }
 
 /// True for files that are never songs (images, databases), judged by the extension.

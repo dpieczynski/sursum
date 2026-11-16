@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Importing an OpenSong library from a ZIP file chosen on the tablet or PC.
+//! Importing an OpenSong library (songs and sets) from a ZIP file chosen on the tablet or PC.
 
 use leptos::prelude::*;
 use sursum_protocol::ImportReport;
@@ -35,5 +35,12 @@ pub fn ImportButton() -> impl IntoView {
 }
 
 fn summary(report: &ImportReport) -> String {
-    import_summary(report.inserted, report.updated, report.unchanged, report.failed, report.problems.len())
+    import_summary(
+        report.inserted,
+        report.updated,
+        report.unchanged,
+        report.failed,
+        report.sets,
+        report.problems.len(),
+    )
 }

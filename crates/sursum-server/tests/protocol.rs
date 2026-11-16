@@ -321,7 +321,7 @@ async fn http_post_bytes(server: &RunningServer, path: &str, body: &[u8]) -> Str
 }
 
 #[tokio::test]
-async fn zip_upload_imports_songs_into_the_running_library() {
+async fn zip_upload_imports_songs_and_sets_into_the_running_library() {
     use std::io::Write as _;
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/opensong/Songs");
     let mut buffer = std::io::Cursor::new(Vec::new());
@@ -330,15 +330,25 @@ async fn zip_upload_imports_songs_into_the_running_library() {
         writer.start_file(format!("Songs/{name}"), zip::write::SimpleFileOptions::default()).unwrap();
         writer.write_all(&std::fs::read(fixtures.join(name)).unwrap()).unwrap();
     }
+    writer.start_file("Sets/Synthetic Sunday", zip::write::SimpleFileOptions::default()).unwrap();
+    writer.write_all(&std::fs::read(fixtures.join("../Sets/Synthetic Sunday")).unwrap()).unwrap();
     writer.finish().unwrap();
 
     let dir = tempfile::tempdir().unwrap();
     let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    next_remote_state(&mut remote).await;
     let report: sursum_protocol::ImportReport = serde_json::from_str(
         &http_post_bytes(&server, "/api/import/opensong?songbook=Test", buffer.get_ref()).await,
     )
     .unwrap();
-    assert_eq!((report.inserted, report.failed), (2, 1), "{report:?}");
+    assert_eq!((report.inserted, report.failed, report.sets), (2, 1, 1), "{report:?}");
+    let state = next_remote_state(&mut remote).await;
+    assert!(
+        state.sets.iter().any(|set| set.name == "Syntetyczna niedziela" && set.items == 3),
+        "{:?}",
+        state.sets
+    );
     let found: Vec<sursum_protocol::SongSummary> =
         serde_json::from_str(&http_get(&server, "/api/songs?q=windows%201250").await).unwrap();
     assert_eq!(found[0].title, "Syntetyczna pieśń w kodowaniu Windows-1250");

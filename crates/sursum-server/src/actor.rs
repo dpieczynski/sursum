@@ -447,7 +447,12 @@ impl AppState {
             tracing::error!(?error, "could not back up before importing");
         }
         let report = match crate::import::store(&mut self.database, library) {
-            Ok(report) => report,
+            Ok((report, sets)) => {
+                for set in sets {
+                    self.sets.upsert(set);
+                }
+                report
+            }
             Err(error) => {
                 sursum_protocol::ImportReport { problems: vec![error.to_string()], ..Default::default() }
             }

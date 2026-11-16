@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<set name="Syntetyczna niedziela">
+  <slide_groups>
+    <slide_group name="Synthetic Basic" type="song" presentation="V1 C" path=""/>
+    <slide_group name="Ogłoszenia" type="custom" seconds="" loop="">
+      <title>Ogłoszenia parafialne</title>
+      <subtitle></subtitle>
+      <notes></notes>
+      <slides>
+        <slide><body>Syntetyczne ogłoszenie pierwsze.
+Druga linia ogłoszenia.</body></slide>
+        <slide><body>Syntetyczne ogłoszenie drugie.</body></slide>
+      </slides>
+    </slide_group>
+    <slide_group name="Synthetic Numbered" type="song"/>
+    <slide_group name="Syntetyczne czytanie 1,1-2" type="scripture">
+      <title>Syntetyczne czytanie 1,1-2</title>
+      <slides>
+        <slide><body>1 Pierwszy syntetyczny werset czytania.
+2 Drugi syntetyczny werset czytania.</body></slide>
+      </slides>
+    </slide_group>
+    <slide_group name="Pieśń której nie ma" type="song" path="Inne/"/>
+    <slide_group name="Obrazek" type="image">
+      <title>Obrazek</title>
+      <slides><slide><image>bm90IGFuIGltYWdl</image></slide></slides>
+    </slide_group>
+  </slide_groups>
+</set>

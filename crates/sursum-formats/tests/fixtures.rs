@@ -71,3 +71,35 @@ fn windows_1250_song_keeps_polish_letters() {
         "encoding was declared"
     );
 }
+
+#[test]
+fn set_file_lists_songs_texts_and_skipped_groups() {
+    use sursum_formats::opensong::{SetEntry, read_sets};
+    let mut import = sursum_formats::opensong::LibraryImport::default();
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/opensong/Sets");
+    read_sets(&mut import, &dir).unwrap();
+    assert!(import.failures.is_empty(), "{:?}", import.failures);
+    let set = &import.sets[0];
+    assert_eq!((set.name.as_str(), set.file_name.as_str()), ("Syntetyczna niedziela", "Synthetic Sunday"));
+    assert_eq!(set.entries.len(), 5);
+    assert_eq!(
+        set.entries[0],
+        SetEntry::Song {
+            name: "Synthetic Basic".into(),
+            folder: Some(String::new()),
+            presentation: Some("V1 C".into())
+        }
+    );
+    assert_eq!(set.entries[0].song_path().as_deref(), Some("Synthetic Basic"));
+    let SetEntry::Text { title, pages } = &set.entries[1] else { panic!("{:?}", set.entries[1]) };
+    assert_eq!(title, "Ogłoszenia parafialne");
+    assert_eq!(
+        pages,
+        &["Syntetyczne ogłoszenie pierwsze.\nDruga linia ogłoszenia.", "Syntetyczne ogłoszenie drugie."]
+    );
+    assert_eq!(set.entries[2].song_path(), None, "no path attribute: found by name later");
+    assert!(matches!(&set.entries[3], SetEntry::Text { pages, .. } if pages.len() == 1));
+    assert_eq!(set.entries[4].song_path().as_deref(), Some("Inne/Pieśń której nie ma"));
+    assert_eq!(set.skipped.len(), 1);
+    assert!(set.skipped[0].contains("image"), "{:?}", set.skipped);
+}

@@ -141,9 +141,16 @@ pub fn pl(msg: Msg) -> &'static str {
 }
 
 /// One-line import report, e.g. "Zaimportowano: 12 nowych, 3 zmienionych, …".
-pub fn import_summary(inserted: u32, updated: u32, unchanged: u32, failed: u32, problems: usize) -> String {
+pub fn import_summary(
+    inserted: u32,
+    updated: u32,
+    unchanged: u32,
+    failed: u32,
+    sets: u32,
+    problems: usize,
+) -> String {
     format!(
-        "Zaimportowano: {inserted} nowych, {updated} zmienionych, {unchanged} bez zmian, {failed} błędów, {problems} uwag"
+        "Zaimportowano: {inserted} nowych, {updated} zmienionych, {unchanged} bez zmian, {failed} błędów, {sets} zestawów, {problems} uwag"
     )
 }
 
