@@ -13,7 +13,7 @@ use crate::messages::{Msg, pl};
 const DEBOUNCE_MS: u32 = 150;
 
 /// Asks the server for songs matching `query`; an empty list on any error.
-async fn fetch_songs(query: &str) -> Vec<SongSummary> {
+pub async fn fetch_songs(query: &str) -> Vec<SongSummary> {
     let url = format!("/api/songs?q={}", js_sys::encode_uri_component(query));
     let Some(window) = web_sys::window() else { return Vec::new() };
     let Ok(response) = JsFuture::from(window.fetch_with_str(&url)).await else { return Vec::new() };

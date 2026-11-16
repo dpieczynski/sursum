@@ -31,32 +31,32 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(800)).await;
     screen.screenshot(&output.join("screen.png")).await?;
     remote_page.screenshot(&output.join("remote.png")).await?;
-    remote_page.find(thirtyfour::By::Css("[data-testid=jump]")).await?.click().await?;
-    remote_page
-        .find(thirtyfour::By::XPath("//div[@data-testid='keypad']//button[text()='2']"))
-        .await?
-        .click()
-        .await?;
-    remote_page.screenshot(&output.join("keypad.png")).await?;
-    remote_page
-        .find(thirtyfour::By::XPath("//div[@data-testid='keypad']//button[text()='Anuluj']"))
-        .await?
-        .click()
-        .await?;
+    // The search sheet.
+    remote_page.find(thirtyfour::By::Css("[data-testid=search]")).await?.click().await?;
     let search = remote_page.find(thirtyfour::By::Css(".search-input")).await?;
     search.send_keys("zorze").await?;
     tokio::time::sleep(Duration::from_millis(600)).await;
     remote_page.screenshot(&output.join("remote-search.png")).await?;
-    // The editor with a song from the library.
+    remote_page
+        .find(thirtyfour::By::Css("[data-testid=search-sheet] .sheet-header button"))
+        .await?
+        .click()
+        .await?;
+    // The Zestaw view and the editor with a song from the library.
+    sursum_e2e::open_tab(&remote_page, "zestaw").await?;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    remote_page.screenshot(&output.join("set.png")).await?;
+    let search = remote_page.find(thirtyfour::By::Css(".search-input")).await?;
+    search.send_keys("zorze").await?;
+    tokio::time::sleep(Duration::from_millis(600)).await;
     remote_page.find(thirtyfour::By::Css(".result-action")).await?.click().await?;
     tokio::time::sleep(Duration::from_millis(1200)).await;
     remote_page.screenshot(&output.join("editor.png")).await?;
-    // The set in edit mode.
     remote_page.find(thirtyfour::By::XPath("//button[text()='Zamknij']")).await?.click().await?;
-    remote_page.find(thirtyfour::By::Css(".search-clear")).await?.click().await?;
-    remote_page.find(thirtyfour::By::XPath("//button[text()='Edytuj zestaw']")).await?.click().await?;
+    // The Ustawienia view.
+    sursum_e2e::open_tab(&remote_page, "ustawienia").await?;
     tokio::time::sleep(Duration::from_millis(400)).await;
-    remote_page.screenshot(&output.join("set-edit.png")).await?;
+    remote_page.screenshot(&output.join("settings.png")).await?;
     // Calibration: the test card on the screen and the panel on the remote.
     remote.command(Command::Calibrate { on: true }).await?;
     let open = remote_page.find(thirtyfour::By::XPath("//button[contains(text(), 'Kalibracja')]")).await?;

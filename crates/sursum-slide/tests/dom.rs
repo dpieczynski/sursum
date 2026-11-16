@@ -125,3 +125,16 @@ async fn scaling_the_stage_does_not_change_the_size() {
     let preview = fit_deck(&deck("scale-0.3", &[SHORT, LONG]), &theme, FULL, &stage(0.3)).await;
     assert_eq!(preview, screen);
 }
+
+#[wasm_bindgen_test]
+async fn a_hidden_measurer_does_not_spoil_the_size_for_a_visible_one() {
+    let hidden = stage(1.0);
+    let frame = hidden.parent_element().unwrap().unchecked_into::<web_sys::HtmlElement>();
+    frame.style().set_property("display", "none").unwrap();
+    let theme = Theme::default();
+    let hidden_fit = fit_deck(&deck("hidden-first", &[LONG]), &theme, FULL, &hidden).await;
+    assert_eq!(hidden_fit.font_px, theme.min_font_px, "nothing can be measured while hidden");
+    let visible = fit_deck(&deck("hidden-first", &[LONG]), &theme, FULL, &stage(1.0)).await;
+    assert!(!overflows(&stage(1.0), LONG, FULL, visible.font_px), "measured for real, not from the cache");
+    assert!(overflows(&stage(1.0), LONG, FULL, visible.font_px + 1));
+}

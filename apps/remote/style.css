@@ -1,134 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Remote for one-handed use: large touch targets, controls in the thumb zone at the bottom. */
+/* Styles of the parts not yet moved to their own files (Zestaw and Ustawienia views, editor,
+   pairing, calibration). */
 
-:root {
-  --bg: #111;
-  --panel: #1c1c1c;
-  --text: #eee;
-  --muted: #999;
-  --accent: #3b82f6;
-  --danger: #b91c1c;
-  --ok: #16a34a;
-  --gap: 10px;
-  font-family: "Lato", system-ui, sans-serif;
-}
-
-* {
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.remote {
-  display: grid;
-  /* top bar, display power, previews, section chips, library (scrolls), controls */
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-  gap: var(--gap);
-  /* Exactly one screen high: the set list scrolls, the controls stay in the thumb zone. */
-  height: 100dvh;
-  padding: var(--gap);
-  padding-bottom: calc(var(--gap) + env(safe-area-inset-bottom));
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  font-size: 15px;
-  color: var(--muted);
-}
-.status-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--danger);
-}
-.status-dot.connected {
-  background: var(--ok);
-}
-.notice {
-  margin-left: auto;
-  color: #facc15;
-}
-.about {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.previews {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  /* The live preview (2/3 of this width, 16:9) is at most a third of the screen height, so the
-     set list and the controls always keep their room. */
-  max-width: min(100%, calc(33dvh * 16 / 9 * 1.5));
-  gap: var(--gap);
-  align-items: start;
-}
-.preview-box {
-  position: relative;
-}
-.preview-box .sursum-frame {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 2px solid #333;
-  border-radius: 6px;
-}
-.preview-box.live .sursum-frame {
-  border-color: #dc2626;
-}
-.preview-label {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-.badge {
-  position: absolute;
-  top: 28px;
-  right: 8px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: #000;
-  border: 1px solid #fff;
-  font-weight: 700;
-  font-size: 14px;
-}
-.sursum-mask-preview {
-  background: repeating-linear-gradient(45deg, #000, #000 20px, #333 20px, #333 40px);
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap);
-}
-.chip {
-  min-width: 64px;
-  min-height: 52px;
-  padding: 0 14px;
-  border-radius: 26px;
-  border: 1px solid #444;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 20px;
-  font-weight: 700;
-}
-.chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.library {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  gap: var(--gap);
-  min-height: 0;
-}
 .search {
   display: flex;
   gap: var(--gap);
@@ -237,52 +110,12 @@ a.import-button {
   background: #3f1d1d;
 }
 
-.controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 2fr;
-  grid-template-rows: auto auto;
-  gap: var(--gap);
-}
-.controls button {
-  min-height: 72px;
-  border: none;
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 22px;
-  font-weight: 700;
-}
-.controls button:active {
-  filter: brightness(1.4);
-}
-.controls .next {
-  grid-row: span 2;
-  background: var(--accent);
-  font-size: 30px;
-}
-.controls .black.active {
-  background: #fff;
-  color: #000;
-}
-.controls .black {
-  background: #000;
-  border: 2px solid #fff;
-}
-.controls .logo.active {
-  background: var(--ok);
-}
-
 /* Song editor: form on the left, slide previews on the right (stacked on narrow screens). */
 .editor {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--gap);
-  padding: var(--gap);
-  background: var(--bg);
-  overflow: auto;
+  min-height: 100%;
 }
 @media (max-width: 900px) {
   .editor {
@@ -472,41 +305,6 @@ label.set-tool {
   user-select: text;
 }
 
-/* Landscape tablets and PCs: previews and section chips on the left, the library and the set on
-   the right at full height, controls along the bottom. */
-@media (orientation: landscape) and (min-width: 1000px) {
-  .remote {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      "top top"
-      "previews library"
-      "chips library"
-      "power library"
-      "controls controls";
-  }
-  .power {
-    grid-area: power;
-  }
-  .topbar {
-    grid-area: top;
-  }
-  .previews {
-    grid-area: previews;
-    max-width: none;
-  }
-  .chips {
-    grid-area: chips;
-    align-content: start;
-  }
-  .library {
-    grid-area: library;
-  }
-  .controls {
-    grid-area: controls;
-  }
-}
-
 /* Pairing form: big PIN field for a thumb. */
 .pairing {
   display: flex;
@@ -522,7 +320,7 @@ label.set-tool {
   gap: 6px;
   color: var(--muted);
 }
-.pairing input {
+.pairing input:not(.pin) {
   min-height: 56px;
   padding: 0 14px;
   border-radius: 10px;
@@ -537,7 +335,7 @@ label.set-tool {
   letter-spacing: 0.3em;
   text-align: center;
 }
-.pairing button {
+.pairing button[type="submit"] {
   min-height: 64px;
   border: none;
   border-radius: 10px;
@@ -713,53 +511,6 @@ label.set-tool {
 .key-names {
   flex: 1;
   color: var(--muted);
-}
-
-/* The "#" keypad: jump to item N of the set. */
-.keypad {
-  position: fixed;
-  top: var(--gap);
-  right: var(--gap);
-  z-index: 15;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  width: min(360px, calc(100vw - 2 * var(--gap)));
-  padding: var(--gap);
-  border: 1px solid #444;
-  border-radius: 12px;
-  background: var(--panel);
-}
-.keypad-display {
-  min-height: 56px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--bg);
-  font-size: 32px;
-  font-weight: 700;
-  text-align: right;
-}
-.keypad-keys {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--gap);
-}
-.keypad button {
-  min-height: 64px;
-  border: none;
-  border-radius: 10px;
-  background: #2a2a2a;
-  color: var(--text);
-  font-size: 26px;
-  font-weight: 700;
-}
-.keypad .go {
-  background: var(--accent);
-  font-size: 20px;
-}
-.keypad .keypad-cancel {
-  min-height: 48px;
-  font-size: 18px;
 }
 
 .set-kind {

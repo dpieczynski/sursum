@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The operator's remote: what is on screen, what comes next, and large controls for one hand.
+//! The operator's remote: three views (Msza for running the service with one hand, Zestaw for
+//! preparing it, Ustawienia for the rest) around a live area that never moves.
 //!
 //! It sends commands and renders snapshots; all decisions are made by the server.
 
@@ -14,21 +15,24 @@ mod calibration_form;
 mod editor;
 mod import;
 mod key_settings;
-mod keypad;
 mod keys;
+mod live;
 mod messages;
 mod pairing;
 mod picture;
 mod power;
+mod prefs;
+mod scroll;
 mod search;
 mod set_list;
+mod shell;
 mod ui;
 
 use leptos::prelude::*;
-use messages::{Msg, pl, section_label};
-use sursum_client::{Client, Status, needs_reload};
-use sursum_protocol::{ClientMsg, CmdOutcome, Command, Overlay, RemoteState, Role, SectionJump, ServerMsg};
-use sursum_slide::{PreviewData, SlidePreview};
+use messages::{Msg, pl};
+use shell::{CurrentView, View};
+use sursum_client::{Client, needs_reload};
+use sursum_protocol::{ClientMsg, CmdOutcome, Command, RemoteState, Role, ServerMsg};
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -56,6 +60,17 @@ fn Root() -> impl IntoView {
         Some(info) if info.setup_needed => view! { <pairing::Setup /> }.into_any(),
         Some(info) if !info.paired => view! { <pairing::Pairing /> }.into_any(),
         Some(info) => view! { <App info /> }.into_any(),
+    }
+}
+
+/// The connection status (shared through the context): controls are disabled without it.
+#[derive(Clone, Copy)]
+pub struct Connection(pub RwSignal<sursum_client::Status>);
+
+impl Connection {
+    /// True while commands can reach the server.
+    pub fn up(self) -> bool {
+        self.0.get() == sursum_client::Status::Connected
     }
 }
 
@@ -113,173 +128,140 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         _ => {}
     });
     let status = client.status();
+    provide_context(Connection(status));
     let commands =
         Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0), toasts };
     provide_context(commands);
+    let prefs = prefs::Prefs::load();
+    provide_context(prefs);
     let keys = key_settings::Keys { map: RwSignal::new(keys::KeyMap::load()), learning: RwSignal::new(None) };
     provide_context(keys);
     key_settings::listen(keys, commands);
     let editing = RwSignal::new(None::<editor::EditorTarget>);
     provide_context(editing);
-    let editor_view =
-        move || editing.get().map(|target| view! { <editor::Editor target editing state commands /> });
     let calibrating = calibration::Calibrating(RwSignal::new(false));
     provide_context(calibrating);
+    let current = CurrentView(RwSignal::new(View::from_location()));
+    provide_context(current);
+
     let open = calibrating.0;
     let calibration_view =
         move || open.get().then(|| view! { <calibration::CalibrationPanel open state commands /> });
+    let searching = RwSignal::new(false);
+    let search_sheet =
+        move || searching.get().then(|| view! { <live::SearchSheet commands open=searching /> });
+    let screen_open = RwSignal::new(false);
+    let screen_sheet =
+        move || screen_open.get().then(|| view! { <live::ScreenSheet state commands open=screen_open /> });
+    let content = move || match (editing.get(), current.0.get()) {
+        (Some(target), _) => view! { <editor::Editor target editing state commands /> }.into_any(),
+        (None, View::Live) => view! { <live::LiveSet state commands /> }.into_any(),
+        (None, View::Set) => view! { <SetViewForNow state commands /> }.into_any(),
+        (None, View::Settings) => view! { <SettingsViewForNow /> }.into_any(),
+    };
+    let view_attr = move || match current.0.get() {
+        View::Live => "live",
+        View::Set => "set",
+        View::Settings => "settings",
+    };
+    let editing_attr = move || editing.with(Option::is_some).to_string();
 
     view! {
-        {editor_view}
         {calibration_view}
-        <main class="remote">
-            <TopBar status state />
-            <power::DisplayPowerBar state commands />
-            <Previews state />
-            <SectionChips state commands />
-            <Library state commands />
-            <Controls state commands />
+        <main
+            class="remote"
+            data-view=view_attr
+            data-hand=shell::hand_attribute(prefs)
+            data-editing=editing_attr
+        >
+            <div class="area-top">
+                <shell::TopBar status state on_status=move || screen_open.set(true) />
+                <shell::Banners status state commands />
+            </div>
+            <section class="area-now">
+                <live::Now state />
+            </section>
+            <section class="area-slides">
+                <live::Slides state commands />
+            </section>
+            <section class="area-content">{content}</section>
+            <section class="area-pad">
+                <live::Pad state commands on_search=move || searching.set(true) />
+            </section>
+            <section class="area-strip">
+                <live::LiveStrip state commands />
+            </section>
         </main>
         <ui::Toast toasts send=move |command| commands.send(command) />
+        {search_sheet}
+        {screen_sheet}
     }
 }
 
+/// The Zestaw view until it is rebuilt: search, the library tools and the set panel.
 #[component]
-fn TopBar(status: RwSignal<Status>, state: RwSignal<Option<RemoteState>>) -> impl IntoView {
-    let status_text = move || {
-        pl(match status.get() {
-            Status::Connected => Msg::Connected,
-            Status::Connecting => Msg::Connecting,
-            Status::Disconnected => Msg::Disconnected,
-        })
-    };
-    let set_name = move || {
-        state
-            .with(|state| state.as_ref().and_then(|s| s.active_set.as_ref().map(|set| set.name.clone())))
-            .unwrap_or_else(|| pl(Msg::NoSet).to_owned())
-    };
-    // Only once a snapshot arrived: before that we do not know.
-    let screen_missing =
-        move || state.with(|state| state.as_ref().is_some_and(|state| !state.screen_connected));
-    view! {
-        <header class="topbar">
-            <span class="status-dot" class:connected=move || status.get() == Status::Connected></span>
-            <span>{status_text}</span>
-            <span>" · "{set_name}</span>
-
-            <a class="about" href="/licenses" target="_blank">
-                {pl(Msg::About)}
-            </a>
-        </header>
-        <div class="banners">
-            <Show when=move || status.get() != Status::Connected>
-                <ui::Banner kind=ui::BannerKind::Danger testid="disconnected">
-                    {pl(Msg::Disconnected)}
-                </ui::Banner>
-            </Show>
-            <Show when=screen_missing>
-                <ui::Banner kind=ui::BannerKind::Warn testid="screen-missing">
-                    {pl(Msg::ScreenMissing)}
-                </ui::Banner>
-            </Show>
-        </div>
-    }
-}
-
-#[component]
-fn Previews(state: RwSignal<Option<RemoteState>>) -> impl IntoView {
-    let live = Signal::derive(move || {
-        state.with(|state| {
-            let state = state.as_ref()?;
-            let program = &state.program;
-            Some(PreviewData {
-                live: program.live.clone()?,
-                theme: program.theme.clone(),
-                layout: program.layout.clone(),
-            })
-        })
-    });
-    let next = Signal::derive(move || {
-        state.with(|state| {
-            let state = state.as_ref()?;
-            Some(PreviewData {
-                live: state.next.clone()?,
-                theme: state.program.theme.clone(),
-                layout: state.program.layout.clone(),
-            })
-        })
-    });
-    let overlay =
-        move || state.with(|state| state.as_ref().map(|state| state.program.overlay).unwrap_or_default());
-    let dimmed = Signal::derive(move || overlay() != Overlay::None);
-    let badge = move || match overlay() {
-        Overlay::None => None,
-        Overlay::Black => Some(pl(Msg::Black)),
-        Overlay::Logo => Some(pl(Msg::Logo)),
-    };
-    let next_label = move || if next.with(Option::is_some) { pl(Msg::Next) } else { pl(Msg::EndOfSet) };
-    view! {
-        <section class="previews">
-            <div class="preview-box live" data-testid="preview-live">
-                <div class="preview-label">{pl(Msg::Live)}</div>
-                <SlidePreview data=live dimmed />
-                {move || badge().map(|text| view! { <span class="badge">{text}</span> })}
-            </div>
-            <div class="preview-box" data-testid="preview-next">
-                <div class="preview-label">{next_label}</div>
-                <SlidePreview data=next />
-            </div>
-        </section>
-    }
-}
-
-#[component]
-fn SectionChips(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let current = Signal::derive(move || {
-        state.with(|state| state.as_ref().and_then(|s| s.program.live.as_ref().map(|live| live.slide_index)))
-    });
-    let chips = move || {
-        let sections =
-            state.with(|state| state.as_ref().map(|state| state.sections.clone()).unwrap_or_default());
-        let ends: Vec<u32> =
-            sections.iter().skip(1).map(|next| next.slide_index).chain(std::iter::once(u32::MAX)).collect();
-        sections.into_iter().zip(ends).map(|(jump, end)| chip(jump, end, current, commands)).collect_view()
-    };
-    view! { <nav class="chips">{chips}</nav> }
-}
-
-/// One section button; highlighted while the live slide is inside its section.
-fn chip(jump: SectionJump, end: u32, current: Signal<Option<u32>>, commands: Commands) -> impl IntoView {
-    let start = jump.slide_index;
-    let active = move || current.get().is_some_and(|index| index >= start && index < end);
-    let jump_here = move |_| commands.send(Command::GoToSlide { slide_index: start });
-    let label = section_label(&jump.label);
-    view! {
-        <button class="chip" class:active=active on:click=jump_here>
-            {label}
-        </button>
-    }
-}
-
-/// The set, or search results while the search field is not empty.
-#[component]
-fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
+fn SetViewForNow(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
     let query = RwSignal::new(String::new());
     let searching = move || !query.with(|query| query.trim().is_empty());
     let set_list = move || view! { <set_list::SetPanel state commands /> };
-
     view! {
         <section class="library">
             <search::SearchBox query />
             <div class="library-tools">
                 <NewSongButton />
-                <bundle::ExportLink />
-                <key_settings::KeysButton />
-                <admin::AdminTools />
             </div>
             <Show when=searching fallback=set_list>
                 <search::SearchResults query commands />
             </Show>
+        </section>
+    }
+}
+
+/// The Ustawienia view until it is rebuilt: this device, pedal, library and admin tools.
+#[component]
+fn SettingsViewForNow() -> impl IntoView {
+    let prefs = expect_context::<prefs::Prefs>();
+    let hand = move |hand: prefs::Hand| move |_| prefs.set_hand(hand);
+    let side = move |hand: prefs::Hand| move || prefs.hand.get() == hand;
+    view! {
+        <section class="library">
+            <div class="library-tools">
+                <span>{pl(Msg::ButtonsSide)}</span>
+                <button
+                    class="btn btn--sm"
+                    class:selected=side(prefs::Hand::Right)
+                    data-testid="hand-right"
+                    on:click=hand(prefs::Hand::Right)
+                >
+                    {pl(Msg::ButtonsRight)}
+                </button>
+                <button
+                    class="btn btn--sm"
+                    class:selected=side(prefs::Hand::Left)
+                    data-testid="hand-left"
+                    on:click=hand(prefs::Hand::Left)
+                >
+                    {pl(Msg::ButtonsLeft)}
+                </button>
+            </div>
+            <div class="library-tools">
+                <label class="check">
+                    <input
+                        type="checkbox"
+                        prop:checked=move || prefs.vibration.get()
+                        on:change=move |event| prefs.set_vibration(event_target_checked(&event))
+                    />
+                    {pl(Msg::Vibration)}
+                </label>
+                <a class="btn btn--sm btn--quiet" href="/licenses" target="_blank">
+                    {pl(Msg::About)}
+                </a>
+            </div>
+            <div class="library-tools">
+                <bundle::ExportLink />
+                <key_settings::KeysButton />
+                <admin::AdminTools />
+            </div>
         </section>
     }
 }
@@ -289,47 +271,9 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
 fn NewSongButton() -> impl IntoView {
     let editing = expect_context::<RwSignal<Option<editor::EditorTarget>>>();
     view! {
-        <button class="new-song" on:click=move |_| editing.set(Some(editor::EditorTarget::New))>
+        <button class="new-song btn" on:click=move |_| editing.set(Some(editor::EditorTarget::New))>
             {pl(Msg::NewSong)}
         </button>
-    }
-}
-
-#[component]
-fn Controls(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let overlay =
-        move || state.with(|state| state.as_ref().map(|state| state.program.overlay).unwrap_or_default());
-    let toggle_logo = move |_| {
-        let target = if overlay() == Overlay::Logo { Overlay::None } else { Overlay::Logo };
-        commands.send(Command::SetOverlay { overlay: target });
-    };
-    view! {
-        <footer class="controls">
-            <button class="prev-item" on:click=move |_| commands.send(Command::PrevItem)>
-                {pl(Msg::PrevItem)}
-            </button>
-            <button class="next-item" on:click=move |_| commands.send(Command::NextItem)>
-                {pl(Msg::NextItem)}
-            </button>
-            <button class="logo" class:active=move || overlay() == Overlay::Logo on:click=toggle_logo>
-                {pl(Msg::Logo)}
-            </button>
-            <button class="next" data-testid="next" on:click=move |_| commands.send(Command::Next)>
-                {pl(Msg::Next)}
-            </button>
-            <button class="prev" data-testid="prev" on:click=move |_| commands.send(Command::Prev)>
-                {pl(Msg::Prev)}
-            </button>
-            <button
-                class="black"
-                data-testid="black"
-                class:active=move || overlay() == Overlay::Black
-                on:click=move |_| commands.send(Command::ToggleBlack)
-            >
-                {pl(Msg::Black)}
-            </button>
-            <keypad::JumpButton commands />
-        </footer>
     }
 }
 

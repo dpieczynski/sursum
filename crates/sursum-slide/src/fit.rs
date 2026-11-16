@@ -59,7 +59,14 @@ thread_local! {
 
 /// Fits a deck into the content rectangle, using `measurer` (an element inside a stage with the
 /// `sursum-measure` class) to measure text. Results are cached per deck, theme and rectangle.
+///
+/// A measurer that is not laid out (inside `display: none`, e.g. a preview hidden on a narrow
+/// layout) has no size, so everything would seem to fit: then the smallest size is returned and
+/// nothing is cached, so a hidden preview never spoils the size of a visible one.
 pub async fn fit_deck(deck: &Deck, theme: &Theme, content: Rect, measurer: &web_sys::HtmlElement) -> Fit {
+    if measurer.client_width() == 0 || measurer.client_height() == 0 {
+        return Fit { font_px: theme.min_font_px, wrap: false };
+    }
     let key = FitKey {
         fit_group: deck.fit_group.clone(),
         font: (theme.font_family.clone(), theme.font_weight, theme.line_height_permille),

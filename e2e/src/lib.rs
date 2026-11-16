@@ -342,6 +342,12 @@ where
     bail!("condition not met within {timeout:?}")
 }
 
+/// Opens a tab of the remote: "msza", "zestaw" or "ustawienia".
+pub async fn open_tab(driver: &WebDriver, tab: &str) -> anyhow::Result<()> {
+    driver.find(By::Css(format!("[data-testid=tab-{tab}]"))).await?.click().await?;
+    Ok(())
+}
+
 /// Reads an attribute of the first element matching a CSS selector ("" if missing).
 pub async fn attribute(driver: &WebDriver, selector: &str, name: &str) -> String {
     let script = format!(

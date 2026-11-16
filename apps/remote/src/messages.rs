@@ -5,14 +5,59 @@
 /// Every text the remote shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Msg {
-    Live,
+    TabLive,
+    ShortText,
+    ShortPicture,
+    ShortGap,
+    ShortBlack,
+    ShortLogo,
+    ShortNothing,
+    TabSet,
+    TabSettings,
+    ShowsText,
+    ShowsBlack,
+    ShowsLogo,
+    ShowsGap,
+    ShowsPicture,
+    ShowsNothing,
+    ScreenSheet,
+    BlackOut,
+    ShowText,
+    ShowLogo,
+    LogoOnScreen,
+    Search,
+    PrevSong,
+    NextSong,
+    NothingLive,
+    GapAfterItem,
+    SlideOf,
+    NextGap,
+    StartSet,
+    UnderCover,
+    LiveBadge,
+    NextBadge,
+    SetEmpty,
+    ChooseSet,
+    AddSongs,
+    ShowNowLong,
+    AddToSet,
+    Added,
+    Numbers,
+    SearchSong,
+    DisplayAsleep,
+    TurnOn,
+    NextSlide,
+    ButtonsSide,
+    ButtonsRight,
+    ButtonsLeft,
+    Vibration,
+    SlideN,
+    Items,
     Next,
     Prev,
     NextItem,
     PrevItem,
     Black,
-    Logo,
-    Connected,
     Disconnected,
     Connecting,
     AlreadyAdvanced,
@@ -98,7 +143,6 @@ pub enum Msg {
     KeysLearn,
     KeysPressNow,
     ParishLogo,
-    ItemNumber,
     ScreenMissing,
     DeleteSong,
     DeletedSong,
@@ -140,19 +184,64 @@ pub enum Msg {
 /// The Polish text for a message.
 pub fn pl(msg: Msg) -> &'static str {
     match msg {
-        Msg::Live => "Na ekranie",
-        Msg::Next => "Dalej ▶",
-        Msg::Prev => "◀ Wstecz",
-        Msg::NextItem => "Pieśń »",
-        Msg::PrevItem => "« Pieśń",
-        Msg::Black => "CZERŃ",
-        Msg::Logo => "LOGO",
-        Msg::Connected => "Połączono",
+        Msg::TabLive => "Msza",
+        Msg::ShortText => "Tekst",
+        Msg::ShortPicture => "Obraz",
+        Msg::ShortGap => "Przerwa",
+        Msg::ShortBlack => "Wygaszony",
+        Msg::ShortLogo => "Logo",
+        Msg::ShortNothing => "Pusty",
+        Msg::TabSet => "Zestaw",
+        Msg::TabSettings => "Ustawienia",
+        Msg::ShowsText => "Na ekranie: tekst",
+        Msg::ShowsBlack => "Ekran wygaszony",
+        Msg::ShowsLogo => "Na ekranie: logo",
+        Msg::ShowsGap => "Przerwa – pusty ekran",
+        Msg::ShowsPicture => "Na ekranie: obraz",
+        Msg::ShowsNothing => "Nic nie jest wyświetlane",
+        Msg::ScreenSheet => "Ekran",
+        Msg::BlackOut => "Wygaś ekran",
+        Msg::ShowText => "Pokaż tekst",
+        Msg::ShowLogo => "Pokaż logo",
+        Msg::LogoOnScreen => "Logo na ekranie",
+        Msg::Search => "Szukaj",
+        Msg::PrevSong => "Poprzednia pieśń",
+        Msg::NextSong => "Następna pieśń",
+        Msg::NothingLive => "Nic nie jest wyświetlane. Dotknij pozycji w zestawie albo naciśnij Dalej.",
+        Msg::GapAfterItem => "Przerwa po pozycji – pusty ekran",
+        Msg::SlideOf => "slajd",
+        Msg::NextGap => "→ przerwa",
+        Msg::StartSet => "→ początek zestawu",
+        Msg::UnderCover => "pod zasłoną",
+        Msg::LiveBadge => "na ekranie",
+        Msg::NextBadge => "następna",
+        Msg::SetEmpty => "Zestaw jest pusty",
+        Msg::ChooseSet => "Wybierz zestaw",
+        Msg::AddSongs => "Dodaj pieśni",
+        Msg::ShowNowLong => "Pokaż teraz",
+        Msg::AddToSet => "+ Do zestawu",
+        Msg::Added => "Dodano",
+        Msg::Numbers => "123",
+        Msg::SearchSong => "Szukaj pieśni",
+        Msg::DisplayAsleep => "Ekran jest uśpiony",
+        Msg::TurnOn => "Włącz",
+        Msg::NextSlide => "Następny slajd",
+        Msg::ButtonsSide => "Przyciski sterujące",
+        Msg::ButtonsRight => "Po prawej",
+        Msg::ButtonsLeft => "Po lewej",
+        Msg::Vibration => "Wibracja przy dotknięciu",
+        Msg::SlideN => "Slajd",
+        Msg::Items => "poz.",
+        Msg::Next => "Dalej",
+        Msg::Prev => "Wstecz",
+        Msg::NextItem => "Następna pieśń",
+        Msg::PrevItem => "Poprzednia pieśń",
+        Msg::Black => "Wygaś / pokaż ekran",
         Msg::Disconnected => "Brak połączenia – ekran pokazuje ostatni slajd. Ponawiam…",
         Msg::Connecting => "Łączenie…",
         Msg::AlreadyAdvanced => "Już przełączone przez inny pilot",
         Msg::NotPossible => "Nie da się",
-        Msg::NoSet => "Brak zestawu",
+        Msg::NoSet => "Nie wybrano zestawu",
         Msg::Untitled => "(bez tytułu)",
         Msg::EndOfSet => "Koniec zestawu",
         Msg::About => "Licencje",
@@ -268,7 +357,6 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KeysLearn => "Naucz",
         Msg::KeysPressNow => "Naciśnij teraz…",
         Msg::ParishLogo => "Logo parafii",
-        Msg::ItemNumber => "Numer pozycji w zestawie",
         Msg::ScreenMissing => "Ekran nie jest połączony z sursum",
         Msg::DeleteSong => "Usuń pieśń z bazy",
         Msg::DeletedSong => "(pieśń usunięta z bazy)",
@@ -340,21 +428,19 @@ pub fn locked_for(seconds: u32) -> String {
     format!("Za dużo prób – spróbuj ponownie za {seconds} s")
 }
 
-/// Human label for a section code sent by the server (`v1`, `c`, `c2`, `b`, …).
-pub fn section_label(code: &str) -> String {
+/// Full section name for headings: `v1` → "Zwrotka 1", `c` → "Refren", `c2` → "Refren 2".
+pub fn section_title(code: &str) -> String {
     let split = code.find(|c: char| c.is_ascii_digit()).unwrap_or(code.len());
     let (kind, number) = code.split_at(split);
-    let with_number =
-        |word: &str| if number.is_empty() { word.to_owned() } else { format!("{word} {number}") };
-    match kind {
-        "v" if !number.is_empty() => number.to_owned(),
-        "v" => "Zwr.".to_owned(),
-        "c" => with_number("Ref."),
-        "b" => with_number("Most"),
-        "p" => with_number("Przedref."),
-        "e" => with_number("Zak."),
-        _ => code.to_owned(),
-    }
+    let word = match kind {
+        "v" => "Zwrotka",
+        "c" => "Refren",
+        "b" => "Most",
+        "p" => "Przedrefren",
+        "e" => "Zakończenie",
+        _ => return code.to_owned(),
+    };
+    if number.is_empty() { word.to_owned() } else { format!("{word} {number}") }
 }
 
 #[cfg(test)]
@@ -362,11 +448,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn section_codes_become_polish_labels() {
-        assert_eq!(section_label("v2"), "2");
-        assert_eq!(section_label("c"), "Ref.");
-        assert_eq!(section_label("c2"), "Ref. 2");
-        assert_eq!(section_label("b"), "Most");
-        assert_eq!(section_label("Alleluja"), "Alleluja");
+    fn section_codes_become_polish_titles() {
+        assert_eq!(section_title("v1"), "Zwrotka 1");
+        assert_eq!(section_title("c"), "Refren");
+        assert_eq!(section_title("c2"), "Refren 2");
+        assert_eq!(section_title("Alleluja"), "Alleluja");
     }
 }

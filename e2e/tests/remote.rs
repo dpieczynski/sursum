@@ -5,7 +5,11 @@
 
 use std::time::Duration;
 
-use sursum_e2e::{Browser, SCREEN_ROOT, Server, attribute, wait_for_slide, wait_until, with_engine};
+use anyhow::Context as _;
+
+use sursum_e2e::{
+    Browser, SCREEN_ROOT, Server, attribute, open_tab, wait_for_slide, wait_until, with_engine,
+};
 use thirtyfour::prelude::*;
 
 const PREVIEW_LIVE: &str = "[data-testid=preview-live] [data-font-px]";
@@ -68,13 +72,20 @@ async fn preview_on_the_remote_matches_the_screen() -> anyhow::Result<()> {
                 let key = attribute(screen, SCREEN_ROOT, "data-slide-key").await;
                 let screen_size = attribute(screen, SCREEN_ROOT, "data-font-px").await;
                 let screen_lines = visible_line_count(screen).await?;
-                wait_until(Duration::from_secs(5), || async {
+                let wait = wait_until(Duration::from_secs(5), || async {
                     attribute(remote, PREVIEW_LIVE, "data-font-px").await == screen_size
                         && attribute(remote, PREVIEW_LIVE, "data-line-count").await
                             == screen_lines.to_string()
                 })
-                .await
-                .map_err(|_| anyhow::anyhow!("preview differs from the screen on slide {key}"))?;
+                .await;
+                if wait.is_err() {
+                    let remote_size = attribute(remote, PREVIEW_LIVE, "data-font-px").await;
+                    let remote_lines = attribute(remote, PREVIEW_LIVE, "data-line-count").await;
+                    anyhow::bail!(
+                        "preview differs from the screen on slide {key}: screen {screen_size} px, \
+                         {screen_lines} lines; preview {remote_size} px, {remote_lines} lines"
+                    );
+                }
                 control.command(sursum_protocol::Command::Next).await?;
                 wait_until(Duration::from_secs(5), || async {
                     attribute(screen, SCREEN_ROOT, "data-slide-key").await != key
@@ -109,6 +120,9 @@ async fn search_without_diacritics_and_show_now() -> anyhow::Result<()> {
         screen.goto(server.url("/screen/")).await?;
         with_engine(Browser::Chromium, 1280, 800, async |remote| {
             remote.goto(server.url("/remote/")).await?;
+            let search = remote.query(By::Css("[data-testid=search]")).first().await?;
+            search.wait_until().clickable().await?;
+            search.click().await?;
             let input = remote.query(By::Css(".search-input")).first().await?;
             input.wait_until().displayed().await?;
             // "przykladowa" without the Polish ł finds "Pieśń przykładowa z refrenem".
@@ -119,8 +133,8 @@ async fn search_without_diacritics_and_show_now() -> anyhow::Result<()> {
             wait_for_slide(screen, "v1#").await?;
             let deck = attribute(screen, SCREEN_ROOT, "data-deck-id").await;
             anyhow::ensure!(!deck.is_empty(), "the screen shows no deck");
-            // The search field is cleared and the set list is back. The song is already in the
-            // set, so it is shown from there, not added twice.
+            // The sheet closes and the set list is back. The song is already in the set, so it is
+            // shown from there, not added twice.
             wait_until(Duration::from_secs(5), || async {
                 remote.find_all(By::Css(".set-item")).await.map(|items| items.len()).unwrap_or(0) == 3
             })
@@ -140,6 +154,8 @@ async fn new_song_typed_in_the_editor_goes_on_screen() -> anyhow::Result<()> {
         screen.goto(server.url("/screen/")).await?;
         with_engine(Browser::Chromium, 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
+            remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
+            open_tab(remote, "zestaw").await?;
             let new_song = remote.query(By::Css(".new-song")).first().await?;
             new_song.wait_until().clickable().await?;
             new_song.click().await?;
@@ -203,6 +219,7 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
             let rows =
                 || async { remote.find_all(By::Css(".set-item")).await.map(|rows| rows.len()).unwrap_or(0) };
             wait_until(Duration::from_secs(10), || async { rows().await == 3 }).await?;
+            open_tab(remote, "zestaw").await?;
             remote.find(By::XPath("//button[text()='Edytuj zestaw']")).await?.click().await?;
             // Move the last item up.
             let up_buttons = remote.find_all(By::XPath("//button[text()='↑']")).await?;
@@ -260,6 +277,7 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         })
         .await?;
         // An operator sees no setup tools until admin mode is unlocked with the PIN again.
+        open_tab(remote, "ustawienia").await?;
         let import = By::XPath("//label[contains(text(), 'Import z OpenSong')]");
         anyhow::ensure!(remote.find(import.clone()).await.is_err(), "import must need admin mode");
         remote.find(By::XPath("//button[text()='Tryb administratora']")).await?.click().await?;
@@ -306,6 +324,7 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
             remote.find(By::Css(".status-dot.connected")).await.is_ok()
         })
         .await?;
+        open_tab(remote, "ustawienia").await?;
         remote.find(By::XPath("//label[contains(text(), 'Import z OpenSong')]")).await?;
         Ok(())
     })
@@ -333,6 +352,7 @@ async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> any
             })
             .await?;
             // Calibration needs a hold, so a stray tap during Mass cannot start it.
+            open_tab(remote, "ustawienia").await?;
             let open = remote.find(By::XPath("//button[contains(text(), 'Kalibracja')]")).await?;
             remote.action_chain().click_and_hold_element(&open).perform().await?;
             tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -392,6 +412,10 @@ async fn display_goes_on_with_a_tap_and_to_standby_only_with_a_long_hold() -> an
     let server = Server::start_with(&[], Some(&config)).await?;
     with_engine(Browser::Chromium, 1280, 900, async |remote| {
         remote.goto(server.url("/remote/")).await?;
+        // Power control is in the "Ekran" sheet behind the screen status.
+        let status = remote.query(By::Css("[data-testid=screen-status]")).first().await?;
+        status.wait_until().clickable().await?;
+        status.click().await?;
         let wait_for = async |text: &'static str| {
             wait_until(Duration::from_secs(10), || async { power_state(remote).await == text })
                 .await
@@ -440,8 +464,14 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
             wait_for_slide(screen, "v1#").await?;
 
             // Learn mode: "Naucz" next to "Dalej", then press the pedal (here: F8).
-            remote.find(By::XPath("//button[text()='Pedał i klawisze']")).await?.click().await?;
-            remote.find(By::Css("[data-action=next] button")).await?.click().await?;
+            open_tab(remote, "ustawienia").await?;
+            remote
+                .find(By::XPath("//button[text()='Pedał i klawisze']"))
+                .await?
+                .click()
+                .await
+                .context("opening the key settings")?;
+            remote.find(By::Css("[data-action=next] button")).await?.click().await.context("learn")?;
             remote.action_chain().send_keys(Key::F8).perform().await?;
             wait_until(Duration::from_secs(5), || async {
                 match remote.find(By::Css("[data-action=next] .key-names")).await {
@@ -454,6 +484,7 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
             wait_for_slide(screen, "v2#").await?;
 
             // Typing a "b" in the search field does not black the screen, but PageDown still turns.
+            remote.find(By::Css("[data-testid=search]")).await?.click().await.context("search button")?;
             let search = remote.find(By::Css(".search-input")).await?;
             search.send_keys("b").await?;
             tokio::time::sleep(Duration::from_millis(300)).await;
@@ -466,32 +497,6 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
                 !attribute(screen, SCREEN_ROOT, "data-slide-key").await.starts_with("v2#")
             })
             .await?;
-            Ok(())
-        })
-        .await
-    })
-    .await
-}
-
-#[tokio::test]
-#[ignore = "needs a WebDriver server (just e2e)"]
-async fn the_keypad_jumps_to_an_item_number() -> anyhow::Result<()> {
-    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
-    with_engine(screen_engine(), 1920, 1080, async |screen| {
-        screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 900, async |remote| {
-            remote.goto(server.url("/remote/")).await?;
-            wait_until(Duration::from_secs(10), || async {
-                remote.find(By::Css(".status-dot.connected")).await.is_ok()
-            })
-            .await?;
-            remote.find(By::Css("[data-testid=jump]")).await?.click().await?;
-            // "0" first is ignored; "3" then "Pokaż" shows the third item (the announcements).
-            remote.find(By::XPath("//div[@data-testid='keypad']//button[text()='0']")).await?.click().await?;
-            remote.find(By::XPath("//div[@data-testid='keypad']//button[text()='3']")).await?.click().await?;
-            remote.find(By::Css("[data-testid=keypad-go]")).await?.click().await?;
-            wait_for_slide(screen, "t#").await?;
-            anyhow::ensure!(remote.find(By::Css("[data-testid=keypad]")).await.is_err(), "keypad stays open");
             Ok(())
         })
         .await

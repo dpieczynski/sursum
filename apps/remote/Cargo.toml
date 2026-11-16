@@ -21,7 +21,7 @@ serde_json.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
 gloo-timers.workspace = true
-web-sys = { workspace = true, features = ["Window", "Location", "KeyboardEvent", "Element", "EventTarget", "Response", "Request", "RequestInit", "Headers", "HtmlInputElement", "FileList", "File", "Blob", "PointerEvent", "HtmlSelectElement", "DomRect", "Storage"] }
+web-sys = { workspace = true, features = ["Window", "Location", "KeyboardEvent", "Element", "EventTarget", "Response", "Request", "RequestInit", "Headers", "HtmlInputElement", "FileList", "File", "Blob", "PointerEvent", "HtmlSelectElement", "DomRect", "Storage", "Navigator", "HtmlElement", "ScrollIntoViewOptions", "ScrollLogicalPosition"] }
 
 [lints]
 workspace = true

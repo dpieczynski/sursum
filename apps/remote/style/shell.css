@@ -1,0 +1,227 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* The page frame: top bar with tabs and the screen status, and the regions for three layouts.
+   Regions: now, slides, content (the tab's view or the editor), pad (controls, Msza only on
+   narrow screens), strip (live strip, other views on narrow screens). Only the content and the
+   slide list scroll; everything else has a fixed size, so nothing moves under a finger. */
+
+.remote {
+  display: grid;
+  gap: 8px;
+  height: 100dvh;
+  padding: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.remote > section {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---------- Narrow (phone, and the default) ---------- */
+.remote {
+  grid-template-columns: minmax(0, 1fr);
+}
+.remote[data-view="live"]:not([data-editing="true"]) {
+  grid-template-rows: auto 100px 56px minmax(0, 1fr) auto;
+  grid-template-areas: "top" "now" "slides" "content" "pad";
+}
+.remote:is([data-view="set"], [data-view="settings"], [data-editing="true"]) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "top" "content" "strip";
+}
+.remote:is([data-view="set"], [data-view="settings"], [data-editing="true"]) :is(.area-now, .area-slides, .area-pad) {
+  display: none;
+}
+.remote[data-view="live"]:not([data-editing="true"]) .area-strip {
+  display: none;
+}
+.area-top {
+  grid-area: top;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.area-now {
+  grid-area: now;
+}
+.area-slides {
+  grid-area: slides;
+}
+.area-content {
+  grid-area: content;
+  overflow-y: auto;
+}
+.area-pad {
+  grid-area: pad;
+}
+.area-strip {
+  grid-area: strip;
+}
+
+/* ---------- Upright tablet ---------- */
+@media (min-width: 600px) and (not ((orientation: landscape) and (min-width: 1000px))) {
+  .remote {
+    gap: 10px;
+    padding: 10px;
+  }
+  .remote[data-view="live"]:not([data-editing="true"]) {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "top top"
+      "now now"
+      "slides content"
+      "pad pad";
+  }
+  .remote:is([data-view="set"], [data-view="settings"], [data-editing="true"]) {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+}
+
+/* ---------- Wide: landscape tablet and PC, three columns ---------- */
+@media (orientation: landscape) and (min-width: 1000px) {
+  .remote,
+  .remote:is([data-view="live"], [data-view="set"], [data-view="settings"]):not([data-editing="true"]) {
+    gap: 10px;
+    padding: 10px;
+    grid-template-columns: minmax(360px, 1fr) minmax(0, 520px) minmax(240px, 300px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "top top top"
+      "content now pad"
+      "content slides pad";
+  }
+  .remote[data-hand="left"],
+  .remote[data-hand="left"]:is([data-view="live"], [data-view="set"], [data-view="settings"]):not([data-editing="true"]) {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 520px) minmax(360px, 1fr);
+    grid-template-areas:
+      "top top top"
+      "pad now content"
+      "pad slides content";
+  }
+  /* The editor takes the content and stage columns; the controls stay. */
+  .remote[data-editing="true"] {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "top top" "content pad";
+  }
+  .remote[data-editing="true"][data-hand="left"] {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    grid-template-areas: "top top" "pad content";
+  }
+  /* The live columns stay in every view (same weight as the narrow rule that hides them). */
+  .remote:is([data-view="live"], [data-view="set"], [data-view="settings"]) :is(.area-now, .area-slides, .area-pad) {
+    display: block;
+  }
+  .remote[data-editing="true"] :is(.area-now, .area-slides) {
+    display: none;
+  }
+  .remote .area-strip {
+    display: none;
+  }
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+  height: 44px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.tab {
+  min-width: 88px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 700;
+}
+.tab.selected {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.status-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+.status-chip.content {
+  border-color: var(--live);
+}
+.status-chip-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.status-chip-text.short {
+  display: none;
+}
+.status-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.status-dot.connected {
+  background: var(--live);
+}
+@media (max-width: 599px) {
+  .tab {
+    min-width: 0;
+    padding: 0 8px;
+    font-size: 15px;
+  }
+  .status-chip {
+    padding: 0 10px;
+    font-size: 15px;
+  }
+  .status-chip-text.long {
+    display: none;
+  }
+  .status-chip-text.short {
+    display: inline;
+  }
+}
+@media (min-width: 600px) {
+  .topbar {
+    height: 52px;
+  }
+}
+
+/* The toast sits above the controls (Msza) or the live strip (other views). */
+.toast {
+  --toast-bottom: 214px;
+}
+.remote:is([data-view="set"], [data-view="settings"], [data-editing="true"]) ~ .toast {
+  --toast-bottom: 84px;
+}
+@media (min-width: 600px) {
+  .remote[data-view="live"]:not([data-editing="true"]) ~ .toast {
+    --toast-bottom: 296px;
+  }
+}
+@media (orientation: landscape) and (min-width: 1000px) {
+  .remote ~ .toast,
+  .remote[data-view="live"]:not([data-editing="true"]) ~ .toast {
+    --toast-bottom: 24px;
+  }
+}
