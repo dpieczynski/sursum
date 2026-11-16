@@ -156,6 +156,7 @@ impl Parser {
         };
         match first {
             '[' => self.start_section(line, number),
+            '-' if line == super::markup::OPTIONAL_BREAK => self.optional_break(),
             ';' => {}
             '.' => self.pending_chords = Some(chord_positions(&line[1..])),
             digit if digit.is_ascii_digit() && !self.sections.is_empty() => {
@@ -172,6 +173,17 @@ impl Parser {
                 self.lyric(line, number, None);
                 self.pending_chords = None;
             }
+        }
+    }
+
+    /// `---`: the verse may be split here if it is too long for one slide.
+    fn optional_break(&mut self) {
+        if let Some(section) = self.sections.last_mut()
+            && let Some(block) = section.blocks.last_mut()
+            && !block.lines.is_empty()
+        {
+            block.break_after = BreakKind::Optional;
+            section.blocks.push(LinesBlock::default());
         }
     }
 

@@ -3052,6 +3052,7 @@ dependencies = [
  "gloo-timers",
  "js-sys",
  "leptos",
+ "serde",
  "serde_json",
  "sursum-client",
  "sursum-protocol",
@@ -3099,6 +3100,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

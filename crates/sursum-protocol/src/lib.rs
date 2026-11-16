@@ -5,12 +5,14 @@
 //! It must compile for both the native target and `wasm32-unknown-unknown`, which is why it
 //! depends on nothing but `serde`.
 
+mod editor;
 mod ids;
 mod layout;
 mod message;
 mod slide;
 mod state;
 
+pub use editor::{DraftPreview, SaveOutcome, SongDraft};
 pub use ids::{AssetId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{
     ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH, ScreenLayout, ScreenProfile,

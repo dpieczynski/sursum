@@ -79,7 +79,9 @@ pub fn SearchResults(query: RwSignal<String>, commands: Commands) -> impl IntoVi
 
 /// One result with its two actions; both clear the search afterwards.
 fn result_row(song: SongSummary, query: RwSignal<String>, commands: Commands) -> impl IntoView {
-    let (show_id, add_id) = (song.song_id.clone(), song.song_id.clone());
+    let (show_id, add_id, edit_id) = (song.song_id.clone(), song.song_id.clone(), song.song_id.clone());
+    let editing = expect_context::<RwSignal<Option<crate::editor::EditorTarget>>>();
+    let edit = move |_| editing.set(Some(crate::editor::EditorTarget::Existing(edit_id.clone())));
     let show = move |_| {
         commands.send(Command::ShowNow { song_id: show_id.clone() });
         query.set(String::new());
@@ -96,6 +98,9 @@ fn result_row(song: SongSummary, query: RwSignal<String>, commands: Commands) ->
                 <span class="result-title">{song.title}</span>
                 <span class="result-line">{song.first_line}</span>
             </span>
+            <button class="result-action" on:click=edit>
+                {pl(Msg::Edit)}
+            </button>
             <button class="result-action" on:click=add>
                 {pl(Msg::Add)}
             </button>

@@ -177,6 +177,17 @@ impl Database {
         Ok(outcome)
     }
 
+    /// The current revision of a song, if it exists.
+    pub fn song_revision(&self, song_id: &str) -> anyhow::Result<Option<i64>> {
+        let revision = self
+            .connection
+            .query_row("SELECT revision FROM songs WHERE id = ?1 AND deleted_at IS NULL", [song_id], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        Ok(revision)
+    }
+
     /// Loads the last saved program position.
     pub fn load_runtime(&self) -> anyhow::Result<Option<RuntimeRecord>> {
         let row: Option<(String, Option<String>)> = self

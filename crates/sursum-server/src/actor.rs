@@ -16,13 +16,15 @@ use sursum_core::search::SearchIndex;
 use sursum_core::slides::{SlideRules, compile_song, compile_text};
 use sursum_protocol::{
     ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, ItemId, LiveSlide, Overlay, Rect,
-    RemoteState, Rev, ScreenLayout, ScreenState, SetItemView, SetView, SongId, SongSummary, Theme,
+    RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenState, SetItemView, SetView, SongDraft, SongId,
+    SongSummary, Theme,
 };
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::config::Config;
-use crate::db::{Database, RuntimeRecord, SavedProgram};
+use crate::db::{Database, RuntimeRecord, SavedProgram, Upsert};
 use crate::demo;
+use crate::editor;
 use crate::platform::Platform;
 
 /// Handle to the actor, cheap to clone; one per WebSocket session.
@@ -54,11 +56,30 @@ impl StateHandle {
         }
         results.await.unwrap_or_default()
     }
+
+    /// The editor's text form of a stored song.
+    pub async fn draft(&self, song_id: SongId) -> Option<SongDraft> {
+        let (reply, draft) = oneshot::channel();
+        self.requests.send(Request::Draft { song_id, reply }).await.ok()?;
+        draft.await.ok().flatten()
+    }
+
+    /// Saves an edited or new song (optimistic locking on the revision).
+    pub async fn save_song(&self, draft: SongDraft) -> SaveOutcome {
+        let (reply, outcome) = oneshot::channel();
+        let unavailable = SaveOutcome::Invalid { reason: "server_unavailable".to_owned() };
+        if self.requests.send(Request::SaveSong { draft, reply }).await.is_err() {
+            return unavailable;
+        }
+        outcome.await.unwrap_or(unavailable)
+    }
 }
 
 enum Request {
     Command { actor: ClientId, base_rev: Rev, command: Command, reply: oneshot::Sender<CmdOutcome> },
     Search { query: String, limit: usize, reply: oneshot::Sender<Vec<SongSummary>> },
+    Draft { song_id: SongId, reply: oneshot::Sender<Option<SongDraft>> },
+    SaveSong { draft: SongDraft, reply: oneshot::Sender<SaveOutcome> },
 }
 
 /// Starts the actor thread with restored state.
@@ -110,6 +131,17 @@ pub fn spawn(
                     }
                     Request::Search { query, limit, reply } => {
                         let _ = reply.send(state.search(&query, limit));
+                    }
+                    Request::Draft { song_id, reply } => {
+                        let _ = reply.send(state.draft(&song_id));
+                    }
+                    Request::SaveSong { draft, reply } => {
+                        let outcome = state.save_song(&draft);
+                        if matches!(outcome, SaveOutcome::Saved { .. }) {
+                            screen_tx.send_replace(Arc::new(state.screen_state()));
+                            remote_tx.send_replace(Arc::new(state.remote_state()));
+                        }
+                        let _ = reply.send(outcome);
                     }
                 }
             }
@@ -202,6 +234,45 @@ impl AppState {
                 (CmdOutcome::Rejected { code: ErrorCode::Unsupported }, false)
             }
         }
+    }
+
+    fn draft(&self, song_id: &SongId) -> Option<SongDraft> {
+        let song = self.songs.get(song_id)?;
+        let revision = self.database.song_revision(song_id.as_str()).ok().flatten()?;
+        Some(editor::draft_of(song, u32::try_from(revision).unwrap_or(u32::MAX)))
+    }
+
+    /// Saves a draft. An existing song is only overwritten if nobody saved it since the editor
+    /// opened it; the program keeps its frozen deck until the next navigation (ADR 0005).
+    fn save_song(&mut self, draft: &SongDraft) -> SaveOutcome {
+        let current = match &draft.song_id {
+            Some(id) => match self.database.song_revision(id.as_str()) {
+                Ok(Some(revision)) => Some(u32::try_from(revision).unwrap_or(u32::MAX)),
+                Ok(None) => return SaveOutcome::Invalid { reason: "not_found".to_owned() },
+                Err(error) => return SaveOutcome::Invalid { reason: format!("database: {error}") },
+            },
+            None => None,
+        };
+        if let (Some(current), Some(base)) = (current, draft.base_revision)
+            && current != base
+        {
+            return SaveOutcome::Conflict { current_revision: current };
+        }
+        let id = draft.song_id.clone().unwrap_or_else(|| SongId(format!("song-{}", uuid::Uuid::new_v4())));
+        let (song, _) = editor::song_from_draft(draft, id.clone(), self.songs.get(&id));
+        if let Some(reason) = editor::validation_error(&song) {
+            return SaveOutcome::Invalid { reason: reason.to_owned() };
+        }
+        let revision = match self.database.upsert_song(&song, "editor") {
+            Ok(Upsert::Inserted) => 1,
+            Ok(Upsert::Updated { revision }) => u32::try_from(revision).unwrap_or(u32::MAX),
+            Ok(Upsert::Unchanged) => current.unwrap_or(1),
+            Err(error) => return SaveOutcome::Invalid { reason: format!("database: {error}") },
+        };
+        self.index.upsert(&song);
+        self.songs.insert(id.clone(), song);
+        self.rev = self.rev.next();
+        SaveOutcome::Saved { song_id: id, revision }
     }
 
     fn search(&self, query: &str, limit: usize) -> Vec<SongSummary> {

@@ -6,6 +6,8 @@
 // Leptos components take their props by value; clippy's pass-by-value lint does not fit them.
 #![allow(clippy::needless_pass_by_value)]
 
+mod api;
+mod editor;
 mod messages;
 mod search;
 
@@ -61,8 +63,13 @@ fn App() -> impl IntoView {
     let status = client.status();
     let commands = Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0) };
     keyboard_shortcuts(commands);
+    let editing = RwSignal::new(None::<editor::EditorTarget>);
+    provide_context(editing);
+    let editor_view =
+        move || editing.get().map(|target| view! { <editor::Editor target editing state commands /> });
 
     view! {
+        {editor_view}
         <main class="remote">
             <TopBar status notice state />
             <Previews state />
@@ -188,10 +195,22 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
     view! {
         <section class="library">
             <search::SearchBox query />
+            <NewSongButton />
             <Show when=searching fallback=set_list>
                 <search::SearchResults query commands />
             </Show>
         </section>
+    }
+}
+
+/// Opens the editor for a new song.
+#[component]
+fn NewSongButton() -> impl IntoView {
+    let editing = expect_context::<RwSignal<Option<editor::EditorTarget>>>();
+    view! {
+        <button class="new-song" on:click=move |_| editing.set(Some(editor::EditorTarget::New))>
+            {pl(Msg::NewSong)}
+        </button>
     }
 }
 

@@ -130,3 +130,52 @@ async fn search_without_diacritics_and_show_now() -> anyhow::Result<()> {
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn new_song_typed_in_the_editor_goes_on_screen() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    with_engine(screen_engine(), 1920, 1080, async |screen| {
+        screen.goto(server.url("/screen/")).await?;
+        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+            remote.goto(server.url("/remote/")).await?;
+            let new_song = remote.query(By::Css(".new-song")).first().await?;
+            new_song.wait_until().clickable().await?;
+            new_song.click().await?;
+            let inputs = remote.find_all(By::Css(".editor-form input")).await?;
+            inputs[0].send_keys("Pieśń wpisana z klawiatury").await?;
+            let lyrics = remote.find(By::Css(".editor-form textarea")).await?;
+            lyrics.clear().await?;
+            lyrics.send_keys("[V1]\n Pierwsza linia nowej pieśni\n[C]\n Refren nowej pieśni").await?;
+            // The server-side preview shows two slides.
+            wait_until(Duration::from_secs(5), || async {
+                remote.find_all(By::Css(".editor-slide")).await.map(|slides| slides.len()).unwrap_or(0) == 2
+            })
+            .await?;
+            remote.find(By::Css(".editor-buttons .primary")).await?.click().await?;
+            wait_for_slide(screen, "v1#").await?;
+            wait_until(Duration::from_secs(5), || async { remote.find(By::Css(".editor")).await.is_err() })
+                .await?;
+            Ok(())
+        })
+        .await
+    })
+    .await?;
+    let found = reqwest_like_get(&server.url("/api/songs?q=wpisana%20z%20klawiatury")).await?;
+    anyhow::ensure!(found.contains("Pieśń wpisana z klawiatury"), "the new song is not searchable: {found}");
+    Ok(())
+}
+
+/// A tiny HTTP GET for checks outside the browser.
+async fn reqwest_like_get(url: &str) -> anyhow::Result<String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let rest = url.strip_prefix("http://").unwrap_or(url);
+    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let mut stream = tokio::net::TcpStream::connect(host).await?;
+    stream
+        .write_all(format!("GET /{path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes())
+        .await?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await?;
+    Ok(response)
+}

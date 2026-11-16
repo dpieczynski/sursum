@@ -235,3 +235,71 @@ async fn show_now_inserts_after_the_live_item_and_add_song_appends() {
     assert_eq!((live.deck.item_id.as_str(), live.slide_index), ("added-1", 0));
     server.stop().await.unwrap();
 }
+
+async fn http_post(server: &RunningServer, path: &str, body: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = TcpStream::connect(server.addr).await.unwrap();
+    let request = format!(
+        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    response.split_once("\r\n\r\n").map(|(_, body)| body.to_owned()).unwrap_or_default()
+}
+
+#[tokio::test]
+async fn editor_creates_edits_detects_conflicts_and_validates() {
+    use sursum_protocol::{DraftPreview, SaveOutcome, SongDraft};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let draft = SongDraft {
+        title: "Pieśń z edytora".into(),
+        number: Some("777".into()),
+        presentation: "V1 C".into(),
+        lyrics: "[V1]\n Pierwsza zwrotka\n[C]\n Refren".into(),
+        ..SongDraft::default()
+    };
+    let preview: DraftPreview = serde_json::from_str(
+        &http_post(&server, "/api/songs/preview", &serde_json::to_string(&draft).unwrap()).await,
+    )
+    .unwrap();
+    assert_eq!(preview.deck.slides.len(), 2);
+
+    let saved: SaveOutcome = serde_json::from_str(
+        &http_post(&server, "/api/songs/save", &serde_json::to_string(&draft).unwrap()).await,
+    )
+    .unwrap();
+    let SaveOutcome::Saved { song_id, revision: 1 } = saved else { panic!("{saved:?}") };
+
+    let found: Vec<sursum_protocol::SongSummary> =
+        serde_json::from_str(&http_get(&server, "/api/songs?q=777").await).unwrap();
+    assert_eq!(found[0].song_id, song_id);
+
+    let mut edited: SongDraft =
+        serde_json::from_str(&http_get(&server, &format!("/api/songs/{}/draft", song_id.as_str())).await)
+            .unwrap();
+    assert_eq!(edited.base_revision, Some(1));
+    edited.lyrics.push_str("\n druga linia refrenu");
+    let saved: SaveOutcome = serde_json::from_str(
+        &http_post(&server, "/api/songs/save", &serde_json::to_string(&edited).unwrap()).await,
+    )
+    .unwrap();
+    assert_eq!(saved, SaveOutcome::Saved { song_id: song_id.clone(), revision: 2 });
+
+    // A second editor still holding revision 1 must not overwrite revision 2.
+    let stale: SaveOutcome = serde_json::from_str(
+        &http_post(&server, "/api/songs/save", &serde_json::to_string(&edited).unwrap()).await,
+    )
+    .unwrap();
+    assert_eq!(stale, SaveOutcome::Conflict { current_revision: 2 });
+
+    let empty = SongDraft { title: "Pusta".into(), ..SongDraft::default() };
+    let invalid: SaveOutcome = serde_json::from_str(
+        &http_post(&server, "/api/songs/save", &serde_json::to_string(&empty).unwrap()).await,
+    )
+    .unwrap();
+    assert!(matches!(invalid, SaveOutcome::Invalid { .. }));
+    server.stop().await.unwrap();
+}

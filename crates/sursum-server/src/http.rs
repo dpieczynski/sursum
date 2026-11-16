@@ -56,6 +56,9 @@ pub fn router(state: StateHandle, config: &Config) -> Router {
         .route("/healthz", get(|| async { "ok" }))
         .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
         .route("/api/songs", get(search_songs))
+        .route("/api/songs/preview", axum::routing::post(preview_song))
+        .route("/api/songs/save", axum::routing::post(save_song))
+        .route("/api/songs/{id}/draft", get(song_draft))
         .route("/ws/screen", get(screen_socket))
         .route("/ws/remote", get(remote_socket))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))
@@ -82,6 +85,27 @@ fn default_limit() -> usize {
 /// `GET /api/songs?q=…`: search by songbook number, title or lyrics (ADR 0006).
 async fn search_songs(State(app): State<App>, Query(query): Query<SearchQuery>) -> Response {
     axum::Json(app.state.search(query.q, query.limit.min(100)).await).into_response()
+}
+
+/// `GET /api/songs/{id}/draft`: a song in the editor's text form.
+async fn song_draft(State(app): State<App>, Path(id): Path<String>) -> Response {
+    match app.state.draft(sursum_protocol::SongId(id)).await {
+        Some(draft) => axum::Json(draft).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// `POST /api/songs/preview`: the slides a draft would produce (nothing is saved).
+async fn preview_song(axum::Json(draft): axum::Json<sursum_protocol::SongDraft>) -> Response {
+    axum::Json(crate::editor::preview(&draft)).into_response()
+}
+
+/// `POST /api/songs/save`: saves a new or edited song.
+async fn save_song(
+    State(app): State<App>,
+    axum::Json(draft): axum::Json<sursum_protocol::SongDraft>,
+) -> Response {
+    axum::Json(app.state.save_song(draft).await).into_response()
 }
 
 async fn screen_socket(State(app): State<App>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {

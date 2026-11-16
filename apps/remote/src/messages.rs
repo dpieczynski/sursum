@@ -25,6 +25,22 @@ pub enum Msg {
     NoResults,
     ShowNow,
     Add,
+    NewSong,
+    Edit,
+    EditorTitle,
+    EditorNumber,
+    EditorOrder,
+    EditorLyrics,
+    EditorHelp,
+    Save,
+    SaveAndShow,
+    Close,
+    Saved,
+    Conflict,
+    TitleMissing,
+    LyricsMissing,
+    SaveFailed,
+    LoadFailed,
 }
 
 /// The Polish text for a message.
@@ -50,6 +66,25 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::NoResults => "Brak wyników",
         Msg::ShowNow => "Pokaż",
         Msg::Add => "Dodaj",
+        Msg::NewSong => "Nowa pieśń",
+        Msg::Edit => "Edytuj",
+        Msg::EditorTitle => "Tytuł",
+        Msg::EditorNumber => "Numer",
+        Msg::EditorOrder => "Kolejność (np. V1 C V2 C)",
+        Msg::EditorLyrics => "Tekst",
+        Msg::EditorHelp => {
+            "[V1] zwrotka · [C] refren · [B] most · linia tekstu zaczyna się spacją · || nowy slajd · \
+             --- podział, jeśli się nie zmieści · Ctrl+S zapisz · Ctrl+Enter zapisz i pokaż · Esc zamknij"
+        }
+        Msg::Save => "Zapisz",
+        Msg::SaveAndShow => "Zapisz i pokaż",
+        Msg::Close => "Zamknij",
+        Msg::Saved => "Zapisano",
+        Msg::Conflict => "Ktoś zapisał tę pieśń w międzyczasie – otwórz ją ponownie",
+        Msg::TitleMissing => "Brak tytułu",
+        Msg::LyricsMissing => "Brak tekstu (zacznij od [V1] i linii ze spacją na początku)",
+        Msg::SaveFailed => "Nie udało się zapisać",
+        Msg::LoadFailed => "Nie udało się wczytać pieśni",
     }
 }
 

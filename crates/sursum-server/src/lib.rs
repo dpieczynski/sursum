@@ -10,6 +10,7 @@ pub mod actor;
 pub mod config;
 pub mod db;
 pub mod demo;
+pub mod editor;
 pub mod http;
 pub mod import;
 pub mod licenses;

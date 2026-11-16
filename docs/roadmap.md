@@ -47,11 +47,13 @@ manual run on a laptop + tablet and both hardware spikes are still open.
 
 ## M2 — OpenSong import, library, search, editor
 
-- [ ] `sursum-formats`: OpenSong songs (CLI + ZIP upload), import report, idempotent re-import
-- [ ] Verify extended OpenSong conventions ⚠ (see [opensong-format.md](opensong-format.md))
-- [ ] SQLite schema V1, migrations, backups, `quick_check` + auto-restore
-- [ ] In-memory search with Polish folding (ł!) and ranking
-- [ ] Keyboard-friendly song editor with server-compiled preview; revision history
+- [x] `sursum-formats`: OpenSong songs, import report, idempotent re-import; CLI `sursum-server import-opensong <Songs dir>` (875 real songs, 0 failures)
+- [ ] ZIP upload of an OpenSong folder from the browser
+- [x] Extended OpenSong conventions checked against a real Polish library (see [opensong-format.md](opensong-format.md)); numbered lines still ⚠
+- [x] SQLite schema (migration 2: `songs` with revisions, `song_history`)
+- [ ] Backups (`VACUUM INTO`), `quick_check` + auto-restore
+- [x] In-memory search with Polish folding (ł!) and ranking; ~1.2 ms per query over 5000 songs (laptop); remote search panel with Show now / Add / Edit
+- [x] Keyboard-friendly song editor (OpenSong markup, `---` optional break) with server-compiled preview drawn by `sursum-slide`; revision history and optimistic locking (conflict detection)
 
 **Done when:** every convention has a synthetic fixture test; the real parish library imports
 locally without critical errors; search by number/title/fragment works regardless of diacritics;

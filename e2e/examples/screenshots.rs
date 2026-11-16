@@ -32,6 +32,10 @@ async fn main() -> anyhow::Result<()> {
     search.send_keys("zorze").await?;
     tokio::time::sleep(Duration::from_millis(600)).await;
     remote_page.screenshot(&output.join("remote-search.png")).await?;
+    // The editor with a song from the library.
+    remote_page.find(thirtyfour::By::Css(".result-action")).await?.click().await?;
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    remote_page.screenshot(&output.join("editor.png")).await?;
     screen.quit().await?;
     remote_page.quit().await?;
     println!("saved to {}", output.display());
