@@ -62,7 +62,7 @@ without a mouse.
 
 ## M3 — Sets, live editing, pairing, shared library
 
-- [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items); image and blank items still open
+- [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items), pictures (content-addressed uploads in `<data>/assets/`, PNG/JPEG/WebP, decoded before the fade) and pauses (blank items); assets are not yet part of backups or `.sursum` files
 - [x] Remote: two-column landscape layout (previews left, library/set right, controls bottom)
 - [x] OpenSong set import (folder and ZIP): songs by path/file name/title, `presentation` override, custom and scripture groups as text items, image groups reported; re-import replaces the set
 - [x] Multi-remote `Stale` rule (M1)

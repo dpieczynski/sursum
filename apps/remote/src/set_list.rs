@@ -17,6 +17,7 @@ pub fn SetPanel(state: RwSignal<Option<RemoteState>>, commands: Commands) -> imp
     let can_undo = move || state.with(|state| state.as_ref().is_some_and(|state| state.can_undo));
     let undo = move |_| commands.send(Command::UndoRemove);
     let toggle = move |_| editing.update(|on| *on = !*on);
+    let add_pause = move |_| commands.send(Command::AddBlank { title: pl(Msg::Pause).to_owned() });
     let edit_label = move || if editing.get() { pl(Msg::DoneEditing) } else { pl(Msg::EditSet) };
     let dialog =
         move || announcement.get().then(|| view! { <AnnouncementDialog open=announcement commands /> });
@@ -29,6 +30,12 @@ pub fn SetPanel(state: RwSignal<Option<RemoteState>>, commands: Commands) -> imp
             <button class="set-tool" on:click=move |_| announcement.set(true)>
                 {pl(Msg::Announcement)}
             </button>
+            <Show when=move || editing.get()>
+                <crate::picture::AddPictureButton commands />
+                <button class="set-tool" on:click=add_pause>
+                    {pl(Msg::Pause)}
+                </button>
+            </Show>
             <Show when=can_undo>
                 <button class="set-tool undo" on:click=undo>
                     {pl(Msg::Undo)}

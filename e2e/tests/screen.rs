@@ -187,3 +187,35 @@ const MEASURE_LINES: &str = "
         });
     return { lefts, stageLeft: stage.left, stageTop: stage.top, scale };
 ";
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn uploaded_picture_is_decoded_before_it_is_shown() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    // A synthetic 16:9 picture in one strong colour.
+    let picture = image::RgbaImage::from_pixel(160, 90, image::Rgba([200, 40, 40, 255]));
+    let mut png = std::io::Cursor::new(Vec::new());
+    picture.write_to(&mut png, image::ImageFormat::Png)?;
+    let asset_id = server.upload_asset(png.get_ref()).await?;
+    with_browser(WIDTH, HEIGHT, async |driver| {
+        driver.goto(server.url("/screen/")).await?;
+        let mut remote = server.remote("organist").await?;
+        remote.command(Command::AddImage { title: "Plakat".into(), asset_id: asset_id.clone() }).await?;
+        // The demo set has three items; the picture is the fourth.
+        remote.command(Command::GoToItemNumber { number: 4 }).await?;
+        wait_for_slide(driver, "img#").await?;
+        let decoded = driver
+            .execute(
+                "const image = document.querySelector('.sursum-image'); \
+                 return image ? image.complete && image.naturalWidth : 0;",
+                Vec::new(),
+            )
+            .await?;
+        anyhow::ensure!(decoded.json().as_u64() == Some(160), "picture not decoded: {:?}", decoded.json());
+        let shot = screenshot(driver).await?;
+        let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
+        anyhow::ensure!(centre[0] > 150 && centre[1] < 100, "the picture is not visible: {centre:?}");
+        Ok(())
+    })
+    .await
+}

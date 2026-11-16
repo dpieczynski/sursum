@@ -672,3 +672,59 @@ async fn operators_need_admin_mode_for_setup_and_revoked_remotes_are_cut_off() {
     assert!(matches!(outcome, CmdOutcome::Applied { .. }), "the other remote keeps working: {outcome:?}");
     server.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn uploaded_pictures_and_pauses_become_set_items_and_reach_the_screen() {
+    use sursum_protocol::{AssetId, ErrorCode, SlideBody};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let png = b"\x89PNG\r\n\x1a\nsynthetic picture bytes";
+    let id: AssetId = serde_json::from_str(&http_post_bytes(&server, "/api/assets", png).await).unwrap();
+    assert!(http_post_bytes(&server, "/api/assets", b"GIF89a").await.contains("not a PNG"));
+
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    next_screen_state(&mut screen).await;
+    let add = Command::AddImage { title: "Plakat".into(), asset_id: id.clone() };
+    assert!(matches!(command(&mut remote, 1, Rev(u32::MAX), add).await, CmdOutcome::Applied { .. }));
+    let missing =
+        Command::AddImage { title: "x".into(), asset_id: AssetId(format!("{}.png", "0".repeat(64))) };
+    let outcome = command(&mut remote, 2, Rev(u32::MAX), missing).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::NotFound });
+    command(&mut remote, 3, Rev(u32::MAX), Command::AddBlank { title: String::new() }).await;
+    let state = next_remote_state(&mut remote).await;
+    let items = &state.active_set.as_ref().unwrap().items;
+    let titles: Vec<&str> = items.iter().rev().take(2).map(|item| item.title.as_str()).collect();
+    assert_eq!(titles, ["Przerwa", "Plakat"]);
+
+    let number = u32::try_from(items.len() - 1).unwrap();
+    command(&mut remote, 4, Rev(u32::MAX), Command::GoToItemNumber { number }).await;
+    let live = loop {
+        if let Some(live) = next_screen_state(&mut screen).await.live {
+            break live;
+        }
+    };
+    assert!(matches!(&live.deck.slides[0].body, SlideBody::Image { asset_id, .. } if asset_id == &id));
+
+    let served = {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = TcpStream::connect(server.addr).await.unwrap();
+        let request =
+            format!("GET /assets/{} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", id.as_str());
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut bytes = Vec::new();
+        stream.read_to_end(&mut bytes).await.unwrap();
+        assert!(bytes.ends_with(png), "the stored bytes come back");
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    assert!(served.contains("content-type: image/png") && served.contains("immutable"), "{served}");
+    assert!(
+        http_raw(
+            &server,
+            "GET /assets/..%2Fsursum.db HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+        )
+        .await
+        .starts_with("HTTP/1.1 404")
+    );
+    server.stop().await.unwrap();
+}

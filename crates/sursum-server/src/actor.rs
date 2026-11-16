@@ -13,7 +13,7 @@ use sursum_core::layout;
 use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song};
 use sursum_core::program::{Context, Live, Outcome, Program, Rejection};
 use sursum_core::search::SearchIndex;
-use sursum_core::slides::{SlideRules, compile_song, compile_text};
+use sursum_core::slides::SlideRules;
 use sursum_protocol::{
     ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, ItemId, LiveSlide, Overlay, Rect,
     RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenProfile, ScreenState, SetId, SetItemView, SetView,
@@ -334,6 +334,23 @@ impl AppState {
             Command::ShowNow { song_id } => return self.show_now(actor, song_id),
             Command::AddSong { song_id } => self.add_song(song_id),
             Command::AddText { title, text } => self.add_text(title, text),
+            Command::AddImage { title, asset_id } => {
+                if !crate::assets::exists(&self.data_dir, asset_id) {
+                    return (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false);
+                }
+                let title = if title.trim().is_empty() { "Obraz" } else { title.trim() };
+                let kind = ItemKind::Image {
+                    title: title.to_owned(),
+                    asset_id: asset_id.clone(),
+                    fit: sursum_protocol::ImageFit::Contain,
+                };
+                self.sets.insert(None, new_item_id(), kind).cloned().ok_or(ErrorCode::NoActiveSet).map(Some)
+            }
+            Command::AddBlank { title } => {
+                let title = if title.trim().is_empty() { "Przerwa" } else { title.trim() };
+                let kind = ItemKind::Blank { title: title.to_owned() };
+                self.sets.insert(None, new_item_id(), kind).cloned().ok_or(ErrorCode::NoActiveSet).map(Some)
+            }
             Command::RemoveItem { item_id } => self.remove_item(item_id),
             Command::MoveItem { item_id, to_index } => self.move_item(item_id, *to_index as usize),
             Command::UndoRemove => self.sets.undo_remove().cloned().ok_or(ErrorCode::NotFound).map(Some),
@@ -665,7 +682,7 @@ impl AppState {
             ItemKind::Song { song_id, .. } => {
                 self.songs.get(song_id).map(|song| song.title().to_owned()).unwrap_or_default()
             }
-            ItemKind::Text { title, .. } => title.clone(),
+            other => other.own_title().unwrap_or_default().to_owned(),
         }
     }
 
@@ -704,12 +721,7 @@ const SCREEN_PROFILE_KEY: &str = "screen_profile";
 
 /// Compiles the deck for a set item.
 fn compile_item(songs: &HashMap<SongId, Song>, rules: SlideRules, item: &SetItem) -> Option<Deck> {
-    match &item.kind {
-        ItemKind::Song { song_id, order_override } => {
-            Some(compile_song(songs.get(song_id)?, &item.id, order_override.as_deref(), rules))
-        }
-        ItemKind::Text { title, slides } => Some(compile_text(&item.id, title, slides)),
-    }
+    sursum_core::slides::compile_item(item, |song_id| songs.get(song_id), rules)
 }
 
 fn live_slide(live: &Live) -> LiveSlide {

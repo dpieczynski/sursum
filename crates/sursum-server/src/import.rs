@@ -310,6 +310,7 @@ mod tests {
                 ItemKind::Song { order_override: Some(_), .. } => "song+order",
                 ItemKind::Song { .. } => "song",
                 ItemKind::Text { .. } => "text",
+                ItemKind::Image { .. } | ItemKind::Blank { .. } => "other",
             })
             .collect();
         assert_eq!(kinds, ["song+order", "text", "song", "text"]);

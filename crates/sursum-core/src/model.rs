@@ -2,7 +2,7 @@
 //! Songs and sets. The song model follows OpenLyrics 0.9 so it can be exported without loss.
 
 use serde::{Deserialize, Serialize};
-use sursum_protocol::{ItemId, SetId, SongId};
+use sursum_protocol::{AssetId, ImageFit, ItemId, SetId, SongId};
 
 /// Name of a verse in OpenLyrics style: `v1`, `c`, `c2`, `b`, `p`, `e`, `o1`…
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -182,6 +182,28 @@ pub enum ItemKind {
     },
     /// Custom text slides (announcements, prayers).
     Text { title: String, slides: Vec<String> },
+    /// One uploaded picture, e.g. a poster with announcements.
+    Image {
+        title: String,
+        asset_id: AssetId,
+        #[serde(default)]
+        fit: ImageFit,
+    },
+    /// A deliberate pause in the running order (e.g. during the homily): an empty slide, so
+    /// "next" moves on naturally and nobody has to remember to press black.
+    Blank { title: String },
+}
+
+impl ItemKind {
+    /// The name shown in the set list (songs are named by the library, so `None`).
+    pub fn own_title(&self) -> Option<&str> {
+        match self {
+            ItemKind::Song { .. } => None,
+            ItemKind::Text { title, .. } | ItemKind::Image { title, .. } | ItemKind::Blank { title } => {
+                Some(title)
+            }
+        }
+    }
 }
 
 /// One entry in a set.

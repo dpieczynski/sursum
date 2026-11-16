@@ -7,6 +7,7 @@
 //! - [`db`]: SQLite persistence of the runtime state.
 
 pub mod actor;
+pub mod assets;
 pub mod auth;
 pub mod config;
 pub mod db;

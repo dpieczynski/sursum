@@ -16,6 +16,7 @@ mod hold;
 mod import;
 mod messages;
 mod pairing;
+mod picture;
 mod search;
 mod set_list;
 

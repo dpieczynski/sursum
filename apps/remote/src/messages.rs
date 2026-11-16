@@ -76,6 +76,9 @@ pub enum Msg {
     ThisDevice,
     Revoke,
     AdminRequired,
+    Picture,
+    PictureFailed,
+    Pause,
     EditSet,
     DoneEditing,
     Remove,
@@ -187,6 +190,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ThisDevice => "to urządzenie",
         Msg::Revoke => "Odłącz (przytrzymaj)",
         Msg::AdminRequired => "To wymaga trybu administratora",
+        Msg::Picture => "Obraz",
+        Msg::PictureFailed => "Nie udało się dodać obrazu (PNG, JPEG lub WebP, do 25 MB)",
+        Msg::Pause => "Przerwa",
     }
 }
 

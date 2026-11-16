@@ -22,6 +22,15 @@ pub async fn fonts_ready(theme: &Theme) {
     }
 }
 
+/// Loads and decodes a picture, so it appears complete on the first frame it is shown
+/// (`img.decode()`, allowed by the screen API contract, ADR 0015). Errors are ignored: a broken
+/// picture shows as nothing, never as an error on the screen.
+pub async fn decode_image(url: &str) {
+    let Ok(image) = web_sys::HtmlImageElement::new() else { return };
+    image.set_src(url);
+    let _ = JsFuture::from(image.decode()).await;
+}
+
 /// Fades an element in with the Web Animations API and returns the running animation.
 pub fn fade_in(element: &web_sys::Element, duration_ms: u32) -> Option<web_sys::Animation> {
     let frame = |opacity: &str| {

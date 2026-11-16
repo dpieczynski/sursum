@@ -125,6 +125,22 @@ impl Server {
     pub async fn remote(&self, name: &str) -> anyhow::Result<Remote> {
         Remote::connect(self.addr, name).await
     }
+
+    /// Uploads a picture like the remote does (`POST /api/assets`) and returns its id.
+    pub async fn upload_asset(&self, bytes: &[u8]) -> anyhow::Result<sursum_protocol::AssetId> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect(self.addr).await?;
+        let head = format!(
+            "POST /api/assets HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            bytes.len()
+        );
+        stream.write_all(head.as_bytes()).await?;
+        stream.write_all(bytes).await?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await?;
+        let body = response.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or_default();
+        serde_json::from_str(body).with_context(|| format!("upload refused: {response}"))
+    }
 }
 
 impl Drop for Server {

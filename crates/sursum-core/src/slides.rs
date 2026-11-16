@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The slide compiler: turns a song (or a text item) into a [`Deck`] of slides.
+//! The slide compiler: turns a song (or a text, image or blank item) into a [`Deck`] of slides.
 //!
 //! Rules:
 //! - every verse starts a new slide;
@@ -8,11 +8,13 @@
 //!   equally long chunks (never a lonely last line).
 
 use sha2::{Digest, Sha256};
-use sursum_protocol::{Background, Deck, DeckId, ItemId, Slide, SlideBody, SlideKey};
+use sursum_protocol::{
+    AssetId, Background, Deck, DeckId, ImageFit, ItemId, Slide, SlideBody, SlideKey, SongId,
+};
 
 #[cfg(test)]
 use crate::model::Line;
-use crate::model::{BreakKind, LinesBlock, Song, Verse, VerseName};
+use crate::model::{BreakKind, ItemKind, LinesBlock, SetItem, Song, Verse, VerseName};
 
 /// Settings that control how verses are split into slides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +62,42 @@ pub fn compile_text(item_id: &ItemId, title: &str, pages: &[String]) -> Deck {
         })
         .collect();
     build_deck(item_id, title, slides)
+}
+
+/// Compiles any set item; `None` if it names a song that is not in the library.
+pub fn compile_item<'a>(
+    item: &SetItem,
+    song: impl Fn(&SongId) -> Option<&'a Song>,
+    rules: SlideRules,
+) -> Option<Deck> {
+    Some(match &item.kind {
+        ItemKind::Song { song_id, order_override } => {
+            compile_song(song(song_id)?, &item.id, order_override.as_deref(), rules)
+        }
+        ItemKind::Text { title, slides } => compile_text(&item.id, title, slides),
+        ItemKind::Image { title, asset_id, fit } => compile_image(&item.id, title, asset_id, *fit),
+        ItemKind::Blank { title } => compile_blank(&item.id, title),
+    })
+}
+
+/// Compiles an image item: one slide showing the picture.
+pub fn compile_image(item_id: &ItemId, title: &str, asset_id: &AssetId, fit: ImageFit) -> Deck {
+    let slide = Slide {
+        key: SlideKey("img#0".to_owned()),
+        label: "1".to_owned(),
+        body: SlideBody::Image { asset_id: asset_id.clone(), fit },
+    };
+    build_deck(item_id, title, vec![slide])
+}
+
+/// Compiles a pause: one empty slide (only the background shows).
+pub fn compile_blank(item_id: &ItemId, title: &str) -> Deck {
+    let slide = Slide {
+        key: SlideKey("blank#0".to_owned()),
+        label: "–".to_owned(),
+        body: SlideBody::Text { title: None, lines: Vec::new() },
+    };
+    build_deck(item_id, title, vec![slide])
 }
 
 /// The verse order to present: the override, else the song's order, else written order.
@@ -178,7 +216,7 @@ fn content_id(title: &str, slides: &[Slide], background: &Background) -> DeckId 
         hasher.update([0]);
         let body = match &slide.body {
             SlideBody::Lyrics { lines } | SlideBody::Text { lines, .. } => lines.join("\n"),
-            SlideBody::Image { asset_id, .. } => asset_id.0.clone(),
+            SlideBody::Image { asset_id, fit } => format!("{}#{fit:?}", asset_id.0),
         };
         hasher.update(body.as_bytes());
         hasher.update([0]);
@@ -321,5 +359,18 @@ mod tests {
                 proptest::prop_assert!(maxsize - min <= 1);
             }
         }
+    }
+
+    #[test]
+    fn image_and_blank_items_are_one_slide_each_and_fit_changes_the_deck() {
+        let item = ItemId::from("i");
+        let asset = AssetId::from("abc.png");
+        let contain = compile_image(&item, "Plakat", &asset, ImageFit::Contain);
+        assert_eq!(contain.slides.len(), 1);
+        assert!(matches!(&contain.slides[0].body, SlideBody::Image { asset_id, .. } if asset_id == &asset));
+        let cover = compile_image(&item, "Plakat", &asset, ImageFit::Cover);
+        assert_ne!(contain.deck_id, cover.deck_id, "the screen must redraw when the fit changes");
+        let blank = compile_blank(&item, "Homilia");
+        assert!(matches!(&blank.slides[0].body, SlideBody::Text { lines, .. } if lines.is_empty()));
     }
 }

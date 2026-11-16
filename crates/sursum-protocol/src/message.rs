@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ClientId, ItemId, Rev, SetId, SongId};
+use crate::ids::{AssetId, ClientId, ItemId, Rev, SetId, SongId};
 use crate::layout::ScreenProfile;
 use crate::state::{Overlay, RemoteState, ScreenState};
 
@@ -62,6 +62,10 @@ pub enum Command {
     AddSong { song_id: SongId },
     /// Append a text slide (announcement); pages are separated by an empty line.
     AddText { title: String, text: String },
+    /// Append an uploaded picture (`POST /api/assets` returns its id).
+    AddImage { title: String, asset_id: AssetId },
+    /// Append a pause: an empty slide, so "next" moves on naturally.
+    AddBlank { title: String },
     /// Remove an item from the active set (the screen keeps showing it if it is live).
     RemoveItem { item_id: ItemId },
     /// Move an item of the active set to a 0-based position.

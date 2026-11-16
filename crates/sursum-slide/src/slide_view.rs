@@ -2,7 +2,7 @@
 //! One slide, drawn inside a 1920×1080 stage.
 
 use leptos::prelude::*;
-use sursum_protocol::{Background, Rect, Slide, SlideBody, TextAlign, Theme};
+use sursum_protocol::{AssetId, Background, ImageFit, Rect, Slide, SlideBody, TextAlign, Theme};
 
 /// CSS classes of the text box; shared with the measuring code in `fit.rs`.
 pub fn lines_class(theme: &Theme, wrap: bool) -> String {
@@ -38,17 +38,35 @@ pub fn background_style(background: &Background) -> String {
     }
 }
 
+/// Where the server serves an uploaded picture.
+pub fn asset_url(asset_id: &AssetId) -> String {
+    format!("/assets/{}", asset_id.as_str())
+}
+
 /// Draws one slide's content into the given rectangle.
 #[component]
 pub fn SlideView(slide: Slide, theme: Theme, content: Rect, font_px: u32, wrap: bool) -> impl IntoView {
     let lines = match slide.body {
         SlideBody::Lyrics { lines } | SlideBody::Text { lines, .. } => lines,
-        // Images arrive in milestone M3.
-        SlideBody::Image { .. } => Vec::new(),
+        SlideBody::Image { asset_id, fit } => return image_view(&asset_id, fit, content).into_any(),
     };
     view! {
         <div class=lines_class(&theme, wrap) style=text_box_style(&theme, content, font_px)>
             {lines.into_iter().map(|line| view! { <div class="sursum-line">{line}</div> }).collect_view()}
         </div>
     }
+    .into_any()
+}
+
+/// A picture inside the content rectangle (so it also avoids exclusion zones).
+fn image_view(asset_id: &AssetId, fit: ImageFit, content: Rect) -> impl IntoView {
+    let object_fit = match fit {
+        ImageFit::Contain => "contain",
+        ImageFit::Cover => "cover",
+    };
+    let style = format!(
+        "left:{}px;top:{}px;width:{}px;height:{}px;object-fit:{object_fit};",
+        content.x, content.y, content.width, content.height
+    );
+    view! { <img class="sursum-image" src=asset_url(asset_id) style=style alt="" /> }
 }

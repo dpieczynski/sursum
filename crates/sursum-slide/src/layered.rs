@@ -10,7 +10,9 @@
 use futures_util::StreamExt;
 use leptos::html::Div;
 use leptos::prelude::*;
-use sursum_protocol::{Background, DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideKey, Theme};
+use sursum_protocol::{
+    Background, DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideBody, SlideKey, Theme,
+};
 use wasm_bindgen::JsCast;
 
 use crate::calibration::CalibrationPattern;
@@ -145,6 +147,9 @@ impl Parts {
         let Some(measurer) = self.measurer.get_untracked() else { return };
         let measurer: web_sys::HtmlElement = measurer.unchecked_into();
         let fit = fit_deck(&live.deck, &target.theme, target.layout.content, &measurer).await;
+        if let SlideBody::Image { asset_id, .. } = &slide.body {
+            dom::decode_image(&crate::slide_view::asset_url(asset_id)).await;
+        }
 
         let incoming = 1 - current;
         self.layers[incoming].set(Some(Shown {

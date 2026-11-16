@@ -120,6 +120,8 @@ impl Program {
             Command::ShowNow { .. }
             | Command::AddSong { .. }
             | Command::AddText { .. }
+            | Command::AddImage { .. }
+            | Command::AddBlank { .. }
             | Command::RemoveItem { .. }
             | Command::MoveItem { .. }
             | Command::UndoRemove
@@ -314,7 +316,7 @@ fn section_of(key: &str) -> (&str, &str) {
 mod tests {
     use super::*;
     use crate::model::{ItemKind, Song, Verse};
-    use crate::slides::{SlideRules, compile_song, compile_text};
+    use crate::slides::{SlideRules, compile_item, compile_song};
     use sursum_protocol::{SetId, SongId};
 
     fn song(id: &str) -> Song {
@@ -360,7 +362,7 @@ mod tests {
             ItemKind::Song { song_id, .. } => {
                 Some(compile_song(&song(song_id.as_str()), &item.id, None, SlideRules::default()))
             }
-            ItemKind::Text { title, slides } => Some(compile_text(&item.id, title, slides)),
+            _ => compile_item(item, |_| None, SlideRules::default()),
         }
     }
 

@@ -397,6 +397,10 @@ a.import-button {
   font-size: 16px;
   font-weight: 700;
 }
+label.set-tool {
+  display: inline-flex;
+  align-items: center;
+}
 .set-tool.undo {
   background: #a16207;
 }

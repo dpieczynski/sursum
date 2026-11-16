@@ -39,6 +39,7 @@ const SCREEN_FALLBACK: &str = "<!doctype html><html style=\"background:#000\"><h
 #[derive(Clone)]
 struct App {
     state: StateHandle,
+    data_dir: Arc<std::path::PathBuf>,
     access: Arc<Access>,
     allowed_origins: Arc<Vec<String>>,
     allow_public_clients: bool,
@@ -49,6 +50,7 @@ struct App {
 pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Router {
     let app = App {
         state,
+        data_dir: Arc::new(config.data_dir.clone()),
         access,
         allowed_origins: Arc::new(config.allowed_origins.clone()),
         allow_public_clients: config.allow_public_clients,
@@ -76,6 +78,11 @@ pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Route
         .route("/api/songs/save", axum::routing::post(save_song))
         .route("/api/songs/{id}/draft", get(song_draft))
         .route("/api/library/export", get(export_library))
+        .route(
+            "/api/assets",
+            axum::routing::post(upload_asset)
+                .layer(axum::extract::DefaultBodyLimit::max(crate::assets::MAX_ASSET_BYTES + 1)),
+        )
         .route("/api/admin", axum::routing::post(unlock_admin).delete(lock_admin))
         .merge(admin)
         .route_layer(middleware::from_fn_with_state(app.clone(), require_pairing));
@@ -86,6 +93,7 @@ pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Route
         .route("/api/session", get(session))
         .route("/api/pair", axum::routing::post(pair))
         .route("/ws/screen", get(screen_socket))
+        .route("/assets/{id}", get(asset))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))
         .route("/screen/", get(screen_index))
         .route("/screen/{*path}", get(screen_asset))
@@ -259,6 +267,44 @@ async fn import_opensong(
         Ok(Ok(library)) => axum::Json(app.state.import(library).await).into_response(),
         Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `POST /api/assets`: stores an uploaded picture and returns its id (JSON string).
+async fn upload_asset(State(app): State<App>, body: axum::body::Bytes) -> Response {
+    let data_dir = app.data_dir.clone();
+    match tokio::task::spawn_blocking(move || crate::assets::store(&data_dir, &body)).await {
+        Ok(Ok(id)) => axum::Json(id).into_response(),
+        Ok(Err(error @ crate::assets::AssetError::UnsupportedType)) => {
+            (StatusCode::UNSUPPORTED_MEDIA_TYPE, error.to_string()).into_response()
+        }
+        Ok(Err(error @ crate::assets::AssetError::TooLarge)) => {
+            (StatusCode::PAYLOAD_TOO_LARGE, error.to_string()).into_response()
+        }
+        Ok(Err(error)) => {
+            tracing::error!(%error, "could not store an uploaded picture");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /assets/{id}`: a stored picture. Open like the screen itself (the screen needs it); ids
+/// are content hashes, so the answer never changes and may be cached forever.
+async fn asset(State(app): State<App>, Path(id): Path<String>) -> Response {
+    let Some((path, mime)) = crate::assets::locate(&app.data_dir, &id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match tokio::task::spawn_blocking(move || std::fs::read(path)).await {
+        Ok(Ok(bytes)) => (
+            [
+                (header::CONTENT_TYPE, HeaderValue::from_static(mime)),
+                (header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable")),
+            ],
+            bytes,
+        )
+            .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
     }
 }
 

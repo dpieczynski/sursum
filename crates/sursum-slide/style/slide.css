@@ -168,3 +168,9 @@
   color: #fff;
   font-size: 32px;
 }
+
+/* An uploaded picture inside the content rectangle. */
+.sursum-image {
+  position: absolute;
+  display: block;
+}

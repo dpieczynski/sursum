@@ -20,7 +20,7 @@ futures-channel.workspace = true
 futures-util.workspace = true
 web-sys = { workspace = true, features = [
     "Animation", "CssStyleDeclaration", "Document", "DomRectReadOnly", "Element", "FontFaceSet",
-    "HtmlElement", "ResizeObserver", "ResizeObserverEntry", "Window",
+    "HtmlElement", "HtmlImageElement", "ResizeObserver", "ResizeObserverEntry", "Window",
 ] }
 
 [dev-dependencies]
