@@ -12,10 +12,11 @@ use anyhow::Context as _;
 use sursum_core::layout;
 use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song};
 use sursum_core::program::{Context, Live, Outcome, Program, Rejection};
+use sursum_core::search::SearchIndex;
 use sursum_core::slides::{SlideRules, compile_song, compile_text};
 use sursum_protocol::{
-    ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, LiveSlide, Overlay, Rect, RemoteState,
-    Rev, ScreenLayout, ScreenState, SetItemView, SetView, SongId, Theme,
+    ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, ItemId, LiveSlide, Overlay, Rect,
+    RemoteState, Rev, ScreenLayout, ScreenState, SetItemView, SetView, SongId, SongSummary, Theme,
 };
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -44,19 +45,40 @@ impl StateHandle {
         }
         outcome.await.unwrap_or(CmdOutcome::Rejected { code: ErrorCode::Unsupported })
     }
+
+    /// Searches the song library (ADR 0006).
+    pub async fn search(&self, query: String, limit: usize) -> Vec<SongSummary> {
+        let (reply, results) = oneshot::channel();
+        if self.requests.send(Request::Search { query, limit, reply }).await.is_err() {
+            return Vec::new();
+        }
+        results.await.unwrap_or_default()
+    }
 }
 
 enum Request {
     Command { actor: ClientId, base_rev: Rev, command: Command, reply: oneshot::Sender<CmdOutcome> },
+    Search { query: String, limit: usize, reply: oneshot::Sender<Vec<SongSummary>> },
 }
 
 /// Starts the actor thread with restored state.
-pub fn spawn(config: &Config, database: Database, platform: &dyn Platform) -> anyhow::Result<StateHandle> {
-    let songs = demo::songs();
-    let set = demo::set(&songs);
+pub fn spawn(
+    config: &Config,
+    mut database: Database,
+    platform: &dyn Platform,
+) -> anyhow::Result<StateHandle> {
+    // The demo songs stay in the library until real sets exist (milestone M3).
+    let demo_songs = demo::songs();
+    for song in &demo_songs {
+        database.upsert_song(song, "demo").context("storing demo songs")?;
+    }
+    let songs = database.load_songs().context("loading the song library")?;
+    tracing::info!(songs = songs.len(), "song library loaded");
     let mut state = AppState {
+        index: SearchIndex::build(&songs),
         songs: songs.into_iter().map(|song| (song.id.clone(), song)).collect(),
-        set: Some(set),
+        set: Some(demo::set(&demo_songs)),
+        next_item: 1,
         program: Program::default(),
         rev: Rev(1),
         theme: Theme::default(),
@@ -86,6 +108,9 @@ pub fn spawn(config: &Config, database: Database, platform: &dyn Platform) -> an
                         }
                         let _ = reply.send(outcome);
                     }
+                    Request::Search { query, limit, reply } => {
+                        let _ = reply.send(state.search(&query, limit));
+                    }
                 }
             }
         })
@@ -97,7 +122,10 @@ pub fn spawn(config: &Config, database: Database, platform: &dyn Platform) -> an
 /// Everything the server knows, owned by the actor thread.
 struct AppState {
     songs: HashMap<SongId, Song>,
+    index: SearchIndex,
     set: Option<ServiceSet>,
+    /// Counter for ids of items added during this run (sets are persisted from M3).
+    next_item: u32,
     program: Program,
     rev: Rev,
     theme: Theme,
@@ -111,6 +139,51 @@ struct AppState {
 impl AppState {
     /// Applies one command; returns its outcome and whether the state changed.
     fn handle_command(&mut self, actor: &ClientId, base_rev: Rev, command: &Command) -> (CmdOutcome, bool) {
+        match command {
+            Command::AddSong { song_id } => match self.insert_song(song_id, None) {
+                Ok(_) => {
+                    self.rev = self.rev.next();
+                    (CmdOutcome::Applied { rev: self.rev }, true)
+                }
+                Err(code) => (CmdOutcome::Rejected { code }, false),
+            },
+            Command::ShowNow { song_id } => {
+                // Right after the live item (or at the end if nothing is live), then on screen.
+                let anchor = self.program.live.as_ref().map(|live| live.item_id.clone());
+                match self.insert_song(song_id, anchor.as_ref()) {
+                    Ok(item_id) => {
+                        let show = Command::GoTo { item_id, slide_index: 0 };
+                        // An explicit choice of the operator: never stale.
+                        let (outcome, _) = self.run_program_command(actor, Rev(u32::MAX), &show);
+                        (outcome, true)
+                    }
+                    Err(code) => (CmdOutcome::Rejected { code }, false),
+                }
+            }
+            _ => self.run_program_command(actor, base_rev, command),
+        }
+    }
+
+    /// Inserts a song into the active set after `anchor` (or at the end); returns the new item.
+    fn insert_song(&mut self, song_id: &SongId, anchor: Option<&ItemId>) -> Result<ItemId, ErrorCode> {
+        if !self.songs.contains_key(song_id) {
+            return Err(ErrorCode::NotFound);
+        }
+        let set = self.set.as_mut().ok_or(ErrorCode::NoActiveSet)?;
+        let item_id = ItemId(format!("added-{}", self.next_item));
+        self.next_item += 1;
+        let kind = ItemKind::Song { song_id: song_id.clone(), order_override: None };
+        set.insert_after(anchor, SetItem { id: item_id.clone(), kind });
+        Ok(item_id)
+    }
+
+    /// Runs a command that only changes the program (navigation, overlay).
+    fn run_program_command(
+        &mut self,
+        actor: &ClientId,
+        base_rev: Rev,
+        command: &Command,
+    ) -> (CmdOutcome, bool) {
         let new_rev = self.rev.next();
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
@@ -125,7 +198,19 @@ impl AppState {
             Err(Rejection::Stale) => (CmdOutcome::Stale { rev: self.rev }, false),
             Err(Rejection::NotFound) => (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false),
             Err(Rejection::NoActiveSet) => (CmdOutcome::Rejected { code: ErrorCode::NoActiveSet }, false),
+            Err(Rejection::NotAProgramCommand) => {
+                (CmdOutcome::Rejected { code: ErrorCode::Unsupported }, false)
+            }
         }
+    }
+
+    fn search(&self, query: &str, limit: usize) -> Vec<SongSummary> {
+        self.index
+            .query(query, limit)
+            .into_iter()
+            .filter_map(|hit| self.songs.get(&hit.song_id))
+            .map(song_summary)
+            .collect()
     }
 
     /// Restores the program position saved before the last stop (ADR 0003): after a process
@@ -225,6 +310,18 @@ impl AppState {
             None => 0,
         };
         compile_item(&self.songs, self.rules, set.items.get(next_index)?)
+    }
+}
+
+/// How a song is listed in search results.
+fn song_summary(song: &Song) -> SongSummary {
+    let first_line =
+        song.verses.iter().flat_map(|verse| &verse.blocks).flat_map(|block| block.texts()).next();
+    SongSummary {
+        song_id: song.id.clone(),
+        title: song.title().to_owned(),
+        number: song.songbooks.first().map(|entry| entry.entry.clone()),
+        first_line: first_line.unwrap_or_default().to_owned(),
     }
 }
 

@@ -100,3 +100,33 @@ async fn visible_line_count(driver: &WebDriver) -> anyhow::Result<u64> {
         .await?;
     Ok(count.json().as_u64().unwrap_or(0))
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn search_without_diacritics_and_show_now() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    with_engine(screen_engine(), 1920, 1080, async |screen| {
+        screen.goto(server.url("/screen/")).await?;
+        with_engine(Browser::Chromium, 1280, 800, async |remote| {
+            remote.goto(server.url("/remote/")).await?;
+            let input = remote.query(By::Css(".search-input")).first().await?;
+            input.wait_until().displayed().await?;
+            // "przykladowa" without the Polish ł finds "Pieśń przykładowa z refrenem".
+            input.send_keys("przykladowa").await?;
+            let show = remote.query(By::Css("[data-testid=show-now]")).first().await?;
+            show.wait_until().clickable().await?;
+            show.click().await?;
+            wait_for_slide(screen, "v1#").await?;
+            let deck = attribute(screen, SCREEN_ROOT, "data-deck-id").await;
+            anyhow::ensure!(!deck.is_empty(), "the screen shows no deck");
+            // The search field is cleared and the set list is back, with the new item.
+            wait_until(Duration::from_secs(5), || async {
+                remote.find_all(By::Css(".set-item")).await.map(|items| items.len()).unwrap_or(0) == 4
+            })
+            .await?;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}

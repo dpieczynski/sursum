@@ -200,6 +200,14 @@ pub struct ServiceSet {
 }
 
 impl ServiceSet {
+    /// Inserts an item right after `anchor`, or at the end if there is no anchor (or it is not
+    /// in the set).
+    pub fn insert_after(&mut self, anchor: Option<&ItemId>, item: SetItem) {
+        let position =
+            anchor.and_then(|anchor| self.position(anchor)).map_or(self.items.len(), |index| index + 1);
+        self.items.insert(position, item);
+    }
+
     /// Index of an item in the running order.
     pub fn position(&self, item_id: &ItemId) -> Option<usize> {
         self.items.iter().position(|item| &item.id == item_id)
@@ -220,6 +228,21 @@ mod tests {
         assert_eq!(block.lines[1].chords[0].chord, "G");
         let json = serde_json::to_string(&block.lines[0]).unwrap();
         assert_eq!(json, r#""a""#);
+    }
+
+    #[test]
+    fn insert_after_anchor_or_at_the_end() {
+        let item = |id: &str| SetItem {
+            id: ItemId::from(id),
+            kind: ItemKind::Text { title: id.into(), slides: vec![] },
+        };
+        let mut set =
+            ServiceSet { id: SetId::from("s"), name: "s".into(), items: vec![item("a"), item("b")] };
+        set.insert_after(Some(&ItemId::from("a")), item("x"));
+        set.insert_after(None, item("y"));
+        set.insert_after(Some(&ItemId::from("missing")), item("z"));
+        let ids: Vec<&str> = set.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["a", "x", "b", "y", "z"]);
     }
 
     #[test]

@@ -19,5 +19,5 @@ pub use message::{ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, R
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
     DisplayPowerState, LiveSlide, Overlay, RemoteState, ScreenState, SectionJump, SetItemView, SetView,
-    TextAlign, Theme,
+    SongSummary, TextAlign, Theme,
 };

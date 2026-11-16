@@ -28,6 +28,10 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(800)).await;
     screen.screenshot(&output.join("screen.png")).await?;
     remote_page.screenshot(&output.join("remote.png")).await?;
+    let search = remote_page.find(thirtyfour::By::Css(".search-input")).await?;
+    search.send_keys("zorze").await?;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    remote_page.screenshot(&output.join("remote-search.png")).await?;
     screen.quit().await?;
     remote_page.quit().await?;
     println!("saved to {}", output.display());

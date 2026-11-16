@@ -4,7 +4,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use sursum_server::{BUILD_ID, Config, SystemPlatform};
 
 const LICENSE_NOTICE: &str = "sursum — offline church lyrics display
@@ -35,6 +35,21 @@ struct Args {
     /// Test-only: delay serving WebAssembly (needs the `e2e-hooks` feature).
     #[arg(long, default_value_t = 0, hide = true)]
     wasm_delay_ms: u64,
+    #[command(subcommand)]
+    command: Option<Task>,
+}
+
+/// One-off tasks instead of running the server.
+#[derive(Debug, Subcommand)]
+enum Task {
+    /// Import (or update) songs from an OpenSong `Songs` folder, then exit.
+    ImportOpensong {
+        /// The OpenSong `Songs` folder.
+        songs_dir: PathBuf,
+        /// Name of the songbook that OpenSong hymn numbers refer to.
+        #[arg(long, default_value = "OpenSong")]
+        songbook: String,
+    },
 }
 
 #[tokio::main]
@@ -49,6 +64,21 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
+
+    if let Some(Task::ImportOpensong { songs_dir, songbook }) = &args.command {
+        let mut database = sursum_server::db::Database::open(&args.data_dir)?;
+        let summary = sursum_server::import::import_opensong(
+            &mut database,
+            songs_dir,
+            songbook,
+            &mut std::io::stderr(),
+        )?;
+        println!(
+            "imported: {} new, {} updated, {} unchanged, {} failed, {} warnings",
+            summary.inserted, summary.updated, summary.unchanged, summary.failed, summary.warnings
+        );
+        return Ok(());
+    }
 
     let mut config = Config::with_data_dir(&args.data_dir).load_file()?;
     if let Some(listen) = args.listen {

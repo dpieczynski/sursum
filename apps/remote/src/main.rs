@@ -7,6 +7,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod messages;
+mod search;
 
 use leptos::ev;
 use leptos::prelude::*;
@@ -24,14 +25,14 @@ fn main() {
 
 /// Sends commands with the revision the operator currently sees (for the `Stale` rule).
 #[derive(Clone, Copy)]
-struct Commands {
+pub struct Commands {
     client: StoredValue<Client, LocalStorage>,
     state: RwSignal<Option<RemoteState>>,
     seq: StoredValue<u32>,
 }
 
 impl Commands {
-    fn send(self, cmd: Command) {
+    pub fn send(self, cmd: Command) {
         let base_rev =
             self.state.with_untracked(|state| state.as_ref().map(|state| state.rev).unwrap_or_default());
         self.seq.update_value(|seq| *seq = seq.wrapping_add(1));
@@ -66,7 +67,7 @@ fn App() -> impl IntoView {
             <TopBar status notice state />
             <Previews state />
             <SectionChips state commands />
-            <SetList state commands />
+            <Library state commands />
             <Controls state commands />
         </main>
     }
@@ -175,6 +176,22 @@ fn chip(jump: SectionJump, end: u32, current: Signal<Option<u32>>, commands: Com
         <button class="chip" class:active=active on:click=jump_here>
             {label}
         </button>
+    }
+}
+
+/// The set, or search results while the search field is not empty.
+#[component]
+fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
+    let query = RwSignal::new(String::new());
+    let searching = move || !query.with(|query| query.trim().is_empty());
+    let set_list = move || view! { <SetList state commands /> };
+    view! {
+        <section class="library">
+            <search::SearchBox query />
+            <Show when=searching fallback=set_list>
+                <search::SearchResults query commands />
+            </Show>
+        </section>
     }
 }
 

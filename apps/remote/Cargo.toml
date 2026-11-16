@@ -16,7 +16,11 @@ sursum-client.workspace = true
 leptos.workspace = true
 console_error_panic_hook.workspace = true
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Location", "KeyboardEvent", "Element", "EventTarget"] }
+serde_json.workspace = true
+js-sys.workspace = true
+wasm-bindgen-futures.workspace = true
+gloo-timers.workspace = true
+web-sys = { workspace = true, features = ["Window", "Location", "KeyboardEvent", "Element", "EventTarget", "Response"] }
 
 [lints]
 workspace = true

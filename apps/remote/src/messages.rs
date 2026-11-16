@@ -21,6 +21,10 @@ pub enum Msg {
     Untitled,
     EndOfSet,
     About,
+    SearchPlaceholder,
+    NoResults,
+    ShowNow,
+    Add,
 }
 
 /// The Polish text for a message.
@@ -29,8 +33,8 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Live => "Na ekranie",
         Msg::Next => "Dalej ▶",
         Msg::Prev => "◀ Wstecz",
-        Msg::NextItem => "Pieśń ⏭",
-        Msg::PrevItem => "⏮ Pieśń",
+        Msg::NextItem => "Pieśń »",
+        Msg::PrevItem => "« Pieśń",
         Msg::Black => "CZERŃ",
         Msg::Logo => "LOGO",
         Msg::Connected => "Połączono",
@@ -42,6 +46,10 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Untitled => "(bez tytułu)",
         Msg::EndOfSet => "Koniec zestawu",
         Msg::About => "Licencje",
+        Msg::SearchPlaceholder => "Szukaj: numer, tytuł lub fragment tekstu",
+        Msg::NoResults => "Brak wyników",
+        Msg::ShowNow => "Pokaż",
+        Msg::Add => "Dodaj",
     }
 }
 

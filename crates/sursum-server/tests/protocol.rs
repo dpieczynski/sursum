@@ -180,3 +180,58 @@ async fn healthz_answers() {
     assert!(response.ends_with("ok"));
     server.stop().await.unwrap();
 }
+
+async fn http_get(server: &RunningServer, path: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = TcpStream::connect(server.addr).await.unwrap();
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    response.split_once("\r\n\r\n").map(|(_, body)| body.to_owned()).unwrap_or_default()
+}
+
+#[tokio::test]
+async fn search_ignores_diacritics_and_ranks_numbers_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let results: Vec<sursum_protocol::SongSummary> =
+        serde_json::from_str(&http_get(&server, "/api/songs?q=wstaja%20zorze").await).unwrap();
+    assert_eq!(results[0].title, "Kiedy ranne wstają zorze");
+    let by_number: Vec<sursum_protocol::SongSummary> =
+        serde_json::from_str(&http_get(&server, "/api/songs?q=1").await).unwrap();
+    assert_eq!(by_number[0].number.as_deref(), Some("1"));
+    server.stop().await.unwrap();
+}
+
+async fn next_remote_state(socket: &mut Socket) -> sursum_protocol::RemoteState {
+    loop {
+        if let ServerMsg::Remote { state } = receive(socket).await {
+            return state;
+        }
+    }
+}
+
+#[tokio::test]
+async fn show_now_inserts_after_the_live_item_and_add_song_appends() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let refrain = sursum_protocol::SongId::from("demo-synthetic-refrain");
+    command(&mut remote, 1, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
+    let outcome = command(&mut remote, 2, Rev(0), Command::ShowNow { song_id: refrain.clone() }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    let outcome = command(&mut remote, 3, Rev(0), Command::AddSong { song_id: refrain }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    let missing = Command::ShowNow { song_id: sursum_protocol::SongId::from("no-such-song") };
+    assert!(matches!(command(&mut remote, 4, Rev(0), missing).await, CmdOutcome::Rejected { .. }));
+
+    let mut observer = connect(&server, Role::Remote, "observer").await;
+    let state = next_remote_state(&mut observer).await;
+    let items: Vec<&str> =
+        state.active_set.as_ref().unwrap().items.iter().map(|item| item.item_id.as_str()).collect();
+    assert_eq!(items, ["demo-item-1", "added-1", "demo-item-2", "demo-item-3", "added-2"]);
+    let live = state.program.live.unwrap();
+    assert_eq!((live.deck.item_id.as_str(), live.slide_index), ("added-1", 0));
+    server.stop().await.unwrap();
+}

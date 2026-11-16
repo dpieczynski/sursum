@@ -6,12 +6,13 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::{ConnectInfo, Path, Request, State, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, Path, Query, Request, State, WebSocketUpgrade};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use rust_embed::Embed;
+use serde::Deserialize;
 use sursum_protocol::Role;
 
 use crate::actor::StateHandle;
@@ -54,6 +55,7 @@ pub fn router(state: StateHandle, config: &Config) -> Router {
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
         .route("/healthz", get(|| async { "ok" }))
         .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
+        .route("/api/songs", get(search_songs))
         .route("/ws/screen", get(screen_socket))
         .route("/ws/remote", get(remote_socket))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))
@@ -64,6 +66,22 @@ pub fn router(state: StateHandle, config: &Config) -> Router {
         .route("/remote/{*path}", get(remote_asset))
         .layer(middleware::from_fn_with_state(app.clone(), local_network_only))
         .with_state(app)
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    q: String,
+    #[serde(default = "default_limit")]
+    limit: usize,
+}
+
+fn default_limit() -> usize {
+    30
+}
+
+/// `GET /api/songs?q=…`: search by songbook number, title or lyrics (ADR 0006).
+async fn search_songs(State(app): State<App>, Query(query): Query<SearchQuery>) -> Response {
+    axum::Json(app.state.search(query.q, query.limit.min(100)).await).into_response()
 }
 
 async fn screen_socket(State(app): State<App>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ItemId, Rev, SetId};
+use crate::ids::{ItemId, Rev, SetId, SongId};
 use crate::layout::ScreenLayout;
 use crate::slide::Deck;
 
@@ -100,6 +100,16 @@ pub struct SetView {
     pub set_id: SetId,
     pub name: String,
     pub items: Vec<SetItemView>,
+}
+
+/// A song as listed in search results.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SongSummary {
+    pub song_id: SongId,
+    pub title: String,
+    /// Number in a songbook, if any.
+    pub number: Option<String>,
+    pub first_line: String,
 }
 
 /// Power state of the projector or monitor (ADR 0012).

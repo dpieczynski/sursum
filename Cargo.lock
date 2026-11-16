@@ -3049,11 +3049,15 @@ name = "sursum-remote"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "gloo-timers",
+ "js-sys",
  "leptos",
+ "serde_json",
  "sursum-client",
  "sursum-protocol",
  "sursum-slide",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -3084,7 +3088,9 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "sursum-core",
+ "sursum-formats",
  "sursum-protocol",
  "tempfile",
  "thiserror 2.0.21",

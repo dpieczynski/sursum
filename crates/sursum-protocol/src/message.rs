@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ClientId, ItemId, Rev};
+use crate::ids::{ClientId, ItemId, Rev, SongId};
 use crate::state::{Overlay, RemoteState, ScreenState};
 
 /// Bumped on any incompatible change; a client with another version reloads itself.
@@ -55,6 +55,10 @@ pub enum Command {
     SetOverlay { overlay: Overlay },
     /// Black on/off in one tap (absolute).
     ToggleBlack,
+    /// Insert a song right after the live item and show it at once (absolute).
+    ShowNow { song_id: SongId },
+    /// Append a song to the end of the active set (does not change the screen).
+    AddSong { song_id: SongId },
 }
 
 impl Command {

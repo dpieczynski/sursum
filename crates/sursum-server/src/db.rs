@@ -10,6 +10,8 @@ use std::path::Path;
 use anyhow::Context as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use sursum_core::model::Song;
 use sursum_protocol::{ItemId, Overlay, SetId, SlideKey};
 
 /// Schema migrations; index + 1 is the resulting `user_version`. Never edit a released entry,
@@ -25,6 +27,26 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE settings (
         key TEXT PRIMARY KEY,
         json TEXT NOT NULL
+    );",
+    // 2: the song library with a history of every revision (edits can be undone, libraries merged).
+    "CREATE TABLE songs (
+        id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body_json TEXT NOT NULL,
+        source TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        deleted_at TEXT
+    );
+    CREATE TABLE song_history (
+        song_id TEXT NOT NULL REFERENCES songs(id),
+        revision INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        body_json TEXT NOT NULL,
+        edited_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (song_id, revision)
     );",
 ];
 
@@ -45,6 +67,14 @@ pub struct SavedProgram {
 pub struct RuntimeRecord {
     pub program: SavedProgram,
     pub boot_id: Option<String>,
+}
+
+/// What [`Database::upsert_song`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Upsert {
+    Inserted,
+    Updated { revision: i64 },
+    Unchanged,
 }
 
 /// The database connection.
@@ -95,6 +125,58 @@ impl Database {
         Ok(())
     }
 
+    /// All songs that are not deleted.
+    pub fn load_songs(&self) -> anyhow::Result<Vec<Song>> {
+        let mut statement =
+            self.connection.prepare("SELECT body_json FROM songs WHERE deleted_at IS NULL ORDER BY title")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        rows.map(|json| Ok(serde_json::from_str(&json?).context("decoding a stored song")?)).collect()
+    }
+
+    /// Inserts a song or, if its content changed, stores a new revision (keeping the old one in
+    /// `song_history`). `source` records where it came from (e.g. `opensong:<path>`).
+    pub fn upsert_song(&mut self, song: &Song, source: &str) -> anyhow::Result<Upsert> {
+        let body = serde_json::to_string(song)?;
+        let hash = content_hash(&body);
+        let transaction = self.connection.transaction()?;
+        let existing: Option<(i64, String)> = transaction
+            .query_row("SELECT revision, content_hash FROM songs WHERE id = ?1", [song.id.as_str()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?;
+        let outcome = match existing {
+            Some((_, existing_hash)) if existing_hash == hash => Upsert::Unchanged,
+            Some((revision, _)) => {
+                let revision = revision + 1;
+                transaction.execute(
+                    "UPDATE songs SET revision = ?2, content_hash = ?3, title = ?4, body_json = ?5, source = ?6,
+                     updated_at = datetime('now'), deleted_at = NULL WHERE id = ?1",
+                    params![song.id.as_str(), revision, hash, song.title(), body, source],
+                )?;
+                Upsert::Updated { revision }
+            }
+            None => {
+                transaction.execute(
+                    "INSERT INTO songs (id, revision, content_hash, title, body_json, source) VALUES (?1, 1, ?2, ?3, ?4, ?5)",
+                    params![song.id.as_str(), hash, song.title(), body, source],
+                )?;
+                Upsert::Inserted
+            }
+        };
+        if outcome != Upsert::Unchanged {
+            let revision = match outcome {
+                Upsert::Updated { revision } => revision,
+                _ => 1,
+            };
+            transaction.execute(
+                "INSERT INTO song_history (song_id, revision, content_hash, body_json) VALUES (?1, ?2, ?3, ?4)",
+                params![song.id.as_str(), revision, hash, body],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(outcome)
+    }
+
     /// Loads the last saved program position.
     pub fn load_runtime(&self) -> anyhow::Result<Option<RuntimeRecord>> {
         let row: Option<(String, Option<String>)> = self
@@ -122,9 +204,45 @@ impl Database {
     }
 }
 
+/// SHA-256 of a song's JSON, used to detect real changes.
+fn content_hash(body: &str) -> String {
+    Sha256::digest(body.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sursum_core::model::Verse;
+    use sursum_protocol::SongId;
+
+    fn song(text: &str) -> Song {
+        Song {
+            id: SongId::from("s1"),
+            titles: vec!["Tytuł".into()],
+            authors: vec![],
+            songbooks: vec![],
+            copyright: None,
+            ccli: None,
+            themes: vec![],
+            verse_order: vec![],
+            verses: vec![Verse::simple("v1", &[text])],
+            extra: Default::default(),
+        }
+    }
+
+    #[test]
+    fn songs_are_versioned_and_unchanged_imports_are_detected() {
+        let mut database = Database::in_memory().unwrap();
+        assert_eq!(database.upsert_song(&song("a"), "test").unwrap(), Upsert::Inserted);
+        assert_eq!(database.upsert_song(&song("a"), "test").unwrap(), Upsert::Unchanged);
+        assert_eq!(database.upsert_song(&song("b"), "test").unwrap(), Upsert::Updated { revision: 2 });
+        let songs = database.load_songs().unwrap();
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].verses[0].blocks[0].lines[0].text, "b");
+        let history: i64 =
+            database.connection.query_row("SELECT count(*) FROM song_history", [], |row| row.get(0)).unwrap();
+        assert_eq!(history, 2);
+    }
 
     fn saved(overlay: Overlay) -> SavedProgram {
         SavedProgram {

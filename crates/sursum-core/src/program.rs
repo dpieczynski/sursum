@@ -38,6 +38,8 @@ pub enum Rejection {
     NotFound,
     #[error("there is no active set")]
     NoActiveSet,
+    #[error("this command changes the set and is applied by the caller, not by the program")]
+    NotAProgramCommand,
 }
 
 /// Inputs a command needs besides the program itself.
@@ -104,6 +106,8 @@ impl Program {
                 self.overlay = if self.overlay == Overlay::Black { Overlay::None } else { Overlay::Black };
                 Ok(())
             }
+            // Set changes: the server edits the set first (see the state actor).
+            Command::ShowNow { .. } | Command::AddSong { .. } => Err(Rejection::NotAProgramCommand),
         }
     }
 

@@ -62,9 +62,10 @@ body {
 
 .previews {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  /* Keep the previews from pushing the controls off short landscape screens. */
-  max-width: min(100%, calc((100dvh - 330px) * 16 / 9 * 1.5));
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  /* The live preview (2/3 of this width, 16:9) is at most a third of the screen height, so the
+     set list and the controls always keep their room. */
+  max-width: min(100%, calc(33dvh * 16 / 9 * 1.5));
   gap: var(--gap);
   align-items: start;
 }
@@ -121,6 +122,67 @@ body {
   border-color: var(--accent);
 }
 
+.library {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--gap);
+  min-height: 0;
+}
+.search {
+  display: flex;
+  gap: var(--gap);
+}
+.search-input {
+  flex: 1;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 20px;
+}
+.search-clear {
+  width: 52px;
+  border: none;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 26px;
+}
+.search-result .result-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.result-title {
+  font-weight: 700;
+}
+.result-line {
+  color: var(--muted);
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result-action {
+  min-width: 84px;
+  min-height: 48px;
+  border: none;
+  border-radius: 8px;
+  background: #333;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 700;
+}
+.result-action.show {
+  background: var(--accent);
+}
+.search-empty {
+  padding: 12px;
+  color: var(--muted);
+}
 .set-list {
   list-style: none;
   margin: 0;
