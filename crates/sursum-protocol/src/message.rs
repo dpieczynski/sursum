@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ClientId, ItemId, Rev, SongId};
+use crate::ids::{ClientId, ItemId, Rev, SetId, SongId};
 use crate::state::{Overlay, RemoteState, ScreenState};
 
 /// Bumped on any incompatible change; a client with another version reloads itself.
@@ -59,6 +59,18 @@ pub enum Command {
     ShowNow { song_id: SongId },
     /// Append a song to the end of the active set (does not change the screen).
     AddSong { song_id: SongId },
+    /// Append a text slide (announcement); pages are separated by an empty line.
+    AddText { title: String, text: String },
+    /// Remove an item from the active set (the screen keeps showing it if it is live).
+    RemoveItem { item_id: ItemId },
+    /// Move an item of the active set to a 0-based position.
+    MoveItem { item_id: ItemId, to_index: u32 },
+    /// Put back the last removed item.
+    UndoRemove,
+    /// Create an empty set and make it active.
+    NewSet { name: String },
+    /// Make another set active (the screen keeps its slide until the next navigation).
+    ActivateSet { set_id: SetId },
 }
 
 impl Command {

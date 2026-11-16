@@ -20,6 +20,6 @@ pub use layout::{
 pub use message::{ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, Role, ServerMsg};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
-    DisplayPowerState, LiveSlide, Overlay, RemoteState, ScreenState, SectionJump, SetItemView, SetView,
-    SongSummary, TextAlign, Theme,
+    DisplayPowerState, LiveSlide, Overlay, RemoteState, ScreenState, SectionJump, SetItemView, SetSummary,
+    SetView, SongSummary, TextAlign, Theme,
 };

@@ -11,7 +11,7 @@ use anyhow::Context as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sursum_core::model::Song;
+use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song};
 use sursum_protocol::{ItemId, Overlay, SetId, SlideKey};
 
 /// Schema migrations; index + 1 is the resulting `user_version`. Never edit a released entry,
@@ -47,6 +47,21 @@ const MIGRATIONS: &[&str] = &[
         body_json TEXT NOT NULL,
         edited_at TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (song_id, revision)
+    );",
+    // 3: sets (running orders) and their items.
+    "CREATE TABLE sets (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        deleted_at TEXT
+    );
+    CREATE TABLE set_items (
+        set_id TEXT NOT NULL REFERENCES sets(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        item_id TEXT NOT NULL,
+        kind_json TEXT NOT NULL,
+        PRIMARY KEY (set_id, position)
     );",
 ];
 
@@ -219,6 +234,75 @@ impl Database {
         Ok(outcome)
     }
 
+    /// All sets that are not deleted, items in order.
+    pub fn load_sets(&self) -> anyhow::Result<Vec<ServiceSet>> {
+        let mut sets_statement = self
+            .connection
+            .prepare("SELECT id, name FROM sets WHERE deleted_at IS NULL ORDER BY created_at, id")?;
+        let sets: Vec<(String, String)> =
+            sets_statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?.collect::<Result<_, _>>()?;
+        let mut items_statement = self
+            .connection
+            .prepare("SELECT item_id, kind_json FROM set_items WHERE set_id = ?1 ORDER BY position")?;
+        let mut result = Vec::new();
+        for (id, name) in sets {
+            let rows: Vec<(String, String)> = items_statement
+                .query_map([&id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<_, _>>()?;
+            let items = rows
+                .into_iter()
+                .map(|(item_id, json)| {
+                    let kind: ItemKind = serde_json::from_str(&json).context("decoding a set item")?;
+                    Ok(SetItem { id: ItemId(item_id), kind })
+                })
+                .collect::<anyhow::Result<_>>()?;
+            result.push(ServiceSet { id: SetId(id), name, items });
+        }
+        Ok(result)
+    }
+
+    /// Stores a set, replacing its previous items.
+    pub fn save_set(&mut self, set: &ServiceSet) -> anyhow::Result<()> {
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO sets (id, name) VALUES (?1, ?2)
+             ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = datetime('now')",
+            params![set.id.as_str(), set.name],
+        )?;
+        transaction.execute("DELETE FROM set_items WHERE set_id = ?1", [set.id.as_str()])?;
+        for (position, item) in set.items.iter().enumerate() {
+            transaction.execute(
+                "INSERT INTO set_items (set_id, position, item_id, kind_json) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    set.id.as_str(),
+                    i64::try_from(position)?,
+                    item.id.as_str(),
+                    serde_json::to_string(&item.kind)?
+                ],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    /// Reads a JSON setting.
+    pub fn setting<T: serde::de::DeserializeOwned>(&self, key: &str) -> anyhow::Result<Option<T>> {
+        let json: Option<String> = self
+            .connection
+            .query_row("SELECT json FROM settings WHERE key = ?1", [key], |row| row.get(0))
+            .optional()?;
+        json.map(|json| serde_json::from_str(&json).context("decoding a setting")).transpose()
+    }
+
+    /// Writes a JSON setting.
+    pub fn set_setting<T: Serialize>(&self, key: &str, value: &T) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO settings (key, json) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET json = excluded.json",
+            params![key, serde_json::to_string(value)?],
+        )?;
+        Ok(())
+    }
+
     /// The current revision of a song, if it exists.
     pub fn song_revision(&self, song_id: &str) -> anyhow::Result<Option<i64>> {
         let revision = self
@@ -340,6 +424,27 @@ mod tests {
         let database = Database::open(dir.path()).unwrap();
         assert_eq!(database.load_songs().unwrap()[0].verses[0].blocks[0].lines[0].text, "zapisana");
         assert!(dir.path().join("corrupt").read_dir().unwrap().next().is_some());
+    }
+
+    #[test]
+    fn sets_and_settings_round_trip() {
+        let mut database = Database::in_memory().unwrap();
+        let mut set = ServiceSet {
+            id: SetId::from("set-1"),
+            name: "Niedziela".into(),
+            items: vec![SetItem {
+                id: ItemId::from("i1"),
+                kind: ItemKind::Text { title: "Ogł.".into(), slides: vec!["x".into()] },
+            }],
+        };
+        database.save_set(&set).unwrap();
+        set.items.clear();
+        set.name = "Niedziela II".into();
+        database.save_set(&set).unwrap();
+        assert_eq!(database.load_sets().unwrap(), vec![set]);
+        database.set_setting("active_set", &"set-1").unwrap();
+        assert_eq!(database.setting::<String>("active_set").unwrap().as_deref(), Some("set-1"));
+        assert_eq!(database.setting::<String>("missing").unwrap(), None);
     }
 
     #[test]

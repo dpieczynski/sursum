@@ -16,7 +16,7 @@ use sursum_core::search::SearchIndex;
 use sursum_core::slides::{SlideRules, compile_song, compile_text};
 use sursum_protocol::{
     ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, ItemId, LiveSlide, Overlay, Rect,
-    RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenState, SetItemView, SetView, SongDraft, SongId,
+    RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenState, SetId, SetItemView, SetView, SongDraft, SongId,
     SongSummary, Theme,
 };
 use tokio::sync::{mpsc, oneshot, watch};
@@ -26,6 +26,7 @@ use crate::db::{Database, RuntimeRecord, SavedProgram, Upsert};
 use crate::demo;
 use crate::editor;
 use crate::platform::Platform;
+use crate::sets::SetStore;
 
 /// Handle to the actor, cheap to clone; one per WebSocket session.
 #[derive(Clone)]
@@ -119,19 +120,25 @@ pub fn spawn(
     mut database: Database,
     platform: &dyn Platform,
 ) -> anyhow::Result<StateHandle> {
-    // The demo songs stay in the library until real sets exist (milestone M3).
-    let demo_songs = demo::songs();
-    for song in &demo_songs {
-        database.upsert_song(song, "demo").context("storing demo songs")?;
+    // On the very first start the library gets the demo songs and a demo set.
+    let mut sets = database.load_sets().context("loading sets")?;
+    if sets.is_empty() {
+        let demo_songs = demo::songs();
+        for song in &demo_songs {
+            database.upsert_song(song, "demo").context("storing demo songs")?;
+        }
+        let demo_set = demo::set(&demo_songs);
+        database.save_set(&demo_set).context("storing the demo set")?;
+        sets.push(demo_set);
     }
+    let active_set: Option<SetId> = database.setting(ACTIVE_SET_KEY).context("loading the active set")?;
     let songs = database.load_songs().context("loading the song library")?;
     tracing::info!(songs = songs.len(), "song library loaded");
     let mut state = AppState {
         index: SearchIndex::build(&songs),
         data_dir: config.data_dir.clone(),
         songs: songs.into_iter().map(|song| (song.id.clone(), song)).collect(),
-        set: Some(demo::set(&demo_songs)),
-        next_item: 1,
+        sets: SetStore::new(sets, active_set),
         program: Program::default(),
         rev: Rev(1),
         theme: Theme::default(),
@@ -194,9 +201,7 @@ struct AppState {
     songs: HashMap<SongId, Song>,
     index: SearchIndex,
     data_dir: std::path::PathBuf,
-    set: Option<ServiceSet>,
-    /// Counter for ids of items added during this run (sets are persisted from M3).
-    next_item: u32,
+    sets: SetStore,
     program: Program,
     rev: Rev,
     theme: Theme,
@@ -210,42 +215,108 @@ struct AppState {
 impl AppState {
     /// Applies one command; returns its outcome and whether the state changed.
     fn handle_command(&mut self, actor: &ClientId, base_rev: Rev, command: &Command) -> (CmdOutcome, bool) {
-        match command {
-            Command::AddSong { song_id } => match self.insert_song(song_id, None) {
-                Ok(_) => {
-                    self.rev = self.rev.next();
-                    (CmdOutcome::Applied { rev: self.rev }, true)
-                }
-                Err(code) => (CmdOutcome::Rejected { code }, false),
-            },
-            Command::ShowNow { song_id } => {
-                // Right after the live item (or at the end if nothing is live), then on screen.
-                let anchor = self.program.live.as_ref().map(|live| live.item_id.clone());
-                match self.insert_song(song_id, anchor.as_ref()) {
-                    Ok(item_id) => {
-                        let show = Command::GoTo { item_id, slide_index: 0 };
-                        // An explicit choice of the operator: never stale.
-                        let (outcome, _) = self.run_program_command(actor, Rev(u32::MAX), &show);
-                        (outcome, true)
-                    }
-                    Err(code) => (CmdOutcome::Rejected { code }, false),
+        let result = match command {
+            Command::ShowNow { song_id } => return self.show_now(actor, song_id),
+            Command::AddSong { song_id } => self.add_song(song_id),
+            Command::AddText { title, text } => self.add_text(title, text),
+            Command::RemoveItem { item_id } => self.remove_item(item_id),
+            Command::MoveItem { item_id, to_index } => self.move_item(item_id, *to_index as usize),
+            Command::UndoRemove => self.sets.undo_remove().cloned().ok_or(ErrorCode::NotFound).map(Some),
+            Command::NewSet { name } => {
+                let set = self.sets.create(SetId(format!("set-{}", uuid::Uuid::new_v4())), name).clone();
+                Ok(Some(set))
+            }
+            Command::ActivateSet { set_id } => {
+                if self.sets.activate(set_id) {
+                    Ok(None)
+                } else {
+                    Err(ErrorCode::NotFound)
                 }
             }
-            _ => self.run_program_command(actor, base_rev, command),
+            _ => return self.run_program_command(actor, base_rev, command),
+        };
+        match result {
+            Ok(changed_set) => {
+                if let Some(set) = changed_set {
+                    self.save_set(&set);
+                }
+                self.save_active_set();
+                self.rev = self.rev.next();
+                (CmdOutcome::Applied { rev: self.rev }, true)
+            }
+            Err(code) => (CmdOutcome::Rejected { code }, false),
         }
     }
 
-    /// Inserts a song into the active set after `anchor` (or at the end); returns the new item.
-    fn insert_song(&mut self, song_id: &SongId, anchor: Option<&ItemId>) -> Result<ItemId, ErrorCode> {
+    /// Inserts a song right after the live item (or at the end if nothing is live) and shows it.
+    fn show_now(&mut self, actor: &ClientId, song_id: &SongId) -> (CmdOutcome, bool) {
+        let anchor = self.program.live.as_ref().map(|live| live.item_id.clone());
+        match self.insert_song(song_id, anchor.as_ref()) {
+            Ok((item_id, set)) => {
+                self.save_set(&set);
+                // An explicit choice of the operator: never stale.
+                let (outcome, _) = self.run_program_command(
+                    actor,
+                    Rev(u32::MAX),
+                    &Command::GoTo { item_id, slide_index: 0 },
+                );
+                (outcome, true)
+            }
+            Err(code) => (CmdOutcome::Rejected { code }, false),
+        }
+    }
+
+    fn add_song(&mut self, song_id: &SongId) -> Result<Option<ServiceSet>, ErrorCode> {
+        self.insert_song(song_id, None).map(|(_, set)| Some(set))
+    }
+
+    /// Adds announcement slides; pages are separated by an empty line.
+    fn add_text(&mut self, title: &str, text: &str) -> Result<Option<ServiceSet>, ErrorCode> {
+        let slides: Vec<String> =
+            text.split("\n\n").map(str::trim).filter(|page| !page.is_empty()).map(str::to_owned).collect();
+        if slides.is_empty() {
+            return Err(ErrorCode::NotFound);
+        }
+        let kind = ItemKind::Text { title: title.trim().to_owned(), slides };
+        self.sets.insert(None, new_item_id(), kind).cloned().ok_or(ErrorCode::NoActiveSet).map(Some)
+    }
+
+    fn remove_item(&mut self, item_id: &ItemId) -> Result<Option<ServiceSet>, ErrorCode> {
+        let (index, set) = self.sets.remove(item_id).ok_or(ErrorCode::NotFound)?;
+        let set = set.clone();
+        self.program.item_removed(item_id, index);
+        Ok(Some(set))
+    }
+
+    fn move_item(&mut self, item_id: &ItemId, to_index: usize) -> Result<Option<ServiceSet>, ErrorCode> {
+        self.sets.move_item(item_id, to_index).cloned().ok_or(ErrorCode::NotFound).map(Some)
+    }
+
+    /// Inserts a song into the active set after `anchor` (or at the end).
+    fn insert_song(
+        &mut self,
+        song_id: &SongId,
+        anchor: Option<&ItemId>,
+    ) -> Result<(ItemId, ServiceSet), ErrorCode> {
         if !self.songs.contains_key(song_id) {
             return Err(ErrorCode::NotFound);
         }
-        let set = self.set.as_mut().ok_or(ErrorCode::NoActiveSet)?;
-        let item_id = ItemId(format!("added-{}", self.next_item));
-        self.next_item += 1;
+        let item_id = new_item_id();
         let kind = ItemKind::Song { song_id: song_id.clone(), order_override: None };
-        set.insert_after(anchor, SetItem { id: item_id.clone(), kind });
-        Ok(item_id)
+        let set = self.sets.insert(anchor, item_id.clone(), kind).ok_or(ErrorCode::NoActiveSet)?;
+        Ok((item_id, set.clone()))
+    }
+
+    fn save_set(&mut self, set: &ServiceSet) {
+        if let Err(error) = self.database.save_set(set) {
+            tracing::error!(?error, "could not save the set");
+        }
+    }
+
+    fn save_active_set(&self) {
+        if let Err(error) = self.database.set_setting(ACTIVE_SET_KEY, &self.sets.active_id()) {
+            tracing::error!(?error, "could not save the active set");
+        }
     }
 
     /// Runs a command that only changes the program (navigation, overlay).
@@ -258,7 +329,7 @@ impl AppState {
         let new_rev = self.rev.next();
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
-        let context = Context { set: self.set.as_ref(), deck_for: &deck_for };
+        let context = Context { set: self.sets.active(), deck_for: &deck_for };
         match self.program.execute(command, base_rev, actor, new_rev, &context) {
             Ok(Outcome::Changed) => {
                 self.rev = new_rev;
@@ -353,11 +424,11 @@ impl AppState {
         let same_boot = self.boot_id.is_some() && record.boot_id == self.boot_id;
         self.program.overlay = if same_boot { record.program.overlay } else { Overlay::Logo };
         let saved = record.program;
-        let set_matches = self.set.as_ref().is_some_and(|set| Some(&set.id) == saved.set_id.as_ref());
-        let item =
-            saved.item_id.as_ref().filter(|_| set_matches).and_then(|item_id| {
-                self.set.as_ref()?.items.iter().find(|item| &item.id == item_id).cloned()
-            });
+        // The live item belongs to the set that was active when it went live.
+        let item = saved.set_id.as_ref().and_then(|set_id| self.sets.get(set_id)).and_then(|set| {
+            let item_id = saved.item_id.as_ref()?;
+            set.items.iter().find(|item| &item.id == item_id).cloned()
+        });
         let Some(item) = item else { return };
         let Some(deck) = compile_item(&self.songs, self.rules, &item).filter(|deck| !deck.slides.is_empty())
         else {
@@ -375,7 +446,7 @@ impl AppState {
     fn save_program(&self) {
         let live = self.program.live.as_ref();
         let saved = SavedProgram {
-            set_id: self.set.as_ref().map(|set| set.id.clone()),
+            set_id: self.sets.active().map(|set| set.id.clone()),
             item_id: live.map(|live| live.item_id.clone()),
             slide_key: live.map(|live| live.deck.slides[live.slide_index].key.clone()),
             overlay: self.program.overlay,
@@ -400,13 +471,15 @@ impl AppState {
     fn remote_state(&self) -> RemoteState {
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
-        let context = Context { set: self.set.as_ref(), deck_for: &deck_for };
+        let context = Context { set: self.sets.active(), deck_for: &deck_for };
         RemoteState {
             rev: self.rev,
             program: self.screen_state(),
             next: self.program.peek_next(&context).as_ref().map(live_slide),
             sections: self.program.sections(),
-            active_set: self.set.as_ref().map(|set| self.set_view(set)),
+            active_set: self.sets.active().map(|set| self.set_view(set)),
+            sets: self.sets.summaries(),
+            can_undo: self.sets.can_undo(),
             display_power: DisplayPowerState::Unavailable { reason: "not_configured".to_owned() },
         }
     }
@@ -436,7 +509,7 @@ impl AppState {
 
     /// The deck of the item after the live one, so the screen can fit it in advance.
     fn upcoming_deck(&self) -> Option<Deck> {
-        let set = self.set.as_ref()?;
+        let set = self.sets.active()?;
         let next_index = match &self.program.live {
             Some(live) => set.position(&live.item_id)? + 1,
             None => 0,
@@ -456,6 +529,14 @@ fn song_summary(song: &Song) -> SongSummary {
         first_line: first_line.unwrap_or_default().to_owned(),
     }
 }
+
+/// A new, globally unique item id (sets are shared between devices later).
+fn new_item_id() -> ItemId {
+    ItemId(format!("item-{}", uuid::Uuid::new_v4()))
+}
+
+/// The settings key holding the active set.
+const ACTIVE_SET_KEY: &str = "active_set";
 
 /// Compiles the deck for a set item.
 fn compile_item(songs: &HashMap<SongId, Song>, rules: SlideRules, item: &SetItem) -> Option<Deck> {

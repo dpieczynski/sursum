@@ -78,6 +78,14 @@ expression: state
       }
     ]
   },
+  "sets": [
+    {
+      "set_id": "set",
+      "name": "Msza",
+      "items": 1
+    }
+  ],
+  "can_undo": false,
   "display_power": {
     "state": "unavailable",
     "reason": "not_configured"

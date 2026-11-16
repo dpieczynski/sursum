@@ -27,6 +27,16 @@ pub struct Program {
     pub updated_rev: Rev,
     /// Client that made the last change; may keep pressing "next" without being stale.
     pub last_actor: Option<ClientId>,
+    /// Where the live item was when someone removed it from the set (the "ghost position"):
+    /// the screen keeps showing it, and "next" continues with the item that followed it.
+    pub removed_at: Option<usize>,
+}
+
+/// Where the live item is in the set, for next/previous item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Anchor {
+    At(usize),
+    RemovedAt(usize),
 }
 
 /// Why a command was not applied.
@@ -107,7 +117,14 @@ impl Program {
                 Ok(())
             }
             // Set changes: the server edits the set first (see the state actor).
-            Command::ShowNow { .. } | Command::AddSong { .. } => Err(Rejection::NotAProgramCommand),
+            Command::ShowNow { .. }
+            | Command::AddSong { .. }
+            | Command::AddText { .. }
+            | Command::RemoveItem { .. }
+            | Command::MoveItem { .. }
+            | Command::UndoRemove
+            | Command::NewSet { .. }
+            | Command::ActivateSet { .. } => Err(Rejection::NotAProgramCommand),
         }
     }
 
@@ -116,6 +133,14 @@ impl Program {
         let mut probe = self.clone();
         probe.next(context).ok()?;
         probe.live.filter(|live| Some(live) != self.live.as_ref())
+    }
+
+    /// Tells the program that an item was removed from the set at `index`. If it was the live
+    /// item, the screen keeps it (frozen) and navigation continues from that position.
+    pub fn item_removed(&mut self, item_id: &ItemId, index: usize) {
+        if self.live.as_ref().is_some_and(|live| &live.item_id == item_id) {
+            self.removed_at = Some(index);
+        }
     }
 
     /// Jump buttons for the live deck: one per section, pointing at its first slide.
@@ -154,9 +179,12 @@ impl Program {
             self.live = Some(Live { slide_index: live.slide_index - 1, ..live });
             return Ok(());
         }
-        let position = self.live_position(context);
+        let previous = match self.anchor(context) {
+            Some(Anchor::At(position) | Anchor::RemovedAt(position)) => position.checked_sub(1),
+            None => None,
+        };
         self.live = Some(live);
-        match position.and_then(|position| position.checked_sub(1)) {
+        match previous {
             Some(previous) => self.show_item_at(context, previous, SlidePick::Last),
             None => Ok(()),
         }
@@ -164,8 +192,11 @@ impl Program {
 
     fn step_item(&mut self, context: &Context<'_>, delta: isize) -> Result<(), Rejection> {
         let set = context.set.ok_or(Rejection::NoActiveSet)?;
-        let target = match self.live_position(context) {
-            Some(position) => position.checked_add_signed(delta),
+        let target = match self.anchor(context) {
+            Some(Anchor::At(position)) => position.checked_add_signed(delta),
+            // The item now at the removed item's place is the one that followed it.
+            Some(Anchor::RemovedAt(position)) if delta > 0 => Some(position),
+            Some(Anchor::RemovedAt(position)) => position.checked_sub(1),
             None if delta > 0 => Some(0),
             None => None,
         };
@@ -224,13 +255,17 @@ impl Program {
             SlidePick::Index(index) => index.min(last),
         };
         self.live = Some(Live { item_id: item.id.clone(), deck, slide_index });
+        self.removed_at = None;
         Ok(())
     }
 
     /// Position of the live item in the active set.
-    fn live_position(&self, context: &Context<'_>) -> Option<usize> {
+    fn anchor(&self, context: &Context<'_>) -> Option<Anchor> {
         let live = self.live.as_ref()?;
-        context.set?.position(&live.item_id)
+        match context.set?.position(&live.item_id) {
+            Some(position) => Some(Anchor::At(position)),
+            None => self.removed_at.map(Anchor::RemovedAt),
+        }
     }
 
     /// The live slide, switched to a freshly compiled deck if the item's content changed.
@@ -466,6 +501,30 @@ mod tests {
         program.apply(&Command::Next, &Context { set: Some(&set), deck_for: &edited }).unwrap();
         let live = program.live.as_ref().unwrap();
         assert_eq!(live.deck.slides[live.slide_index].key.as_str(), "v2#0@0");
+    }
+
+    #[test]
+    fn removing_the_live_item_keeps_it_and_next_continues_with_the_following_one() {
+        let mut set = set();
+        let mut program = Program::default();
+        run(&mut program, &set, Command::GoToItemNumber { number: 2 }).unwrap();
+        let index = set.position(&ItemId::from("i2")).unwrap();
+        set.items.remove(index);
+        program.item_removed(&ItemId::from("i2"), index);
+        assert_eq!(position(&program), ("i2".into(), 0), "the screen keeps the removed item");
+        run(&mut program, &set, Command::NextItem).unwrap();
+        assert_eq!(position(&program), ("i3".into(), 0));
+    }
+
+    #[test]
+    fn previous_from_a_removed_item_goes_to_the_one_before_it() {
+        let mut set = set();
+        let mut program = Program::default();
+        run(&mut program, &set, Command::GoToItemNumber { number: 2 }).unwrap();
+        set.items.remove(1);
+        program.item_removed(&ItemId::from("i2"), 1);
+        run(&mut program, &set, Command::Prev).unwrap();
+        assert_eq!(position(&program), ("i1".into(), 2));
     }
 
     #[test]

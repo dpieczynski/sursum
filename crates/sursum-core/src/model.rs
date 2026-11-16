@@ -208,6 +208,26 @@ impl ServiceSet {
         self.items.insert(position, item);
     }
 
+    /// Removes an item; returns where it was and the item itself (for undo).
+    pub fn remove(&mut self, item_id: &ItemId) -> Option<(usize, SetItem)> {
+        let index = self.position(item_id)?;
+        Some((index, self.items.remove(index)))
+    }
+
+    /// Moves an item to `index` (clamped to the set's length). Returns false if it is not there.
+    pub fn move_to(&mut self, item_id: &ItemId, index: usize) -> bool {
+        let Some((_, item)) = self.remove(item_id) else { return false };
+        let index = index.min(self.items.len());
+        self.items.insert(index, item);
+        true
+    }
+
+    /// Puts an item back at a former position (undo of [`ServiceSet::remove`]).
+    pub fn restore(&mut self, index: usize, item: SetItem) {
+        let index = index.min(self.items.len());
+        self.items.insert(index, item);
+    }
+
     /// Index of an item in the running order.
     pub fn position(&self, item_id: &ItemId) -> Option<usize> {
         self.items.iter().position(|item| &item.id == item_id)
@@ -243,6 +263,41 @@ mod tests {
         set.insert_after(Some(&ItemId::from("missing")), item("z"));
         let ids: Vec<&str> = set.items.iter().map(|item| item.id.as_str()).collect();
         assert_eq!(ids, ["a", "x", "b", "y", "z"]);
+    }
+
+    #[test]
+    fn remove_move_and_restore() {
+        let item = |id: &str| SetItem {
+            id: ItemId::from(id),
+            kind: ItemKind::Text { title: id.into(), slides: vec![] },
+        };
+        let mut set = ServiceSet {
+            id: SetId::from("s"),
+            name: "s".into(),
+            items: vec![item("a"), item("b"), item("c")],
+        };
+        assert!(set.move_to(&ItemId::from("a"), 9));
+        let ids = |set: &ServiceSet| set.items.iter().map(|item| item.id.0.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&set), ["b", "c", "a"]);
+        let (index, removed) = set.remove(&ItemId::from("c")).unwrap();
+        assert_eq!((index, ids(&set)), (1, vec!["b".to_owned(), "a".to_owned()]));
+        set.restore(index, removed);
+        assert_eq!(ids(&set), ["b", "c", "a"]);
+        assert!(!set.move_to(&ItemId::from("missing"), 0));
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn moves_keep_every_item_exactly_once(moves in proptest::collection::vec((0usize..6, 0usize..8), 0..20)) {
+            let item = |id: usize| SetItem { id: ItemId(id.to_string()), kind: ItemKind::Text { title: String::new(), slides: vec![] } };
+            let mut set = ServiceSet { id: SetId::from("s"), name: "s".into(), items: (0..6).map(item).collect() };
+            for (which, to) in moves {
+                set.move_to(&ItemId(which.to_string()), to);
+            }
+            let mut ids: Vec<String> = set.items.iter().map(|item| item.id.0.clone()).collect();
+            ids.sort();
+            proptest::prop_assert_eq!(ids, (0..6).map(|n| n.to_string()).collect::<Vec<_>>());
+        }
     }
 
     #[test]

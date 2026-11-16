@@ -15,6 +15,7 @@ pub mod http;
 pub mod import;
 pub mod licenses;
 pub mod platform;
+pub mod sets;
 pub mod ws;
 
 use std::net::SocketAddr;

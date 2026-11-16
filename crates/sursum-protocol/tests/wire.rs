@@ -81,6 +81,8 @@ fn remote_state() {
             name: "Msza".into(),
             items: vec![SetItemView { item_id: ItemId::from("item-1"), number: 1, title: "Pieśń".into() }],
         }),
+        sets: vec![SetSummary { set_id: SetId::from("set"), name: "Msza".into(), items: 1 }],
+        can_undo: false,
         display_power: DisplayPowerState::Unavailable { reason: "not_configured".into() },
     };
     insta::assert_json_snapshot!(state);

@@ -94,6 +94,14 @@ pub struct SetItemView {
     pub title: String,
 }
 
+/// A set in the list of sets.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetSummary {
+    pub set_id: SetId,
+    pub name: String,
+    pub items: u32,
+}
+
 /// The active set as the remote shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetView {
@@ -138,5 +146,9 @@ pub struct RemoteState {
     /// Jump buttons for the live deck.
     pub sections: Vec<SectionJump>,
     pub active_set: Option<SetView>,
+    /// All sets, for switching.
+    pub sets: Vec<SetSummary>,
+    /// True while the last removal can be undone.
+    pub can_undo: bool,
     pub display_power: DisplayPowerState,
 }

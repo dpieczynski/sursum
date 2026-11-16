@@ -230,9 +230,11 @@ async fn show_now_inserts_after_the_live_item_and_add_song_appends() {
     let state = next_remote_state(&mut observer).await;
     let items: Vec<&str> =
         state.active_set.as_ref().unwrap().items.iter().map(|item| item.item_id.as_str()).collect();
-    assert_eq!(items, ["demo-item-1", "added-1", "demo-item-2", "demo-item-3", "added-2"]);
+    assert_eq!(items.len(), 5);
+    assert_eq!((items[0], items[2], items[3]), ("demo-item-1", "demo-item-2", "demo-item-3"));
+    assert!(items[1].starts_with("item-") && items[4].starts_with("item-"));
     let live = state.program.live.unwrap();
-    assert_eq!((live.deck.item_id.as_str(), live.slide_index), ("added-1", 0));
+    assert_eq!((live.deck.item_id.as_str(), live.slide_index), (items[1], 0));
     server.stop().await.unwrap();
 }
 
@@ -341,5 +343,59 @@ async fn zip_upload_imports_songs_into_the_running_library() {
         serde_json::from_str(&http_get(&server, "/api/songs?q=windows%201250").await).unwrap();
     assert_eq!(found[0].title, "Syntetyczna pieśń w kodowaniu Windows-1250");
     assert!(dir.path().join("backups").read_dir().unwrap().count() >= 2, "startup and pre-import backups");
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn set_edits_persist_never_change_the_screen_and_removal_can_be_undone() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    next_screen_state(&mut screen).await;
+    command(&mut remote, 1, Rev(u32::MAX), Command::GoToItemNumber { number: 2 }).await;
+    let shown = next_screen_state(&mut screen).await.live.unwrap();
+
+    // Remove the live item, move another, add an announcement: the screen does not change.
+    let live_item = shown.deck.item_id.clone();
+    for (seq, cmd) in [
+        Command::RemoveItem { item_id: live_item.clone() },
+        Command::MoveItem { item_id: sursum_protocol::ItemId::from("demo-item-3"), to_index: 0 },
+        Command::AddText { title: "Ogłoszenia".into(), text: "Strona pierwsza\n\nStrona druga".into() },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert!(matches!(
+            command(&mut remote, seq as u32 + 2, Rev(0), cmd).await,
+            CmdOutcome::Applied { .. }
+        ));
+        let state = next_screen_state(&mut screen).await;
+        assert_eq!(state.live.as_ref().unwrap().deck, shown.deck, "a set edit changed the screen");
+    }
+    // Undo puts the removed item back.
+    assert!(matches!(command(&mut remote, 9, Rev(0), Command::UndoRemove).await, CmdOutcome::Applied { .. }));
+    drop(remote);
+    server.stop().await.unwrap();
+
+    // Everything survives a restart.
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let state = next_remote_state(&mut remote).await;
+    let set = state.active_set.unwrap();
+    let titles: Vec<&str> = set.items.iter().map(|item| item.title.as_str()).collect();
+    // Undo restores the item at its former index (1).
+    let expected = ["Ogłoszenia", "Pieśń przykładowa z refrenem", "Kiedy ranne wstają zorze", "Ogłoszenia"];
+    assert_eq!(titles, expected);
+    assert_eq!(state.program.live.unwrap().deck.item_id, live_item);
+
+    // A new set becomes active; switching back works.
+    command(&mut remote, 1, Rev(0), Command::NewSet { name: "Nowy".into() }).await;
+    let state = next_remote_state(&mut remote).await;
+    assert_eq!(state.sets.len(), 2);
+    assert_eq!(state.active_set.as_ref().unwrap().name, "Nowy");
+    let first = state.sets[0].set_id.clone();
+    command(&mut remote, 2, Rev(0), Command::ActivateSet { set_id: first }).await;
+    assert_eq!(next_remote_state(&mut remote).await.active_set.unwrap().items.len(), 4);
     server.stop().await.unwrap();
 }
