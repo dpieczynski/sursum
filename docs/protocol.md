@@ -16,9 +16,9 @@ same Rust types, so they cannot drift apart within one build.
 
 | Who | May |
 |---|---|
-| anyone on the LAN | `/screen/`, `/ws/screen`, `/api/session`, `/api/pair`, `/healthz`, `/licenses` |
-| paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `/api/library/export`, `POST/DELETE /api/admin` |
-| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile` and `Calibrate` |
+| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/healthz`, `/licenses` |
+| paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `POST /api/assets`, `/api/library/export`, `POST/DELETE /api/admin` |
+| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
 
 Without a PIN everyone has admin rights. Refusals: HTTP 401 (not paired) or 403 (needs admin
 mode); WebSocket commands answer `Rejected { code: forbidden }`.
@@ -40,8 +40,11 @@ Command = Next | Prev | NextItem | PrevItem                // relative: subject 
         | AddSong { song_id } | AddText { title, text }
         | RemoveItem { item_id } | MoveItem { item_id, to_index } | UndoRemove
         | NewSet { name } | ActivateSet { set_id }
-        | SetScreenProfile { profile } | Calibrate { on }   // admin mode, ADR 0008
-        // planned: DisplayPower { action: "on"|"standby" }  (HDMI-CEC / PJLink, ADR 0012)
+        | AddImage { title, asset_id } | AddBlank { title }      // pictures (POST /api/assets) and pauses
+        | DisplayPower { action: "on"|"standby" }              // ADR 0012, runs outside the actor
+        // admin mode only:
+        | SetScreenProfile { profile } | Calibrate { on }      // ADR 0008
+        | SetLogo { asset_id? } | DeleteSong { song_id }
 ```
 
 ## Server → client
