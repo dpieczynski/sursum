@@ -19,6 +19,8 @@ pub const MAX_ASSET_BYTES: usize = 25 * 1024 * 1024;
 pub const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 const FOLDER: &str = "assets";
+/// An upload's temporary file older than this was left behind by a crash.
+const STALE_PART: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Why an upload was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -120,11 +122,24 @@ fn store_within(data_dir: &Path, bytes: &[u8], quota: u64) -> Result<AssetId, As
     Ok(id)
 }
 
-/// Bytes taken by stored pictures (and leftovers of interrupted uploads).
+/// Bytes taken by stored pictures. Temporary files of uploads interrupted by a crash or a
+/// power cut (older than [`STALE_PART`]) are removed on the way, so they never eat the quota.
 fn used_bytes(folder: &Path) -> std::io::Result<u64> {
     let mut total = 0;
     for entry in std::fs::read_dir(folder)? {
-        total += entry?.metadata()?.len();
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+        let stale = entry.file_name().to_string_lossy().ends_with(".part")
+            && metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.elapsed().ok())
+                .is_some_and(|age| age > STALE_PART);
+        if stale {
+            let _ = std::fs::remove_file(entry.path());
+        } else {
+            total += metadata.len();
+        }
     }
     Ok(total)
 }
