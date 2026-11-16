@@ -15,6 +15,7 @@ mod editor;
 mod hold;
 mod import;
 mod key_settings;
+mod keypad;
 mod keys;
 mod messages;
 mod pairing;
@@ -296,12 +297,11 @@ fn Controls(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl In
             >
                 {pl(Msg::Black)}
             </button>
+            <keypad::JumpButton commands />
         </footer>
     }
 }
 
-/// Keys sent by typical Bluetooth pedals and presentation clickers. Configurable mapping and a
-/// learn mode follow in milestone M5.
 fn reload() {
     if let Some(window) = web_sys::window() {
         let _ = window.location().reload();

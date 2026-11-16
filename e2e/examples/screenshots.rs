@@ -31,6 +31,18 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(800)).await;
     screen.screenshot(&output.join("screen.png")).await?;
     remote_page.screenshot(&output.join("remote.png")).await?;
+    remote_page.find(thirtyfour::By::Css("[data-testid=jump]")).await?.click().await?;
+    remote_page
+        .find(thirtyfour::By::XPath("//div[@data-testid='keypad']//button[text()='2']"))
+        .await?
+        .click()
+        .await?;
+    remote_page.screenshot(&output.join("keypad.png")).await?;
+    remote_page
+        .find(thirtyfour::By::XPath("//div[@data-testid='keypad']//button[text()='Anuluj']"))
+        .await?
+        .click()
+        .await?;
     let search = remote_page.find(thirtyfour::By::Css(".search-input")).await?;
     search.send_keys("zorze").await?;
     tokio::time::sleep(Duration::from_millis(600)).await;

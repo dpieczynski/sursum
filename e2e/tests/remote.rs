@@ -432,3 +432,29 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn the_keypad_jumps_to_an_item_number() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    with_engine(screen_engine(), 1920, 1080, async |screen| {
+        screen.goto(server.url("/screen/")).await?;
+        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+            remote.goto(server.url("/remote/")).await?;
+            wait_until(Duration::from_secs(10), || async {
+                remote.find(By::Css(".status-dot.connected")).await.is_ok()
+            })
+            .await?;
+            remote.find(By::Css("[data-testid=jump]")).await?.click().await?;
+            // "0" first is ignored; "3" then "Pokaż" shows the third item (the announcements).
+            remote.find(By::XPath("//div[@data-testid='keypad']//button[text()='0']")).await?.click().await?;
+            remote.find(By::XPath("//div[@data-testid='keypad']//button[text()='3']")).await?.click().await?;
+            remote.find(By::Css("[data-testid=keypad-go]")).await?.click().await?;
+            wait_for_slide(screen, "t#").await?;
+            anyhow::ensure!(remote.find(By::Css("[data-testid=keypad]")).await.is_err(), "keypad stays open");
+            Ok(())
+        })
+        .await
+    })
+    .await
+}

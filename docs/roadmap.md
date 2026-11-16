@@ -64,6 +64,7 @@ without a mouse.
 
 - [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items), the parish logo for the LOGO button (admin upload, drawn inside the content area, pre-decoded), pictures (content-addressed uploads in `<data>/assets/`, PNG/JPEG/WebP, decoded before the fade) and pauses (blank items); assets are not yet part of backups or `.sursum` files
 - [x] Remote: two-column landscape layout (previews left, library/set right, controls bottom)
+- [x] Remote: "#" keypad to jump to item N of the set (plan §7), no system keyboard needed
 - [x] OpenSong set import (folder and ZIP): songs by path/file name/title, `presentation` override, custom and scripture groups as text items, image groups reported; re-import replaces the set
 - [x] Multi-remote `Stale` rule (M1)
 - [x] PIN pairing: `sursum-server set-pin`, salted hash, rate-limited `/api/pair` with doubling lockout, `HttpOnly; SameSite=Strict` device cookie (only its hash stored), protected `/ws/remote` and `/api/*`, pairing screen in the remote; screen stays open

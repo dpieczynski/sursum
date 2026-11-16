@@ -139,6 +139,8 @@ body {
   gap: var(--gap);
 }
 .import-button {
+  border: none;
+  color: var(--text);
   display: inline-flex;
   align-items: center;
   min-height: 52px;
@@ -710,4 +712,51 @@ label.set-tool {
 .key-names {
   flex: 1;
   color: var(--muted);
+}
+
+/* The "#" keypad: jump to item N of the set. */
+.keypad {
+  position: fixed;
+  top: var(--gap);
+  right: var(--gap);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: min(360px, calc(100vw - 2 * var(--gap)));
+  padding: var(--gap);
+  border: 1px solid #444;
+  border-radius: 12px;
+  background: var(--panel);
+}
+.keypad-display {
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 32px;
+  font-weight: 700;
+  text-align: right;
+}
+.keypad-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap);
+}
+.keypad button {
+  min-height: 64px;
+  border: none;
+  border-radius: 10px;
+  background: #2a2a2a;
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 700;
+}
+.keypad .go {
+  background: var(--accent);
+  font-size: 20px;
+}
+.keypad .keypad-cancel {
+  min-height: 48px;
+  font-size: 18px;
 }
