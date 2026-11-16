@@ -67,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(Task::ImportOpensong { songs_dir, songbook }) = &args.command {
         let mut database = sursum_server::db::Database::open(&args.data_dir)?;
+        database.backup(&args.data_dir, "before-import")?;
         let summary = sursum_server::import::import_opensong(
             &mut database,
             songs_dir,

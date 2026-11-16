@@ -51,7 +51,7 @@ manual run on a laptop + tablet and both hardware spikes are still open.
 - [ ] ZIP upload of an OpenSong folder from the browser
 - [x] Extended OpenSong conventions checked against a real Polish library (see [opensong-format.md](opensong-format.md)); numbered lines still ⚠
 - [x] SQLite schema (migration 2: `songs` with revisions, `song_history`)
-- [ ] Backups (`VACUUM INTO`), `quick_check` + auto-restore
+- [x] Backups (`VACUUM INTO`, 14 kept, at startup and before imports), `quick_check` at startup + automatic restore of the newest backup (damaged file kept in `corrupt/`)
 - [x] In-memory search with Polish folding (ł!) and ranking; ~1.2 ms per query over 5000 songs (laptop); remote search panel with Show now / Add / Edit
 - [x] Keyboard-friendly song editor (OpenSong markup, `---` optional break) with server-compiled preview drawn by `sursum-slide`; revision history and optimistic locking (conflict detection)
 

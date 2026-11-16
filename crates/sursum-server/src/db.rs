@@ -5,7 +5,7 @@
 //! Durability settings follow the plan: WAL with `synchronous=FULL` (writes are rare, so an
 //! fsync per commit costs nothing and survives power loss).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -50,6 +50,13 @@ const MIGRATIONS: &[&str] = &[
     );",
 ];
 
+/// The database file inside the data directory.
+const DATABASE_FILE: &str = "sursum.db";
+/// Backup copies, newest kept.
+const BACKUP_DIR: &str = "backups";
+/// How many backup copies to keep.
+pub const BACKUPS_KEPT: usize = 14;
+
 /// `PRAGMA application_id` marking the file as a sursum database ("SURS").
 const APPLICATION_ID: i64 = 0x5355_5253;
 
@@ -84,10 +91,45 @@ pub struct Database {
 
 impl Database {
     /// Opens (or creates) `sursum.db` in `data_dir` and brings the schema up to date.
+    ///
+    /// If the file is damaged (e.g. after a power cut on a bad SD card), it is moved to
+    /// `corrupt/` and the newest backup from `backups/` is restored instead.
     pub fn open(data_dir: &Path) -> anyhow::Result<Self> {
         std::fs::create_dir_all(data_dir).with_context(|| format!("creating {}", data_dir.display()))?;
-        let connection = Connection::open(data_dir.join("sursum.db"))?;
-        Self::configure(connection)
+        let path = data_dir.join(DATABASE_FILE);
+        match Self::open_checked(&path) {
+            Ok(database) => Ok(database),
+            Err(error) if path.exists() => {
+                tracing::error!(?error, "the database is damaged; restoring the newest backup");
+                restore_newest_backup(data_dir)?;
+                Self::open_checked(&path).context("opening the restored backup")
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Opens a database file and verifies its integrity with `PRAGMA quick_check`.
+    fn open_checked(path: &Path) -> anyhow::Result<Self> {
+        let database = Self::configure(Connection::open(path)?)?;
+        let check: String = database.connection.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+        anyhow::ensure!(check == "ok", "integrity check failed: {check}");
+        Ok(database)
+    }
+
+    /// Writes a consistent copy of the database into `data_dir/backups` and keeps the newest
+    /// [`BACKUPS_KEPT`] copies. Called at startup and before imports.
+    pub fn backup(&self, data_dir: &Path, label: &str) -> anyhow::Result<PathBuf> {
+        let dir = data_dir.join(BACKUP_DIR);
+        std::fs::create_dir_all(&dir)?;
+        let seconds =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let target = dir.join(format!("sursum-{seconds:012}-{label}.db"));
+        if target.exists() {
+            std::fs::remove_file(&target)?;
+        }
+        self.connection.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
+        prune_backups(&dir)?;
+        Ok(target)
     }
 
     /// An in-memory database, for tests.
@@ -215,6 +257,46 @@ impl Database {
     }
 }
 
+/// Backups sorted oldest first (names start with a zero-padded timestamp).
+fn backups(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let mut files: Vec<PathBuf> = match std::fs::read_dir(dir) {
+        Ok(entries) => entries.filter_map(|entry| entry.ok().map(|entry| entry.path())).collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(error.into()),
+    };
+    files.retain(|path| path.extension().is_some_and(|extension| extension == "db"));
+    files.sort();
+    Ok(files)
+}
+
+fn prune_backups(dir: &Path) -> anyhow::Result<()> {
+    let files = backups(dir)?;
+    for old in files.iter().take(files.len().saturating_sub(BACKUPS_KEPT)) {
+        std::fs::remove_file(old)?;
+    }
+    Ok(())
+}
+
+/// Moves the damaged database (with its WAL files) aside and copies the newest backup in place.
+fn restore_newest_backup(data_dir: &Path) -> anyhow::Result<()> {
+    let newest = backups(&data_dir.join(BACKUP_DIR))?
+        .pop()
+        .context("the database is damaged and there is no backup")?;
+    let quarantine = data_dir.join("corrupt");
+    std::fs::create_dir_all(&quarantine)?;
+    let seconds =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    for suffix in ["", "-wal", "-shm"] {
+        let file = data_dir.join(format!("{DATABASE_FILE}{suffix}"));
+        if file.exists() {
+            std::fs::rename(&file, quarantine.join(format!("{seconds}-{DATABASE_FILE}{suffix}")))?;
+        }
+    }
+    std::fs::copy(&newest, data_dir.join(DATABASE_FILE))?;
+    tracing::warn!(backup = %newest.display(), "restored the database from a backup");
+    Ok(())
+}
+
 /// SHA-256 of a song's JSON, used to detect real changes.
 fn content_hash(body: &str) -> String {
     Sha256::digest(body.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()
@@ -239,6 +321,25 @@ mod tests {
             verses: vec![Verse::simple("v1", &[text])],
             extra: Default::default(),
         }
+    }
+
+    #[test]
+    fn backups_rotate_and_a_damaged_database_is_restored() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut database = Database::open(dir.path()).unwrap();
+            database.upsert_song(&song("zapisana"), "test").unwrap();
+            for index in 0..BACKUPS_KEPT + 3 {
+                database.backup(dir.path(), &format!("t{index:02}")).unwrap();
+            }
+        }
+        assert_eq!(backups(&dir.path().join(BACKUP_DIR)).unwrap().len(), BACKUPS_KEPT);
+        // Simulate a damaged file: garbage over the whole database.
+        std::fs::write(dir.path().join(DATABASE_FILE), vec![0x5a; 8192]).unwrap();
+        let _ = std::fs::remove_file(dir.path().join("sursum.db-wal"));
+        let database = Database::open(dir.path()).unwrap();
+        assert_eq!(database.load_songs().unwrap()[0].verses[0].blocks[0].lines[0].text, "zapisana");
+        assert!(dir.path().join("corrupt").read_dir().unwrap().next().is_some());
     }
 
     #[test]

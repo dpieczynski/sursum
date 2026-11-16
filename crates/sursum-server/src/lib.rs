@@ -53,6 +53,9 @@ impl RunningServer {
 /// Starts the server in the background and returns once it listens.
 pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<RunningServer> {
     let database = db::Database::open(&config.data_dir).context("opening the database")?;
+    if let Err(error) = database.backup(&config.data_dir, "startup") {
+        tracing::error!(?error, "could not write the startup backup");
+    }
     let state = actor::spawn(&config, database, platform)?;
     let router = http::router(state, &config);
     let listener =
