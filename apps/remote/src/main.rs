@@ -96,6 +96,9 @@ fn TopBar(
             <span>{status_text}</span>
             <span>" · "{set_name}</span>
             <span class="notice">{move || notice.get().map(pl)}</span>
+            <a class="about" href="/licenses" target="_blank">
+                {pl(Msg::About)}
+            </a>
         </header>
     }
 }

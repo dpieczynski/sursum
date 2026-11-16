@@ -11,6 +11,7 @@ pub mod config;
 pub mod db;
 pub mod demo;
 pub mod http;
+pub mod licenses;
 pub mod platform;
 pub mod ws;
 

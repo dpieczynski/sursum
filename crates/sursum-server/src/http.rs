@@ -53,6 +53,7 @@ pub fn router(state: StateHandle, config: &Config) -> Router {
     Router::new()
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
         .route("/healthz", get(|| async { "ok" }))
+        .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
         .route("/ws/screen", get(screen_socket))
         .route("/ws/remote", get(remote_socket))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))

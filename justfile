@@ -57,6 +57,15 @@ screenshots dir="screenshots": build-web
     cargo build -p sursum-server
     cargo run -p sursum-e2e --example screenshots -- {{dir}}
 
+# Regenerate the third-party license notices served at /licenses (commit the result).
+licenses:
+    cargo about generate --fail -m crates/sursum-server/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs
+    cargo about generate --fail -m apps/remote/Cargo.toml -o crates/sursum-server/assets/licenses-web.html about.hbs
+
+# Fail if the committed license notices are out of date.
+licenses-check: licenses
+    git diff --exit-code -- crates/sursum-server/assets
+
 # Formatting, lints (native and wasm32), SPDX headers and dependency policy.
 lint:
     cargo fmt --all --check

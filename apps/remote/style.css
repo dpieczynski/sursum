@@ -55,6 +55,10 @@ body {
   margin-left: auto;
   color: #facc15;
 }
+.about {
+  color: var(--muted);
+  font-size: 13px;
+}
 
 .previews {
   display: grid;

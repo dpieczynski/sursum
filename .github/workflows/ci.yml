@@ -20,8 +20,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,leptosfmt@0.1.33,cargo-deny@0.20.2
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,leptosfmt@0.1.33,cargo-deny@0.20.2,cargo-about@0.9.3
       - run: just lint
+      - run: just licenses-check
       - run: just test
       - run: just build
       - name: WebAssembly size report

@@ -11,7 +11,7 @@ milestone. ⚠ = assumption to verify in a spike before relying on it.
 - [x] Devcontainer definition (Debian trixie: rustup + `wasm32-unknown-unknown`, trunk 0.22, wasm-bindgen-cli 0.2.130, binaryen, leptosfmt, chromium + chromium-driver, cog + wpewebkit-webdriver; no Node/Python). Not yet built/tried in VS Code; zig + cargo-zigbuild still to add
 - [x] Browsers image for e2e (`e2e/browsers.Containerfile`, podman, host network): Chromium 156 + chromedriver, cog 0.18.4 + WPEWebDriver (WPE WebKit 2.48.3) + Mesa
 - [x] Cargo workspace: `sursum-protocol`, `sursum-core`, `sursum-formats`, `sursum-server`, `sursum-slide`, `sursum-client`, `apps/screen`, `apps/remote`, `e2e`; `default-members` = native crates; `rust-toolchain.toml`, `deny.toml`
-- [x] Leptos 0.8 CSR apps with Trunk (`index.html`, `Trunk.toml` with `/ws` proxy ⚠ WS proxy in `trunk serve` not yet tried)
+- [x] Leptos 0.8 CSR apps with Trunk (`index.html`, `Trunk.toml` with `/ws` proxy; WebSocket upgrade through `trunk serve` verified)
 - [x] rust-embed serving both `apps/*/dist`; `allow_missing` verified (server compiles without a frontend build; `/screen/` then serves a black page)
 - [x] Bundled OFL fonts in `assets/fonts/` with `LICENSES.md` (Lato 400/700, latin + latin-ext)
 - [x] `justfile`, SPDX check script, `deny.toml` (licenses, bans, sources, advisories pass)

@@ -20,6 +20,7 @@ pub enum Msg {
     NoSet,
     Untitled,
     EndOfSet,
+    About,
 }
 
 /// The Polish text for a message.
@@ -40,6 +41,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::NoSet => "Brak zestawu",
         Msg::Untitled => "(bez tytułu)",
         Msg::EndOfSet => "Koniec zestawu",
+        Msg::About => "Licencje",
     }
 }
 
