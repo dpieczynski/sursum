@@ -54,6 +54,7 @@ js-sys = "0.3.107"
 web-sys = "0.3.107"
 console_error_panic_hook = "0.1.7"
 gloo-timers = { version = "0.4.1", features = ["futures"] }
+futures-channel = "0.3.34"
 
 # Tests
 insta = { version = "1.49.0", features = ["json"] }
@@ -62,6 +63,7 @@ tempfile = "3.27.0"
 tokio-tungstenite = "0.30.0"
 futures-util = "0.3.34"
 thirtyfour = "0.38.3"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 wasm-bindgen-test = "0.3.80"
 
 [workspace.lints.rust]

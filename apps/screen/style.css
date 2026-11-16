@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+.sursum-screen {
+  position: fixed;
+  inset: 0;
+}
+* {
+  cursor: none !important;
+}

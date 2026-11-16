@@ -16,7 +16,7 @@ sursum-client.workspace = true
 leptos.workspace = true
 console_error_panic_hook.workspace = true
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Location", "KeyboardEvent"] }
+web-sys = { workspace = true, features = ["Window", "Location", "KeyboardEvent", "Element", "EventTarget"] }
 
 [lints]
 workspace = true

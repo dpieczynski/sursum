@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/screen/"
+
+[serve]
+port = 8082
+
+# During `trunk serve`, the WebSocket goes to the sursum server.
+[[proxy]]
+backend = "ws://127.0.0.1:8080/ws/screen"
+ws = true

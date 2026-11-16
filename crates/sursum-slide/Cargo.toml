@@ -15,9 +15,12 @@ leptos.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
+gloo-timers.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
 web-sys = { workspace = true, features = [
-    "Animation", "AnimationEffect", "Document", "DomRect", "Element", "FontFaceSet", "HtmlElement",
-    "HtmlImageElement", "KeyframeAnimationOptions", "Window", "CssStyleDeclaration", "FillMode",
+    "Animation", "CssStyleDeclaration", "Document", "DomRectReadOnly", "Element", "FontFaceSet",
+    "HtmlElement", "ResizeObserver", "ResizeObserverEntry", "Window",
 ] }
 
 [dev-dependencies]

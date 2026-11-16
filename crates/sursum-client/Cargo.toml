@@ -17,7 +17,7 @@ wasm-bindgen.workspace = true
 js-sys.workspace = true
 gloo-timers.workspace = true
 web-sys = { workspace = true, features = [
-    "BinaryType", "CloseEvent", "Event", "Location", "MessageEvent", "Storage", "WebSocket", "Window",
+    "CloseEvent", "Event", "Location", "MessageEvent", "Storage", "WebSocket", "Window", "console",
 ] }
 
 [lints]
