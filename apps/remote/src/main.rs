@@ -43,12 +43,18 @@ fn Root() -> impl IntoView {
     leptos::task::spawn_local(async move {
         let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
         // If the question itself fails, try to connect anyway; the server decides.
-        let open = sursum_protocol::SessionInfo { pin_required: false, paired: true, admin: true };
+        let open = sursum_protocol::SessionInfo {
+            pin_required: false,
+            paired: true,
+            admin: true,
+            setup_needed: false,
+        };
         session.set(Some(info.unwrap_or(open)));
     });
     move || match session.get() {
         None => view! { <p class="loading">{pl(Msg::Connecting)}</p> }.into_any(),
-        Some(info) if info.pin_required && !info.paired => view! { <pairing::Pairing /> }.into_any(),
+        Some(info) if info.setup_needed => view! { <pairing::Setup /> }.into_any(),
+        Some(info) if !info.paired => view! { <pairing::Pairing /> }.into_any(),
         Some(info) => view! { <App info /> }.into_any(),
     }
 }

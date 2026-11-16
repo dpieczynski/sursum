@@ -16,11 +16,14 @@ same Rust types, so they cannot drift apart within one build.
 
 | Who | May |
 |---|---|
-| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/healthz`, `/licenses` |
+| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/licenses` |
 | paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `POST /api/assets`, `/api/library/export`, `POST/DELETE /api/admin` |
 | admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
 
-Without a PIN everyone has admin rights. Refusals: HTTP 401 (not paired) or 403 (needs admin
+Without a PIN nobody may control the screen: `/api/session` says `setup_needed`, and
+`POST /api/setup { pin, name }` sets the PIN once (`invalid_pin` → 400, `already_set` → 409) and
+pairs that browser with admin mode unlocked. Only the development flag `--open-without-pin` (used
+by `just dev` and the tests) gives everyone admin rights while no PIN is set. Refusals: HTTP 401 (not paired) or 403 (needs admin
 mode); WebSocket commands answer `Rejected { code: forbidden }`.
 
 JSON text frames (`serde_json` on both sides, readable in browser dev tools); serde enums tagged

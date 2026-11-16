@@ -30,6 +30,16 @@ pub struct Server {
     child: Option<Child>,
 }
 
+/// How remotes get in on a test server.
+enum Access<'a> {
+    /// No PIN, development mode: every remote is admin (most tests).
+    Open,
+    /// Remotes must pair with this PIN.
+    Pin(&'a str),
+    /// No PIN yet: the first remote must set one.
+    NewDevice,
+}
+
 impl Server {
     /// Starts a server with an empty data directory.
     pub async fn start() -> anyhow::Result<Server> {
@@ -38,24 +48,33 @@ impl Server {
 
     /// Starts a server with extra arguments and an optional `config.toml`.
     pub async fn start_with(extra_args: &[&str], config_toml: Option<&str>) -> anyhow::Result<Server> {
-        Self::start_prepared(extra_args, config_toml, None).await
+        Self::start_prepared(extra_args, config_toml, Access::Open).await
     }
 
     /// Starts a server whose remotes must pair with `pin`.
     pub async fn start_with_pin(pin: &str) -> anyhow::Result<Server> {
-        Self::start_prepared(&[], Some("transition_ms = 0\n"), Some(pin)).await
+        Self::start_prepared(&[], Some("transition_ms = 0\n"), Access::Pin(pin)).await
+    }
+
+    /// Starts a server as freshly installed: no PIN, so the first remote must set one.
+    pub async fn start_new_device() -> anyhow::Result<Server> {
+        Self::start_prepared(&[], Some("transition_ms = 0\n"), Access::NewDevice).await
     }
 
     async fn start_prepared(
         extra_args: &[&str],
         config_toml: Option<&str>,
-        pin: Option<&str>,
+        access: Access<'_>,
     ) -> anyhow::Result<Server> {
         let data_dir = tempfile::tempdir()?;
         if let Some(config) = config_toml {
             std::fs::write(data_dir.path().join("config.toml"), config)?;
         }
-        if let Some(pin) = pin {
+        let mut extra_args: Vec<String> = extra_args.iter().map(|arg| (*arg).to_owned()).collect();
+        if matches!(access, Access::Open) {
+            extra_args.push("--open-without-pin".to_owned());
+        }
+        if let Access::Pin(pin) = access {
             let status = Process::new(server_binary())
                 .arg("--data-dir")
                 .arg(data_dir.path())
@@ -65,12 +84,8 @@ impl Server {
             anyhow::ensure!(status.success(), "set-pin failed");
         }
         let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
-        let mut server = Server {
-            addr: SocketAddr::from(([127, 0, 0, 1], port)),
-            data_dir,
-            extra_args: extra_args.iter().map(|arg| (*arg).to_owned()).collect(),
-            child: None,
-        };
+        let mut server =
+            Server { addr: SocketAddr::from(([127, 0, 0, 1], port)), data_dir, extra_args, child: None };
         server.spawn().await?;
         Ok(server)
     }

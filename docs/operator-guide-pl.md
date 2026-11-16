@@ -109,4 +109,7 @@ spróbuj za chwilę”) — to normalne.
   tablet (będzie musiał ponownie podać PIN).
 - **Zakończ tryb administratora** — po skończonej pracy.
 
-PIN ustawia się na urządzeniu poleceniem `sursum-server set-pin <PIN>` (instalator).
+**Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,
+który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy). To urządzenie
+zostaje od razu sparowane i jest w trybie administratora, więc można dalej konfigurować (import,
+kalibracja, logo). Instalator może też ustawić PIN poleceniem `sursum-server set-pin <PIN>`.

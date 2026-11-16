@@ -45,8 +45,9 @@ The demo set contains a public-domain hymn, a synthetic song and an announcement
 duration, the screen profile (safe area, exclusion zones), display power (`[display_power]`,
 PJLink) and the screen guard (`[screen_guard]`); see `crates/sursum-server/src/config.rs`.
 
-Set a PIN before using it on a shared network (`sursum-server --data-dir … set-pin 123456`);
-without one, every device on the LAN has admin rights.
+Until a PIN is set nobody can control the screen: the first remote that opens the page sets it
+(or run `sursum-server --data-dir … set-pin 123456`). `just dev` passes `--open-without-pin`, which
+lets every device in while no PIN is set — for development only.
 
 ## Contributing
 

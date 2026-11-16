@@ -32,6 +32,10 @@ struct Args {
     /// Print the license notice and exit.
     #[arg(long)]
     license: bool,
+    /// Development only: while no PIN is set, let every device on the local network in as admin
+    /// (without it, the first remote must set the PIN).
+    #[arg(long)]
+    open_without_pin: bool,
     /// Test-only: delay serving WebAssembly (needs the `e2e-hooks` feature).
     #[arg(long, default_value_t = 0, hide = true)]
     wasm_delay_ms: u64,
@@ -125,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
     }
     config.allowed_origins.extend(args.allow_origins);
     config.wasm_delay_ms = args.wasm_delay_ms;
+    config.open_without_pin = args.open_without_pin;
 
     let server = sursum_server::start(config, &SystemPlatform).await?;
     println!("listening on http://{}", server.addr);

@@ -1,0 +1,33 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: "(session, outcomes)"
+---
+[
+  {
+    "pin_required": false,
+    "paired": false,
+    "admin": false,
+    "setup_needed": true
+  },
+  [
+    {
+      "outcome": "paired"
+    },
+    {
+      "outcome": "unlocked"
+    },
+    {
+      "outcome": "wrong_pin"
+    },
+    {
+      "outcome": "invalid_pin"
+    },
+    {
+      "outcome": "already_set"
+    },
+    {
+      "outcome": "locked",
+      "retry_after_s": 30
+    }
+  ]
+]

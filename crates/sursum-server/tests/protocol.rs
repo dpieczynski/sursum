@@ -18,6 +18,7 @@ type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn start(data_dir: &std::path::Path, boot_id: &str) -> RunningServer {
     let mut config = Config::with_data_dir(data_dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
+    config.open_without_pin = true;
     sursum_server::start(config, &FixedPlatform(Some(boot_id.to_owned()))).await.unwrap()
 }
 
@@ -421,17 +422,71 @@ async fn http_raw(server: &RunningServer, request: &str) -> String {
 }
 
 async fn pair_with(server: &RunningServer, pin: &str) -> String {
+    post_pin(server, "/api/pair", pin).await
+}
+
+async fn post_pin(server: &RunningServer, path: &str, pin: &str) -> String {
     let body =
         serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: "Tablet".into() })
             .unwrap();
     http_raw(
         server,
         &format!(
-            "POST /api/pair HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         ),
     )
     .await
+}
+
+fn session_cookie(response: &str) -> String {
+    response
+        .lines()
+        .find_map(|line| line.strip_prefix("set-cookie: "))
+        .and_then(|value| value.split(';').next())
+        .expect("a cookie is set")
+        .to_owned()
+}
+
+#[tokio::test]
+async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = Config::with_data_dir(dir.path());
+    config.listen = "127.0.0.1:0".parse().unwrap();
+    let server = sursum_server::start(config.clone(), &FixedPlatform(Some("boot-1".into()))).await.unwrap();
+    let url = format!("ws://{}/ws/remote", server.addr);
+    assert!(tokio_tungstenite::connect_async(&url).await.is_err(), "no PIN, yet closed");
+    let session: sursum_protocol::SessionInfo =
+        serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
+    assert!(session.setup_needed && !session.paired && !session.pin_required);
+
+    assert!(post_pin(&server, "/api/setup", "1234").await.starts_with("HTTP/1.1 400"), "too short");
+    let response = post_pin(&server, "/api/setup", "246813").await;
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    let cookie = session_cookie(&response);
+    let late = post_pin(&server, "/api/setup", "135792").await;
+    assert!(late.starts_with("HTTP/1.1 409"), "the PIN cannot be set twice: {late}");
+
+    // Whoever set the PIN is paired and in admin mode, to go on configuring the device.
+    let mut request =
+        tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(&url).unwrap();
+    request.headers_mut().insert("cookie", cookie.parse().unwrap());
+    assert!(tokio_tungstenite::connect_async(request).await.is_ok());
+    let devices = http_raw(
+        &server,
+        &format!(
+            "GET /api/devices HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\nConnection: close\r\n\r\n"
+        ),
+    )
+    .await;
+    assert!(devices.starts_with("HTTP/1.1 200"), "admin right after setup: {devices}");
+    server.stop().await.unwrap();
+
+    // The PIN was stored: after a restart others must pair with it.
+    let server = sursum_server::start(config, &FixedPlatform(Some("boot-1".into()))).await.unwrap();
+    assert!(pair_with(&server, "135792").await.starts_with("HTTP/1.1 401"));
+    assert!(pair_with(&server, "246813").await.starts_with("HTTP/1.1 200"));
+    server.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -448,17 +503,15 @@ async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() 
     assert!(http_get(&server, "/api/songs?q=a").await.is_empty(), "the API is closed too");
     let session: sursum_protocol::SessionInfo =
         serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
-    assert_eq!(session, sursum_protocol::SessionInfo { pin_required: true, paired: false, admin: false });
+    assert_eq!(
+        session,
+        sursum_protocol::SessionInfo { pin_required: true, paired: false, admin: false, setup_needed: false }
+    );
 
     assert!(pair_with(&server, "1111").await.starts_with("HTTP/1.1 401"));
     let response = pair_with(&server, "2468").await;
     assert!(response.starts_with("HTTP/1.1 200"), "{response}");
-    let cookie = response
-        .lines()
-        .find_map(|line| line.strip_prefix("set-cookie: "))
-        .and_then(|value| value.split(';').next())
-        .expect("a cookie is set")
-        .to_owned();
+    let cookie = session_cookie(&response);
     assert!(response.to_lowercase().contains("httponly") && response.contains("SameSite=Strict"));
 
     let mut request =
@@ -780,6 +833,7 @@ async fn start_with_projector(
 ) -> RunningServer {
     let mut config = Config::with_data_dir(dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
+    config.open_without_pin = true;
     config.display_power = sursum_server::config::DisplayPowerConfig::Pjlink {
         host: projector.to_string(),
         password: Some(password.to_owned()),
@@ -887,6 +941,7 @@ async fn a_screen_that_stays_away_gets_its_kiosk_restarted_and_remotes_know() {
     let marker = dir.path().join("kiosk-restarted");
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
+    config.open_without_pin = true;
     config.screen_guard = Some(sursum_server::screen_guard::ScreenGuardConfig {
         restart_command: vec!["sh".into(), "-c".into(), format!("touch '{}'", marker.display())],
         grace_s: 1,

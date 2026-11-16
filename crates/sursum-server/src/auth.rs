@@ -4,8 +4,10 @@
 //! The PIN is stored as a salted SHA-256 hash. A short PIN is weak against offline guessing
 //! whatever the hash, so the real protection is that the database never leaves the device and
 //! that wrong attempts are rate-limited per address. A paired device keeps a random 256-bit token
-//! in an `HttpOnly; SameSite=Strict` cookie; only its hash is stored. Until a PIN is set, control
-//! is open (first setup and development).
+//! in an `HttpOnly; SameSite=Strict` cookie; only its hash is stored. Until a PIN is set, nobody
+//! may control the screen: the first remote sets the PIN and is paired by doing so (or the
+//! installer runs `sursum-server set-pin`). Only an explicit development flag
+//! (`--open-without-pin`) lets everyone in without a PIN.
 //!
 //! Two levels of rights: a paired device is an **operator** (navigation, sets, songs). Entering
 //! the PIN again on a paired device unlocks **admin** mode for [`ADMIN_SESSION`] (import, merge,
@@ -90,13 +92,16 @@ pub enum Rights {
     None,
     /// A paired remote: navigation, sets, songs.
     Operator,
-    /// Admin mode unlocked (or no PIN set): import, merge, calibration, device list.
+    /// Admin mode unlocked (or the development open mode): import, merge, calibration, device
+    /// list.
     Admin,
 }
 
 /// Access rules shared by all requests.
 pub struct Access {
     pin: RwLock<Option<PinHash>>,
+    /// Development and tests only: without a PIN everyone is admin.
+    open_without_pin: bool,
     tokens: RwLock<HashSet<String>>,
     /// Token hash → end of its admin session.
     admin_until: Mutex<HashMap<String, Instant>>,
@@ -129,10 +134,12 @@ pub enum PinCheck {
 }
 
 impl Access {
-    /// Rules from the stored PIN and paired devices.
-    pub fn new(pin: Option<PinHash>, token_hashes: Vec<String>) -> Self {
+    /// Rules from the stored PIN and paired devices. `open_without_pin` is the development mode
+    /// in which, as long as no PIN is set, every device is admin.
+    pub fn new(pin: Option<PinHash>, token_hashes: Vec<String>, open_without_pin: bool) -> Self {
         Access {
             pin: RwLock::new(pin),
+            open_without_pin,
             tokens: RwLock::new(token_hashes.into_iter().collect()),
             admin_until: Mutex::new(HashMap::new()),
             attempts: Mutex::new(HashMap::new()),
@@ -144,7 +151,7 @@ impl Access {
     /// What a request with these headers may do at `now`.
     pub fn rights(&self, headers: &HeaderMap, now: Instant) -> Rights {
         if !self.pin_required() {
-            return Rights::Admin;
+            return if self.open_without_pin { Rights::Admin } else { Rights::None };
         }
         let Some(hash) = self.device(headers) else { return Rights::None };
         let admin =
@@ -185,9 +192,31 @@ impl Access {
         self.pin.read().expect("not poisoned").is_some()
     }
 
+    /// True while no PIN is set and the server is not in the open development mode: the first
+    /// remote has to set the PIN.
+    pub fn setup_needed(&self) -> bool {
+        !self.pin_required() && !self.open_without_pin
+    }
+
+    /// Makes `pin` the PIN if none is set yet; false if one was set meanwhile (two remotes doing
+    /// the first setup at once: only one wins).
+    pub fn claim_pin(&self, pin: PinHash) -> bool {
+        let mut stored = self.pin.write().expect("not poisoned");
+        if stored.is_some() {
+            return false;
+        }
+        *stored = Some(pin);
+        true
+    }
+
+    /// Undoes [`Access::claim_pin`] when the PIN could not be saved.
+    pub fn release_pin(&self) {
+        *self.pin.write().expect("not poisoned") = None;
+    }
+
     /// True if the request may control the screen (operator or admin).
     pub fn allows(&self, headers: &HeaderMap) -> bool {
-        !self.pin_required() || self.device(headers).is_some()
+        self.rights(headers, Instant::now()) >= Rights::Operator
     }
 
     /// Checks a PIN attempt from `address`, counting failures for the lockout.
@@ -292,14 +321,20 @@ mod tests {
     }
 
     #[test]
-    fn without_a_pin_everyone_may_control() {
-        assert!(Access::new(None, vec![]).allows(&HeaderMap::new()));
+    fn without_a_pin_nobody_may_control_until_the_first_remote_sets_one() {
+        let access = Access::new(None, vec![], false);
+        assert!(access.setup_needed() && !access.allows(&HeaderMap::new()));
+        assert!(access.claim_pin(PinHash::new("246813").unwrap()));
+        assert!(!access.claim_pin(PinHash::new("135792").unwrap()), "only the first setup wins");
+        assert!(!access.setup_needed() && access.pin_required());
+        let open = Access::new(None, vec![], true);
+        assert!(!open.setup_needed() && open.allows(&HeaderMap::new()), "development mode");
     }
 
     #[test]
     fn with_a_pin_only_paired_devices_may_control() {
         let (token, hash) = new_token().unwrap();
-        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![]);
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![], false);
         assert!(!access.allows(&headers(&format!("{COOKIE}={token}"))));
         access.add_token(hash);
         assert!(access.allows(&headers(&format!("other=1; {COOKIE}={token}"))));
@@ -308,7 +343,7 @@ mod tests {
 
     #[test]
     fn changing_addresses_does_not_escape_the_global_limit() {
-        let access = Access::new(Some(PinHash::new("246813").unwrap()), vec![]);
+        let access = Access::new(Some(PinHash::new("246813").unwrap()), vec![], false);
         let now = Instant::now();
         for host in 1..=GLOBAL_FAILURES {
             let address = IpAddr::from([192, 168, 1, u8::try_from(host).unwrap()]);
@@ -328,7 +363,7 @@ mod tests {
     #[test]
     fn admin_mode_is_per_device_expires_and_ends_on_revocation() {
         let (token, hash) = new_token().unwrap();
-        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()]);
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()], false);
         let request = headers(&format!("{COOKIE}={token}"));
         let now = Instant::now();
         assert_eq!(access.rights(&request, now), Rights::Operator);
@@ -341,12 +376,12 @@ mod tests {
         access.revoke(&hash);
         assert!(revocations.has_changed().unwrap());
         assert_eq!(access.rights(&request, now), Rights::None);
-        assert_eq!(Access::new(None, vec![]).rights(&HeaderMap::new(), now), Rights::Admin);
+        assert_eq!(Access::new(None, vec![], true).rights(&HeaderMap::new(), now), Rights::Admin);
     }
 
     #[test]
     fn wrong_attempts_lock_the_address_out_with_doubling_time() {
-        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![]);
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![], false);
         let address: IpAddr = "192.168.1.20".parse().unwrap();
         let now = Instant::now();
         for _ in 0..FREE_ATTEMPTS - 1 {

@@ -77,6 +77,15 @@ impl StateHandle {
         report.await.unwrap_or_default()
     }
 
+    /// Stores the PIN set from the first remote; false if it could not be stored.
+    pub async fn set_pin(&self, pin: crate::auth::PinHash) -> bool {
+        let (reply, stored) = oneshot::channel();
+        if self.requests.send(Request::SetPin { pin, reply }).await.is_err() {
+            return false;
+        }
+        stored.await.unwrap_or(false)
+    }
+
     /// Records a newly paired device; false if it could not be stored.
     pub async fn add_device(&self, name: String, token_hash: String) -> bool {
         let (reply, stored) = oneshot::channel();
@@ -174,6 +183,10 @@ enum Request {
         songs: Vec<crate::library::BundleSong>,
         dry_run: bool,
         reply: oneshot::Sender<Option<sursum_protocol::MergeReport>>,
+    },
+    SetPin {
+        pin: crate::auth::PinHash,
+        reply: oneshot::Sender<bool>,
     },
     AddDevice {
         name: String,
@@ -303,6 +316,15 @@ pub fn spawn(
                         state.display_power = power;
                         state.rev = state.rev.next();
                         remote_tx.send_replace(Arc::new(state.remote_state()));
+                    }
+                    Request::SetPin { pin, reply } => {
+                        let stored = state.database.set_setting(crate::auth::PIN_SETTING, &pin);
+                        if let Err(error) = &stored {
+                            tracing::error!(?error, "could not store the PIN");
+                        } else {
+                            tracing::info!("the PIN was set from a remote");
+                        }
+                        let _ = reply.send(stored.is_ok());
                     }
                     Request::AddDevice { name, token_hash, reply } => {
                         let id = format!("device-{}", uuid::Uuid::new_v4());

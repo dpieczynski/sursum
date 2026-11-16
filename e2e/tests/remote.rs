@@ -282,6 +282,45 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow::Result<()> {
+    let server = Server::start_new_device().await?;
+    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        remote.goto(server.url("/remote/")).await?;
+        let form = remote.query(By::Css("[data-testid=setup]")).first().await?;
+        form.wait_until().displayed().await?;
+        let fields = form.find_all(By::Css(".pin")).await?;
+        anyhow::ensure!(fields.len() == 2, "the PIN is entered twice");
+        fields[0].send_keys("246813").await?;
+        fields[1].send_keys("246831").await?;
+        form.find(By::Css("button")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            remote.source().await.map(|html| html.contains("PIN-y się różnią")).unwrap_or(false)
+        })
+        .await?;
+        let fields = form.find_all(By::Css(".pin")).await?;
+        fields[1].send_keys("246813").await?;
+        form.find(By::Css("button")).await?.click().await?;
+        // The page reloads into the remote, already in admin mode to go on with the setup.
+        wait_until(Duration::from_secs(10), || async {
+            remote.find(By::Css(".status-dot.connected")).await.is_ok()
+        })
+        .await?;
+        remote.find(By::XPath("//label[contains(text(), 'Import z OpenSong')]")).await?;
+        Ok(())
+    })
+    .await?;
+    // A second browser must now pair with that PIN.
+    with_engine(Browser::Chromium, 1280, 800, async |other| {
+        other.goto(server.url("/remote/")).await?;
+        other.query(By::Css(".pairing .pin")).first().await?.wait_until().displayed().await?;
+        anyhow::ensure!(other.find(By::Css("[data-testid=setup]")).await.is_err());
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn pillar_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {

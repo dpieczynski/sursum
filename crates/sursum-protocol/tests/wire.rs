@@ -133,3 +133,22 @@ fn merge_report() {
     };
     insta::assert_json_snapshot!(report);
 }
+
+/// Pairing and first setup go over REST; old remotes must still read the session (new fields
+/// default to false).
+#[test]
+fn pairing() {
+    use sursum_protocol::{PairOutcome, SessionInfo};
+    let session = SessionInfo { pin_required: false, paired: false, admin: false, setup_needed: true };
+    let outcomes = [
+        PairOutcome::Paired,
+        PairOutcome::Unlocked,
+        PairOutcome::WrongPin,
+        PairOutcome::InvalidPin,
+        PairOutcome::AlreadySet,
+        PairOutcome::Locked { retry_after_s: 30 },
+    ];
+    insta::assert_json_snapshot!((session, outcomes));
+    let old: SessionInfo = serde_json::from_str(r#"{"pin_required":true,"paired":false}"#).unwrap();
+    assert!(!old.admin && !old.setup_needed);
+}

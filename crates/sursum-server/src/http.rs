@@ -108,6 +108,7 @@ pub fn router(
         .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
         .route("/api/session", get(session))
         .route("/api/pair", axum::routing::post(pair))
+        .route("/api/setup", axum::routing::post(setup))
         .route("/ws/screen", get(screen_socket))
         .route("/assets/{id}", get(asset))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))
@@ -147,6 +148,7 @@ async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
         pin_required: app.access.pin_required(),
         paired: rights >= Rights::Operator,
         admin: rights == Rights::Admin,
+        setup_needed: app.access.setup_needed(),
     };
     axum::Json(info).into_response()
 }
@@ -160,7 +162,7 @@ async fn unlock_admin(
 ) -> Response {
     let now = std::time::Instant::now();
     let Some(device) = app.access.device(&headers) else {
-        // No PIN set: everyone is admin already.
+        // Not paired past `require_pairing`: the open development mode, everyone is admin.
         return axum::Json(PairOutcome::Unlocked).into_response();
     };
     match app.access.check_admin_pin(&device, &request.pin, now) {
@@ -231,17 +233,48 @@ async fn pair(
                 .into_response();
         }
     }
-    let Ok((token, hash)) = auth::new_token() else {
+    match pair_this_browser(&app, &request.name).await {
+        Ok((_, cookie)) => ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response(),
+        Err(status) => status.into_response(),
+    }
+}
+
+/// `POST /api/setup`: sets the first PIN (only while none is set) and pairs this browser with
+/// admin mode unlocked, so whoever installs the device can go on configuring it.
+async fn setup(State(app): State<App>, axum::Json(request): axum::Json<PairRequest>) -> Response {
+    let pin = request.pin.trim();
+    if !auth::valid_pin(pin) {
+        return (StatusCode::BAD_REQUEST, axum::Json(PairOutcome::InvalidPin)).into_response();
+    }
+    let Ok(hash) = auth::PinHash::new(pin) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
-    let name =
-        if request.name.trim().is_empty() { "Pilot".to_owned() } else { request.name.trim().to_owned() };
-    if !app.state.add_device(name, hash.clone()).await {
+    if !app.access.setup_needed() || !app.access.claim_pin(hash.clone()) {
+        return (StatusCode::CONFLICT, axum::Json(PairOutcome::AlreadySet)).into_response();
+    }
+    if !app.state.set_pin(hash).await {
+        app.access.release_pin();
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-    app.access.add_token(hash);
+    match pair_this_browser(&app, &request.name).await {
+        Ok((device, cookie)) => {
+            app.access.grant_admin(device, std::time::Instant::now());
+            ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response()
+        }
+        Err(status) => status.into_response(),
+    }
+}
+
+/// Stores a new device and returns its token hash and the cookie that pairs the browser.
+async fn pair_this_browser(app: &App, name: &str) -> Result<(String, HeaderValue), StatusCode> {
+    let (token, hash) = auth::new_token().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let name = if name.trim().is_empty() { "Pilot".to_owned() } else { name.trim().to_owned() };
+    if !app.state.add_device(name, hash.clone()).await {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    app.access.add_token(hash.clone());
     let cookie = HeaderValue::from_str(&auth::cookie_header(&token)).expect("token is hex");
-    ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response()
+    Ok((hash, cookie))
 }
 
 #[derive(Deserialize)]

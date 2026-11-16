@@ -21,7 +21,7 @@ dev:
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    cargo run -p sursum-server -- --data-dir sursum-data --listen 127.0.0.1:8080 \
+    cargo run -p sursum-server -- --data-dir sursum-data --listen 127.0.0.1:8080 --open-without-pin \
         --allow-origin http://127.0.0.1:8081 --allow-origin http://localhost:8081 \
         --allow-origin http://127.0.0.1:8082 --allow-origin http://localhost:8082 &
     (cd apps/remote && trunk serve) &

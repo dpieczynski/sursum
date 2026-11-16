@@ -7,14 +7,17 @@ use serde::{Deserialize, Serialize};
 /// What a page needs to know before connecting.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionInfo {
-    /// True once a PIN has been set on the device; until then control is open.
+    /// True once a PIN has been set on the device.
     pub pin_required: bool,
-    /// True if this browser is paired (or no PIN is required).
+    /// True if this browser is paired (or the server runs open for development).
     pub paired: bool,
-    /// True while admin mode is unlocked here (always true without a PIN): import, merge,
-    /// calibration and the device list.
+    /// True while admin mode is unlocked here: import, merge, calibration and the device list.
     #[serde(default)]
     pub admin: bool,
+    /// True while no PIN is set: the first remote must set one (`POST /api/setup`) and nobody
+    /// may control the screen until then, so a freshly installed device is never open.
+    #[serde(default)]
+    pub setup_needed: bool,
 }
 
 /// `POST /api/admin`: unlock admin mode on this (paired) device for a while.
@@ -34,7 +37,7 @@ pub struct DeviceView {
     pub this_device: bool,
 }
 
-/// `POST /api/pair`.
+/// `POST /api/pair`, and `POST /api/setup` (where `pin` is the new PIN).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairRequest {
     pub pin: String,
@@ -50,6 +53,10 @@ pub enum PairOutcome {
     /// Admin mode is unlocked (answer to `POST /api/admin`).
     Unlocked,
     WrongPin,
+    /// Setup only: the new PIN is not 6 to 12 digits.
+    InvalidPin,
+    /// Setup only: another remote set the PIN first; pair with it instead.
+    AlreadySet,
     /// Too many wrong attempts from this address; try again after the given time.
     Locked {
         retry_after_s: u32,

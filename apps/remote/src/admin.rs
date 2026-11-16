@@ -104,9 +104,11 @@ fn AdminUnlock(open: RwSignal<bool>, session: Session) -> impl IntoView {
                     open.set(false);
                     session.refresh();
                 }
-                Some(PairOutcome::WrongPin) => status.set(Some(pl(Msg::WrongPin).to_owned())),
+                Some(PairOutcome::WrongPin | PairOutcome::InvalidPin) => {
+                    status.set(Some(pl(Msg::WrongPin).to_owned()));
+                }
                 Some(PairOutcome::Locked { retry_after_s }) => status.set(Some(locked_for(retry_after_s))),
-                None => status.set(Some(pl(Msg::Disconnected).to_owned())),
+                Some(PairOutcome::AlreadySet) | None => status.set(Some(pl(Msg::Disconnected).to_owned())),
             }
             pin.set(String::new());
         });

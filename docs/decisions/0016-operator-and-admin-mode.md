@@ -37,10 +37,20 @@ separate admin PIN can be added later as a setting without changing the protocol
   2 GB in total and written atomically even when the same picture is uploaded twice at once.
 - If the state actor ever panics, the process exits so the service manager restarts it (the
   screen keeps its slide and is restored within the same boot).
-- Known and accepted for now: without a PIN anyone on the LAN is admin (first setup);
-  a hand-edited `.sursum` history can fast-forward over a local edit (the old version stays in
+- Known and accepted for now: a hand-edited `.sursum` history can fast-forward over a local edit (the old version stays in
   `song_history`); a large merge runs on the state actor and briefly delays navigation, so merge
   outside services.
 - After a second review: unlocking admin mode on a paired tablet is rate-limited per device and
   is not part of the global pairing budget, so guests guessing at the pairing form cannot lock
   the parish out of admin mode.
+
+## Amendment (2026-11-16): no open device without a PIN
+- A device without a PIN no longer lets everyone in as admin: nobody may control the screen, and
+  the remote shows a "set the PIN" form instead (PIN entered twice). `POST /api/setup` accepts it
+  only while no PIN is set — the first claim wins atomically, later ones get `already_set` — and
+  pairs that browser in admin mode so the installer can go on (import, calibration, logo).
+  `sursum-server set-pin` still works for installers.
+- The old open behaviour remains only behind the explicit `--open-without-pin` flag (CLI only,
+  never from `config.toml`), for `just dev` and the tests.
+- Remaining risk: whoever reaches a freshly installed device first can set its PIN; the installer
+  sets it right after installation (or before, with `set-pin`).

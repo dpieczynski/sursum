@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Pairing this browser with the device PIN (once per tablet or PC).
+//! Pairing this browser with the device PIN (once per tablet or PC), and setting the PIN on a
+//! new device (the first remote does it; until then nobody may control the screen).
 
 use leptos::prelude::*;
 use sursum_protocol::{PairOutcome, PairRequest};
@@ -19,7 +20,11 @@ pub fn Pairing() -> impl IntoView {
         leptos::task::spawn_local(async move {
             match post_json::<_, PairOutcome>("/api/pair", &request).await {
                 Some(PairOutcome::Paired | PairOutcome::Unlocked) => reload(),
-                Some(PairOutcome::WrongPin) => status.set(Some(pl(Msg::WrongPin).to_owned())),
+                Some(PairOutcome::WrongPin | PairOutcome::InvalidPin) => {
+                    status.set(Some(pl(Msg::WrongPin).to_owned()));
+                }
+                // The PIN is set; pairing with it is what this form does anyway.
+                Some(PairOutcome::AlreadySet) => status.set(Some(pl(Msg::PinAlreadySet).to_owned())),
                 Some(PairOutcome::Locked { retry_after_s }) => status.set(Some(locked_for(retry_after_s))),
                 None => status.set(Some(pl(Msg::Disconnected).to_owned())),
             }
@@ -46,6 +51,60 @@ pub fn Pairing() -> impl IntoView {
             </label>
             <button class="primary" type="submit">
                 {pl(Msg::Pair)}
+            </button>
+            <p class="editor-status">{move || status.get()}</p>
+        </form>
+    }
+}
+
+/// The form shown on a new device: choose the PIN (twice) and pair this browser with it.
+#[component]
+pub fn Setup() -> impl IntoView {
+    let pin = RwSignal::new(String::new());
+    let repeat = RwSignal::new(String::new());
+    let name = RwSignal::new(pl(Msg::DefaultDeviceName).to_owned());
+    let status = RwSignal::new(None::<&'static str>);
+    let submit = move |event: leptos::ev::SubmitEvent| {
+        event.prevent_default();
+        if pin.get_untracked() != repeat.get_untracked() {
+            status.set(Some(pl(Msg::PinsDiffer)));
+            repeat.set(String::new());
+            return;
+        }
+        let request = PairRequest { pin: pin.get_untracked(), name: name.get_untracked() };
+        leptos::task::spawn_local(async move {
+            match post_json::<_, PairOutcome>("/api/setup", &request).await {
+                Some(PairOutcome::Paired) => reload(),
+                Some(PairOutcome::AlreadySet) => reload(),
+                Some(PairOutcome::InvalidPin) => status.set(Some(pl(Msg::InvalidPin))),
+                Some(_) | None => status.set(Some(pl(Msg::Disconnected))),
+            }
+        });
+    };
+    let pin_input = move |value: RwSignal<String>| {
+        view! {
+            <input
+                class="pin"
+                type="password"
+                inputmode="numeric"
+                autocomplete="new-password"
+                prop:value=value
+                on:input=move |event| value.set(event_target_value(&event))
+            />
+        }
+    };
+    view! {
+        <form class="pairing" data-testid="setup" on:submit=submit>
+            <h1>{pl(Msg::SetupTitle)}</h1>
+            <p>{pl(Msg::SetupHint)}</p>
+            <label>{pl(Msg::Pin)} {pin_input(pin)}</label>
+            <label>{pl(Msg::RepeatPin)} {pin_input(repeat)}</label>
+            <label>
+                {pl(Msg::DeviceName)}
+                <input prop:value=name on:input=move |event| name.set(event_target_value(&event)) />
+            </label>
+            <button class="primary" type="submit">
+                {pl(Msg::SetPin)}
             </button>
             <p class="editor-status">{move || status.get()}</p>
         </form>

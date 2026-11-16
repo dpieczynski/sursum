@@ -120,6 +120,13 @@ pub enum Msg {
     DefaultDeviceName,
     Pair,
     WrongPin,
+    SetupTitle,
+    SetupHint,
+    RepeatPin,
+    SetPin,
+    PinsDiffer,
+    InvalidPin,
+    PinAlreadySet,
 }
 
 /// The Polish text for a message.
@@ -181,6 +188,16 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::DefaultDeviceName => "Pilot",
         Msg::Pair => "Połącz",
         Msg::WrongPin => "Błędny PIN",
+        Msg::SetupTitle => "Pierwsze uruchomienie: ustaw PIN",
+        Msg::SetupHint => {
+            "PIN (6–12 cyfr) chroni sterowanie ekranem. Będzie potrzebny przy łączeniu \
+                           kolejnych pilotów i w trybie administratora – zapisz go w bezpiecznym miejscu."
+        }
+        Msg::RepeatPin => "Powtórz PIN",
+        Msg::SetPin => "Ustaw PIN",
+        Msg::PinsDiffer => "Wpisane PIN-y się różnią",
+        Msg::InvalidPin => "PIN musi mieć od 6 do 12 cyfr",
+        Msg::PinAlreadySet => "PIN został już ustawiony na innym urządzeniu – połącz się, wpisując go",
         Msg::ImportFailed => "Import nie powiódł się – czy to plik ZIP z folderem OpenSong?",
         Msg::ExportLibrary => "Eksport bazy",
         Msg::MergeLibrary => "Scal bazę z pliku",

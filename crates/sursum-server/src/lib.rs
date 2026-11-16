@@ -66,12 +66,15 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         tracing::error!(?error, "could not write the startup backup");
     }
     let pin: Option<auth::PinHash> = database.setting(auth::PIN_SETTING).context("loading the PIN")?;
-    if pin.is_none() {
-        tracing::warn!(
-            "no PIN is set: any device on the local network can control the screen (sursum-server set-pin)"
-        );
+    match (&pin, config.open_without_pin) {
+        (Some(_), _) => {}
+        (None, false) => tracing::warn!("no PIN is set: the first remote to open the page must set one"),
+        (None, true) => tracing::warn!(
+            "no PIN is set and --open-without-pin is on: any device on the local network is admin"
+        ),
     }
-    let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?));
+    let access =
+        std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?, config.open_without_pin));
     let state = actor::spawn(&config, database, platform)?;
     let power = display_power::spawn(&config.display_power, state.clone());
     let state_for_watchdog = state.clone();
