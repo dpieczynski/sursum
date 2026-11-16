@@ -72,6 +72,15 @@ with the logo overlay; one tap shows the slide again. No dependency on the clock
 - The remote preview uses the same `sursum-slide` Leptos components, CSS, fonts and stage; all
   target clients use Blink, so the preview matches the screen.
 
+## The remote (ADR 0017)
+
+Three views as tabs: **Msza** (`apps/remote/src/live/`), **Zestaw** (`sets/`, `editor/`) and
+**Ustawienia** (`settings/`), inside a shell (`shell.rs`) whose regions the stylesheets
+(`apps/remote/style/`) arrange for phone, upright tablet and wide screens. The live area (what is
+on screen, slides, controls) never moves; narrow screens show a live strip in the other views.
+Everything shown is derived from `RemoteState` (`live/info.rs` only puts it into words); shared
+parts (sheet, toast, banner, hold button, PIN field) are in `ui/`.
+
 ## Display engine portability (ADRs 0009, 0015)
 
 Chromium under cage is the default. The screen follows an API contract that WPE WebKit (cog) also

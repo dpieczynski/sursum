@@ -22,3 +22,4 @@ supersedes the old one instead of editing it.
 | [0014](0014-rust-frontend-leptos.md) | Rust frontend: Leptos 0.8 CSR, Trunk, shared protocol/slide crates, WebDriver tests; no Dioxus |
 | [0015](0015-screen-engine-portability.md) | Screen portability to WPE WebKit (cog): API contract, blocking WPE tests, engine switch in the image |
 | [0016](0016-operator-and-admin-mode.md) | Operator rights by pairing, time-limited admin mode by entering the PIN again |
+| [0017](0017-remote-three-views.md) | The remote: three views (Msza, Zestaw, Ustawienia) around a fixed live area |

@@ -27,7 +27,11 @@ async fn main() -> anyhow::Result<()> {
     let mut remote = server.paired_remote("sizes", PIN).await?;
     remote.command(Command::GoToItemNumber { number: 1 }).await?;
     remote.command(Command::Next).await?;
+    remote.command(Command::DisplayPower { action: sursum_protocol::PowerAction::On }).await?;
     let browser = Browser::from_env();
+    // A connected screen, so the pictures show no "screen missing" banner.
+    let screen = browser.open(640, 360).await?;
+    screen.goto(server.url("/screen/")).await?;
     for (name, width, height) in SIZES {
         let page = browser.open(width, height).await?;
         page.goto(server.url("/remote/")).await?;
@@ -47,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         page.screenshot(&output.join(format!("{name}-admin.png"))).await?;
         page.quit().await?;
     }
+    screen.quit().await?;
     println!("saved to {}", output.display());
     Ok(())
 }

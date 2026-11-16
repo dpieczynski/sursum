@@ -1,37 +1,47 @@
 # sursum — instrukcja dla obsługi
 
 Dla organisty, zakrystianina i każdego, kto wyświetla teksty pieśni podczas mszy. Pilot to strona
-w przeglądarce na tablecie lub komputerze; ekran (projektor lub monitor) pokazuje to samo, co
-podgląd „Na ekranie” w pilocie.
+w przeglądarce na tablecie, telefonie lub komputerze. Ekran (projektor lub monitor) pokazuje
+dokładnie to, co duży podgląd w pilocie.
 
 ## Najważniejsze w jednym akapicie
 
-**Dalej ▶** przechodzi do następnego slajdu, **◀ Wstecz** do poprzedniego, **CZERŃ** jednym
-dotknięciem wygasza ekran (drugie dotknięcie przywraca tekst). Dotknięcie pieśni na liście albo
-przycisku zwrotki od razu pokazuje ją wiernym. Wszystko inne (wyszukiwanie, dodawanie, przesuwanie
-pozycji) **nie zmienia ekranu**, dopóki czegoś nie dotkniesz, żeby to pokazać.
+Pilot ma trzy zakładki: **Msza** (prowadzenie mszy), **Zestaw** (przygotowanie) i **Ustawienia**.
+W zakładce Msza duży niebieski **Dalej ▶** przechodzi do następnego slajdu, a napis pod nim mówi,
+co się stanie („→ 3 z 7”, „→ przerwa”, „→ 2. Barka”). **Wygaś ekran** jednym dotknięciem gasi
+ekran; wtedy ten sam przycisk zmienia się w **Pokaż tekst**. Dotknięcie pozycji zestawu albo
+kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia na ekran samo.
+
+![Pilot na tablecie: zakładka Msza](images/remote/tablet-msza.png)
 
 ## Przed mszą
 
-1. **Włącz ekran.** Jeśli w pilocie widać przyciski zasilania, dotknij **Włącz ekran** i poczekaj,
-   aż napis zmieni się na „Ekran: włączony” (projektor rozgrzewa się do minuty). Jeśli przycisków
-   nie ma, włącz projektor lub monitor jego własnym pilotem.
-2. **Otwórz pilota** (zakładka w przeglądarce lub skrót na ekranie tabletu). U góry powinno być
-   zielone kółko i „Połączono”. Za pierwszym razem pilot poprosi o **PIN** i nazwę urządzenia,
-   np. „Tablet organisty” — potem pamięta połączenie.
-3. **Wybierz zestaw** z listy po prawej (np. „Msza 1 grudnia”) albo utwórz **Nowy zestaw**.
-4. **Dodaj pieśni:** wpisz w pole wyszukiwania numer, początek tytułu albo kilka słów z tekstu.
-   Polskie znaki nie są potrzebne („zdrowas” znajdzie „Zdrowaś”). Przy wyniku:
-   - **Dodaj** — na koniec zestawu,
-   - **Pokaż** — wstawia pieśń za bieżącą i od razu ją wyświetla,
-   - **Edytuj** — poprawki w tekście.
-5. **Ogłoszenia:** **Ogłoszenie** dodaje slajdy z tekstem (pusta linia zaczyna nowy slajd). W trybie
-   **Edytuj zestaw** są też **Obraz** (plakat w PNG, JPEG lub WebP) i **Przerwa** (pusty slajd,
-   np. na czas homilii).
+1. **Włącz ekran.** Dotknij napisu stanu w prawym górnym rogu (np. „Na ekranie: tekst”). Otworzy
+   się okno **Ekran** z przyciskiem **Włącz ekran**, jeśli sursum steruje zasilaniem projektora lub
+   monitora. Projektor rozgrzewa się do minuty. Jeśli zasilanie nie jest skonfigurowane, włącz
+   projektor jego własnym pilotem.
+2. **Otwórz pilota** (zakładka w przeglądarce lub skrót na ekranie tabletu). Zielona kropka obok
+   napisu stanu oznacza połączenie. Za pierwszym razem pilot poprosi o **PIN** i nazwę urządzenia,
+   np. „Tablet organisty”; potem pamięta połączenie.
+3. **Przygotuj zestaw** w zakładce **Zestaw**:
+   - **Zmień zestaw** pokazuje zestawy od najnowszego i pozwala utworzyć **Nowy zestaw**;
+     **Zmień nazwę** poprawia nazwę bieżącego.
+   - W polu wyszukiwania wpisz numer, początek tytułu albo kilka słów z tekstu. Polskie znaki nie
+     są potrzebne („zdrowas” znajdzie „Zdrowaś”). **+ Dodaj** dopisuje pieśń na koniec zestawu i
+     wyszukiwanie zostaje otwarte, więc można dodać kilka pieśni po kolei. Pieśni, które już są
+     w zestawie, mają znaczek „w zestawie”.
+   - Dotknięcie tytułu pieśni otwiera jej **kartę**: tekst wszystkich slajdów oraz **Dodaj do
+     zestawu**, **Edytuj** i **Pokaż teraz na ekranie**.
+   - Strzałki ↑ ↓ przesuwają pozycje. **Usuń** trzeba przytrzymać; pomyłkę cofa **Cofnij** w
+     dymku na dole albo **Cofnij usunięcie** pod listą.
+   - **Ogłoszenie** dodaje slajdy z tekstem (pusta linia zaczyna nowy slajd), **Obraz** dodaje
+     plakat (PNG, JPEG lub WebP), a **Przerwa** pusty slajd, np. na czas homilii.
 
-Po starcie urządzenia ekran zawsze pokazuje najpierw **logo** — pozycja w zestawie jest zachowana,
-więc wystarczy dotknąć podświetlonego przycisku **LOGO**, żeby wrócić do tekstu. (Samo **Dalej ▶**
-przesuwa slajdy pod logo, ale go nie zdejmuje — tak samo jak pod czernią.)
+![Zakładka Zestaw](images/remote/tablet-zestaw.png)
+
+Po starcie urządzenia ekran zawsze pokazuje najpierw **logo**, a pozycja w zestawie jest
+zachowana. Wystarczy dotknąć **Pokaż tekst** (albo dowolnej pozycji zestawu), żeby wrócić do
+tekstu.
 
 ## W trakcie mszy
 
@@ -39,76 +49,131 @@ przesuwa slajdy pod logo, ale go nie zdejmuje — tak samo jak pod czernią.)
 |---|---|
 | następny slajd | **Dalej ▶** (albo pedał) |
 | poprzedni slajd | **◀ Wstecz** |
-| następną / poprzednią pieśń | **Pieśń »** / **« Pieśń** |
-| konkretną zwrotkę lub refren | przycisk zwrotki pod podglądem („1”, „Ref.”, „2”…) |
+| następną / poprzednią pieśń | **Następna pieśń** / **Poprzednia pieśń** |
+| konkretną zwrotkę lub refren | jej kafelek („Zwrotka 2”, „Refren”) pod podglądem |
 | konkretną pozycję zestawu | jej wiersz na liście |
-| wygasić ekran | **CZERŃ** (drugie dotknięcie przywraca) |
-| pokazać logo parafii | **LOGO** (drugie dotknięcie przywraca) |
-| szybko pokazać pieśń spoza zestawu | wyszukaj ją i dotknij **Pokaż** |
+| wygasić ekran | **Wygaś ekran**; z powrotem: **Pokaż tekst** |
+| pokazać logo parafii | **Pokaż logo**; z powrotem: **Pokaż tekst** |
+| szybko pokazać pieśń spoza zestawu | **Szukaj**, potem **Pokaż teraz** |
 
-- Podgląd **Dalej ▶** obok podglądu „Na ekranie” pokazuje, co pojawi się po następnym dotknięciu.
-- Gdy ekran jest wygaszony (CZERŃ), możesz spokojnie przechodzić dalej — wierni nic nie zobaczą,
-  a podgląd pokazuje, co się pojawi po odsłonięciu.
+- Napis pod **Dalej ▶** mówi, co się stanie. Żółty podpis („→ 2. Barka”) oznacza, że następne
+  dotknięcie zaczyna kolejną pieśń.
+- Po ostatnim slajdzie pieśni **Dalej ▶** najpierw wygasza ekran (pusty slajd „przerwa”), a
+  dopiero następne dotknięcie pokazuje pierwszą zwrotkę kolejnej pieśni. Wierni nie widzą więc
+  tekstu następnej pieśni, zanim się zacznie. Można to wyłączyć w **Ustawienia → Wyświetlanie**.
+- Gdy ekran jest wygaszony, **Dalej ▶** przesuwa slajdy „pod zasłoną” (tak mówi podpis), a wierni
+  nic nie widzą. Dotknięcie konkretnej pozycji, kafelka zwrotki albo **Pokaż teraz** od razu
+  odsłania ekran.
+- **Szukaj** otwiera okno wyszukiwania. **Pokaż teraz** od razu wyświetla pieśń: jeśli jest w
+  zestawie, przechodzi do niej, a jeśli nie, wstawia ją za bieżącą. **+ Do zestawu** tylko ją
+  dopisuje na koniec.
 - Jeśli dwie osoby naciśną **Dalej** w tej samej chwili, ekran przesunie się tylko raz, a drugi
   pilot pokaże „Już przełączone przez inny pilot”.
+- Z zakładek **Zestaw** i **Ustawienia** (na telefonie i tablecie w pionie) przyciski **Wygaś
+  ekran**, **Wstecz** i **Dalej** są cały czas na dole ekranu.
 
-### Zmiany w zestawie podczas mszy
+Na telefonie wszystko mieści się na jednym ekranie, a na tablecie w poziomie albo komputerze
+przyciski są w kolumnie z boku. W **Ustawienia → To urządzenie** można przenieść przyciski na
+lewą stronę.
 
-**Edytuj zestaw** włącza strzałki ↑ ↓ i **Usuń (przytrzymaj)**. Usunięcie wymaga przytrzymania
-przycisku przez chwilę; pomyłkę cofa **Cofnij usunięcie**. Nic z tego nie zmienia ekranu — nawet
-usunięcie pieśni, która właśnie jest wyświetlana: tekst zostaje, a **Dalej ▶** przejdzie do
-pozycji, która zajęła jej miejsce. **Gotowe** kończy edycję.
+| Telefon | Tablet w poziomie |
+|---|---|
+| ![Telefon](images/remote/phone-msza.png) | ![Tablet w poziomie](images/remote/landscape-msza.png) |
 
 ### Pedał lub pilot do prezentacji
 
 Pedał (Bluetooth) albo pilot do prezentacji działa od razu: zwykle wysyła klawisze „Page Down /
 Page Up”, które znaczą **Dalej** i **Wstecz**. Jeśli Twój pedał wysyła coś innego, otwórz
-**Pedał i klawisze**, dotknij **Naucz** przy wybranej akcji i naciśnij pedał. Ustawienie zapamiętuje
-to jedno urządzenie. Przytrzymanie pedału nie przewija wielu slajdów naraz.
+**Ustawienia → Pedał i klawisze**, dotknij **Naucz** przy wybranej akcji i naciśnij pedał.
+Ustawienie zapamiętuje to jedno urządzenie. Przytrzymanie pedału nie przewija wielu slajdów naraz.
 
 Na tablecie z Androidem po sparowaniu pedału może zniknąć klawiatura ekranowa; włącz ją w
 ustawieniach Androida („Pokazuj klawiaturę ekranową” przy klawiaturze fizycznej) ⚠ do sprawdzenia
 na tablecie parafii.
 
+## Nowa pieśń
+
+**Zestaw → Nowa pieśń** (albo **Nowa pieśń: „…”**, gdy wyszukiwanie nic nie znalazło). Wystarczy
+zwykły tekst:
+
+```text
+1. Pierwsza zwrotka,
+druga linia zwrotki.
+
+Ref. Refren,
+druga linia refrenu.
+
+2. Druga zwrotka…
+
+Ref.
+```
+
+- Zwrotki oddziela pusta linia; numer na początku („1.”) można pominąć.
+- Refren zaczyna się od „Ref.”. Samo „Ref.” w osobnym akapicie powtarza refren w tym miejscu.
+- „||” na końcu linii zaczyna nowy slajd; za długa zwrotka i tak podzieli się sama.
+- Przyciski **+ Zwrotka**, **+ Refren**, **+ Most**, **Nowy slajd** wstawiają to w miejscu kursora.
+- Obok widać slajdy dokładnie tak, jak pojawią się na ekranie.
+- **Zapisz** zapisuje pieśń; **Zapisz i pokaż na ekranie** od razu ją wyświetla. Zamknięcie z
+  niezapisanymi zmianami pyta „Odrzucić zmiany?”.
+- Kto zna OpenSong, może pisać jak dotąd: `[V1]`, `[C]`, `[B]`. Kolejność sekcji (np. `V1 C V2 C`)
+  jest w części **Zaawansowane**.
+
 ## Po mszy
 
-**Uśpij ekran (przytrzymaj)** — trzeba przytrzymać półtorej sekundy, żeby przypadkiem nie wyłączyć
-projektora podczas mszy. Gdy na ekranie jest jeszcze slajd, pilot to podpowiada. Projektor po
+Dotknij napisu stanu w prawym górnym rogu i przytrzymaj **Uśpij ekran** przez półtorej sekundy
+(przytrzymanie chroni przed przypadkowym wyłączeniem projektora w trakcie mszy). Projektor po
 uśpieniu przez chwilę stygnie i nie da się go od razu włączyć ponownie („Projektor stygnie,
-spróbuj za chwilę”) — to normalne.
+spróbuj za chwilę”). To normalne.
 
 ## Gdy coś nie działa
 
 | Co widzę | Co zrobić |
 |---|---|
-| „Brak połączenia – ponawiam…” w pilocie | Ekran nadal pokazuje ostatni slajd. Sprawdź Wi-Fi tabletu; pilot połączy się sam. |
-| Ekran czarny, choć powinien być tekst | Sprawdź, czy nie jest włączona **CZERŃ** albo **LOGO** (podświetlony przycisk). |
-| Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę — wpisz PIN parafii. |
-| „To wymaga trybu administratora” | Ta czynność (import, kalibracja…) jest tylko dla administratora. |
-| „Ekran: brak odpowiedzi” | Projektor jest wyłączony z prądu albo kabel sieciowy odpięty; użyj jego pilota. |
+| Czerwony pasek „Brak połączenia – ekran pokazuje ostatni slajd” | Przyciski są nieaktywne, a ekran nadal pokazuje ostatni slajd. Sprawdź Wi-Fi tabletu; pilot połączy się sam. |
+| Żółty pasek „Ekran nie jest połączony z sursum” | Ekran w kościele nie odpowiada; urządzenie spróbuje go uruchomić ponownie. Jeśli to trwa, sprawdź zasilanie urządzenia przy projektorze. |
+| Żółty pasek „Ekran jest uśpiony” | Dotknij **Włącz** na pasku. |
+| Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. |
+| Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę. Wpisz PIN parafii. |
+| Przy przycisku jest kłódka „wymaga trybu administratora” | Dotknij go i wpisz PIN; tryb administratora działa 15 minut. |
+| Tablet gaśnie w trakcie mszy | W ustawieniach Androida wydłuż czas wygaszania ekranu. |
 | Nic nie pomaga | Plan B: dotychczasowy komputer z OpenSong. Zapisz, co się stało, i zgłoś. |
 
-## Dla administratora
+## Ustawienia
 
-**Tryb administratora** (ponowne wpisanie PIN-u, działa 15 minut na tym urządzeniu) odblokowuje:
+![Zakładka Ustawienia](images/remote/tablet-ustawienia.png)
 
-- **Import z OpenSong (ZIP)** — spakuj cały folder OpenSong (z podfolderami *Songs* i *Sets*) i
-  wybierz plik. Ponowny import tych samych plików tylko aktualizuje zmienione pieśni i zestawy.
-- **Eksport bazy** / **Scal bazę z pliku** — wymiana pieśni między kościołami. Plik `.sursum`
-  z jednego kościoła scalasz w drugim; najpierw zobaczysz, co się zmieni, i dopiero **Scal**
+- **Ekran**: zasilanie projektora lub monitora, **Logo parafii** 🔒, **Kalibracja ekranu** 🔒.
+- **Wyświetlanie**: czy po ostatnim slajdzie pieśni najpierw jest pusty ekran (domyślnie), czy od
+  razu następna pozycja. Dotyczy wszystkich pilotów.
+- **To urządzenie**: strona przycisków (prawa lub lewa), wibracja, **Pełny ekran** (chowa paski
+  przeglądarki), **Pedał i klawisze**.
+- **Baza pieśni**: **Eksport bazy** (kopia zapasowa), **Scal bazę z pliku** 🔒,
+  **Import z OpenSong (ZIP)** 🔒.
+- **Urządzenia** 🔒 i **O programie**.
+
+### Dla administratora (🔒)
+
+Pozycje z kłódką wymagają ponownego wpisania PIN-u. Tryb administratora działa 15 minut na tym
+urządzeniu; u góry zakładki Ustawienia widać wtedy żółty pasek z **Zakończ tryb administratora**.
+
+- **Import z OpenSong (ZIP)**: spakuj cały folder OpenSong (z podfolderami *Songs* i *Sets*) i
+  wybierz plik. Po imporcie okno pokazuje, ile pieśni i zestawów dodano lub zmieniono, oraz uwagi
+  do konkretnych plików. Ponowny import tych samych plików tylko aktualizuje zmienione pieśni.
+- **Eksport bazy** / **Scal bazę z pliku**: wymiana pieśni między kościołami. Plik `.sursum` z
+  jednego kościoła scalasz w drugim. Najpierw zobaczysz, co się zmieni, i dopiero **Scal**
   zapisuje. Nic nie jest nadpisywane po cichu: gdy tę samą pieśń zmieniono w obu miejscach, druga
-  wersja trafia do bazy jako kopia „(kopia ze scalenia)”. Eksport to też dobra kopia zapasowa.
-- **Kalibracja ekranu (przytrzymaj)** — tylko poza mszą: na ekranie pojawia się siatka z literami
-  i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć strefę bez tekstu, np.
-  ciemną powierzchnię lub przeszkodę (czerwona strefa) — tekst będzie ją omijał, a sama strefa
-  będzie czarna. Zielona ramka pokazuje, gdzie zmieści się tekst. Pola liczbowe nie pozwalają
-  wysunąć strefy poza ekran. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
-- **Usuń pieśń z bazy (przytrzymaj)** — w edytorze pieśni, np. dla duplikatów po imporcie.
-  Pieśń znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca. Przy
-  scalaniu baz usunięcie przechodzi do drugiego kościoła, chyba że tam pieśń poprawiono później.
-- **Urządzenia** — lista sparowanych pilotów; **Odłącz (przytrzymaj)** usuwa zgubiony lub obcy
+  wersja trafia do bazy jako kopia „(kopia ze scalenia)”.
+- **Kalibracja ekranu**: tylko poza mszą. Po potwierdzeniu na ekranie w kościele pojawia się
+  siatka z literami i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć strefę
+  bez tekstu, np. ciemną powierzchnię lub przeszkodę (czerwona strefa); tekst będzie ją omijał, a
+  sama strefa będzie czarna. Zielona ramka pokazuje, gdzie zmieści się tekst. Pola liczbowe nie
+  pozwalają wysunąć strefy poza ekran. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
+- **Usuń pieśń z bazy** (przytrzymaj): w edytorze pieśni, np. dla duplikatów po imporcie. Pieśń
+  znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca.
+- **Urządzenia**: lista sparowanych pilotów; **Odłącz** (przytrzymaj) usuwa zgubiony lub obcy
   tablet (będzie musiał ponownie podać PIN).
-- **Zakończ tryb administratora** — po skończonej pracy.
+- **Usuń zestaw** (przytrzymaj, w oknie **Zmień zestaw**): nie da się usunąć zestawu, którego
+  pozycja jest właśnie na ekranie.
 
 **Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,
 który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy). To urządzenie
