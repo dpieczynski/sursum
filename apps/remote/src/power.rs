@@ -7,8 +7,8 @@ use leptos::prelude::*;
 use sursum_protocol::{Command, DisplayPowerState, Overlay, PowerAction, RemoteState};
 
 use crate::Commands;
-use crate::hold::HoldButton;
 use crate::messages::{Msg, pl};
+use crate::ui::HoldButton;
 
 /// Standby needs a longer hold than other destructive actions.
 const STANDBY_HOLD_MS: u32 = 1500;

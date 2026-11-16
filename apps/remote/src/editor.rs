@@ -138,7 +138,7 @@ fn EditorForm(
                     {pl(Msg::Close)}
                 </button>
                 <Show when=can_delete>
-                    <crate::hold::HoldButton label=pl(Msg::DeleteSong) on_hold=delete />
+                    <crate::ui::HoldButton label=pl(Msg::DeleteSong) on_hold=delete />
                 </Show>
                 <button type="button" on:click=move |_| save(false)>
                     {pl(Msg::Save)}

@@ -106,6 +106,13 @@ pub enum Msg {
     KindImage,
     KindPause,
     SetOnScreen,
+    UndoShort,
+    Create,
+    AdminHint,
+    HoldToConfirm,
+    ShowPin,
+    HidePin,
+    NotSent,
     EditSet,
     DoneEditing,
     Remove,
@@ -141,7 +148,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Black => "CZERŃ",
         Msg::Logo => "LOGO",
         Msg::Connected => "Połączono",
-        Msg::Disconnected => "Brak połączenia – ponawiam…",
+        Msg::Disconnected => "Brak połączenia – ekran pokazuje ostatni slajd. Ponawiam…",
         Msg::Connecting => "Łączenie…",
         Msg::AlreadyAdvanced => "Już przełączone przez inny pilot",
         Msg::NotPossible => "Nie da się",
@@ -176,7 +183,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Importing => "Importowanie…",
         Msg::EditSet => "Edytuj zestaw",
         Msg::DoneEditing => "Gotowe",
-        Msg::Remove => "Usuń (przytrzymaj)",
+        Msg::Remove => "Usuń",
         Msg::Undo => "Cofnij usunięcie",
         Msg::NewSet => "Nowy zestaw",
         Msg::NewSetPrompt => "Nazwa nowego zestawu",
@@ -208,7 +215,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Merging => "Scalanie…",
         Msg::MergeDone => "Scalono:",
         Msg::MergeFailed => "Scalanie nie powiodło się – czy to plik .sursum?",
-        Msg::Calibrate => "Kalibracja ekranu (przytrzymaj)",
+        Msg::Calibrate => "Kalibracja ekranu",
         Msg::CalibrationTitle => "Kalibracja ekranu",
         Msg::CalibrationHelp => {
             "Tylko poza mszą: na ekranie jest teraz siatka. Przeciągnij palcem po podglądzie, by \
@@ -234,13 +241,13 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::EndAdmin => "Zakończ tryb administratora",
         Msg::Devices => "Urządzenia",
         Msg::ThisDevice => "to urządzenie",
-        Msg::Revoke => "Odłącz (przytrzymaj)",
+        Msg::Revoke => "Odłącz",
         Msg::AdminRequired => "To wymaga trybu administratora",
         Msg::Picture => "Obraz",
         Msg::PictureFailed => "Nie udało się dodać obrazu (PNG, JPEG lub WebP, do 25 MB)",
         Msg::Pause => "Przerwa",
         Msg::DisplayOn => "Włącz ekran",
-        Msg::DisplayStandby => "Uśpij ekran (przytrzymaj)",
+        Msg::DisplayStandby => "Uśpij ekran",
         Msg::SlideOnScreen => "Uwaga: na ekranie jest slajd",
         Msg::ProjectorCooling => "Projektor stygnie, spróbuj za chwilę",
         Msg::DisplayUnknown => "Ekran: …",
@@ -262,13 +269,20 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KeysPressNow => "Naciśnij teraz…",
         Msg::ParishLogo => "Logo parafii",
         Msg::ItemNumber => "Numer pozycji w zestawie",
-        Msg::ScreenMissing => "Uwaga: ekran nie jest połączony z sursum",
-        Msg::DeleteSong => "Usuń pieśń z bazy (przytrzymaj)",
+        Msg::ScreenMissing => "Ekran nie jest połączony z sursum",
+        Msg::DeleteSong => "Usuń pieśń z bazy",
         Msg::DeletedSong => "(pieśń usunięta z bazy)",
         Msg::KindText => "tekst",
         Msg::KindImage => "obraz",
         Msg::KindPause => "przerwa",
         Msg::SetOnScreen => "Tego zestawu nie można usunąć – jego pozycja jest na ekranie",
+        Msg::UndoShort => "Cofnij",
+        Msg::Create => "Utwórz",
+        Msg::AdminHint => "Wpisz PIN jeszcze raz. Tryb administratora wyłączy się sam po 15 minutach.",
+        Msg::HoldToConfirm => "Przytrzymaj przycisk, aby potwierdzić",
+        Msg::ShowPin => "Pokaż",
+        Msg::HidePin => "Ukryj",
+        Msg::NotSent => "Nie wysłano – brak połączenia z sursum",
     }
 }
 
@@ -314,6 +328,11 @@ pub fn merge_summary(report: &sursum_protocol::MergeReport) -> String {
         ));
     }
     text
+}
+
+/// "Usunięto: Barka" (with an undo button in the toast).
+pub fn removed(title: &str) -> String {
+    format!("Usunięto: {title}")
 }
 
 /// "Za dużo prób – spróbuj ponownie za 30 s".

@@ -6,8 +6,8 @@ use leptos::prelude::*;
 use sursum_protocol::{Command, ItemId, RemoteState, SetId, SetItemKind, SetItemView};
 
 use crate::Commands;
-use crate::hold::HoldButton;
 use crate::messages::{Msg, pl};
+use crate::ui::HoldButton;
 
 /// Set selector, edit toggle, the item list and undo.
 #[component]
@@ -69,13 +69,9 @@ fn SetSelector(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl
     let on_change = move |event| {
         commands.send(Command::ActivateSet { set_id: SetId(event_target_value(&event)) });
     };
-    let new_set = move |_| {
-        let name = web_sys::window()
-            .and_then(|window| window.prompt_with_message(pl(Msg::NewSetPrompt)).ok().flatten());
-        if let Some(name) = name {
-            commands.send(Command::NewSet { name });
-        }
-    };
+    let naming = RwSignal::new(false);
+    let new_set = move |_| naming.set(true);
+    let sheet = move || naming.get().then(|| view! { <NewSetSheet open=naming commands /> });
     view! {
         <select class="set-select" on:change=on_change>
             {options}
@@ -83,6 +79,37 @@ fn SetSelector(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl
         <button class="set-tool" on:click=new_set>
             {pl(Msg::NewSet)}
         </button>
+        {sheet}
+    }
+}
+
+/// Asks for the name of a new set (instead of the browser's own prompt).
+#[component]
+pub fn NewSetSheet(open: RwSignal<bool>, commands: Commands) -> impl IntoView {
+    let name = RwSignal::new(String::new());
+    let create = move |event: leptos::ev::SubmitEvent| {
+        event.prevent_default();
+        commands.send(Command::NewSet { name: name.get_untracked() });
+        open.set(false);
+    };
+    view! {
+        <crate::ui::Sheet title=pl(Msg::NewSet).to_owned() on_close=move || open.set(false) testid="new-set">
+            <form class="sheet-form" on:submit=create>
+                <label class="field">
+                    {pl(Msg::NewSetPrompt)}
+                    <input
+                        autofocus=true
+                        prop:value=name
+                        on:input=move |event| name.set(event_target_value(&event))
+                    />
+                </label>
+                <div class="sheet-actions">
+                    <button type="submit" class="btn btn--primary">
+                        {pl(Msg::Create)}
+                    </button>
+                </div>
+            </form>
+        </crate::ui::Sheet>
     }
 }
 
@@ -132,7 +159,12 @@ fn set_row(
             commands.send(Command::GoToItemNumber { number });
         }
     };
-    let controls = move || editing.get().then(|| row_controls(item.item_id.clone(), number, count, commands));
+    let title_for_toast = title.clone();
+    let controls = move || {
+        editing
+            .get()
+            .then(|| row_controls(item.item_id.clone(), title_for_toast.clone(), number, count, commands))
+    };
     view! {
         <li class="set-item" class:live=is_live on:click=show>
             <span class="number">{number}</span>
@@ -154,14 +186,25 @@ fn kind_marker(kind: SetItemKind) -> &'static str {
 }
 
 /// Move up, move down and hold-to-remove buttons of one item.
-fn row_controls(item_id: ItemId, number: u32, count: u32, commands: Commands) -> impl IntoView {
+fn row_controls(
+    item_id: ItemId,
+    title: String,
+    number: u32,
+    count: u32,
+    commands: Commands,
+) -> impl IntoView {
     let index = number - 1;
     let (up_id, down_id, remove_id) = (item_id.clone(), item_id.clone(), item_id);
     let up = move |_| {
         commands.send(Command::MoveItem { item_id: up_id.clone(), to_index: index.saturating_sub(1) });
     };
     let down = move |_| commands.send(Command::MoveItem { item_id: down_id.clone(), to_index: index + 1 });
-    let remove = move || commands.send(Command::RemoveItem { item_id: remove_id.clone() });
+    let toasts = expect_context::<crate::ui::Toasts>();
+    let remove = move || {
+        if commands.try_send(Command::RemoveItem { item_id: remove_id.clone() }) {
+            toasts.show_with_undo(crate::messages::removed(&title), Command::UndoRemove);
+        }
+    };
     view! {
         <span class="row-controls">
             <button class="row-button" disabled=index == 0 on:click=up>
@@ -185,12 +228,16 @@ fn AnnouncementDialog(open: RwSignal<bool>, commands: Commands) -> impl IntoView
         open.set(false);
     };
     view! {
-        <div class="dialog">
-            <label>
+        <crate::ui::Sheet
+            title=pl(Msg::Announcement).to_owned()
+            on_close=move || open.set(false)
+            testid="announcement"
+        >
+            <label class="field">
                 {pl(Msg::EditorTitle)}
                 <input prop:value=title on:input=move |e| title.set(event_target_value(&e)) />
             </label>
-            <label>
+            <label class="field">
                 {pl(Msg::AnnouncementText)}
                 <textarea
                     rows="6"
@@ -198,14 +245,11 @@ fn AnnouncementDialog(open: RwSignal<bool>, commands: Commands) -> impl IntoView
                     on:input=move |e| text.set(event_target_value(&e))
                 ></textarea>
             </label>
-            <div class="editor-buttons">
-                <button type="button" on:click=move |_| open.set(false)>
-                    {pl(Msg::Cancel)}
-                </button>
-                <button type="button" class="primary" on:click=add>
+            <div class="sheet-actions">
+                <button type="button" class="btn btn--primary" on:click=add>
                     {pl(Msg::Add)}
                 </button>
             </div>
-        </div>
+        </crate::ui::Sheet>
     }
 }

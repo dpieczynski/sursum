@@ -210,12 +210,12 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
             // Wait for the new snapshot to re-render the list before touching it again.
             tokio::time::sleep(Duration::from_millis(500)).await;
             // A quick tap on "remove" does nothing…
-            let remove = remote.find_all(By::Css(".row-button.hold")).await?;
+            let remove = remote.find_all(By::Css(".set-item .hold")).await?;
             remove[1].click().await?;
             tokio::time::sleep(Duration::from_millis(500)).await;
             anyhow::ensure!(rows().await == 3, "a tap must not remove an item");
             // …holding it removes the item (here: the live one).
-            let live_row = remote.find(By::Css(".set-item.live .row-button.hold")).await?;
+            let live_row = remote.find(By::Css(".set-item.live .hold")).await?;
             remote.action_chain().click_and_hold_element(&live_row).perform().await?;
             tokio::time::sleep(Duration::from_millis(1000)).await;
             remote.action_chain().release().perform().await?;
@@ -246,14 +246,14 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         let pin = remote.query(By::Css(".pairing .pin")).first().await?;
         pin.wait_until().displayed().await?;
         pin.send_keys("1111").await?;
-        remote.find(By::Css(".pairing button")).await?.click().await?;
+        remote.find(By::Css(".pairing button[type=submit]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async {
             remote.source().await.map(|html| html.contains("Błędny PIN")).unwrap_or(false)
         })
         .await?;
         let pin = remote.find(By::Css(".pairing .pin")).await?;
         pin.send_keys("246813").await?;
-        remote.find(By::Css(".pairing button")).await?.click().await?;
+        remote.find(By::Css(".pairing button[type=submit]")).await?.click().await?;
         // After pairing the page reloads into the remote, which connects.
         wait_until(Duration::from_secs(10), || async {
             remote.find(By::Css(".status-dot.connected")).await.is_ok()
@@ -263,10 +263,10 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         let import = By::XPath("//label[contains(text(), 'Import z OpenSong')]");
         anyhow::ensure!(remote.find(import.clone()).await.is_err(), "import must need admin mode");
         remote.find(By::XPath("//button[text()='Tryb administratora']")).await?.click().await?;
-        let pin = remote.query(By::Css(".dialog .pin")).first().await?;
+        let pin = remote.query(By::Css("[data-testid=admin-unlock] .pin")).first().await?;
         pin.wait_until().displayed().await?;
         pin.send_keys("246813").await?;
-        remote.find(By::XPath("//button[text()='Odblokuj']")).await?.click().await?;
+        remote.find(By::Css("[data-testid=admin-unlock-submit]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
         // The device list shows this tablet (which cannot revoke itself).
         remote.find(By::XPath("//button[text()='Urządzenia']")).await?.click().await?;
@@ -293,14 +293,14 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
         anyhow::ensure!(fields.len() == 2, "the PIN is entered twice");
         fields[0].send_keys("246813").await?;
         fields[1].send_keys("246831").await?;
-        form.find(By::Css("button")).await?.click().await?;
+        form.find(By::Css("button[type=submit]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async {
             remote.source().await.map(|html| html.contains("PIN-y się różnią")).unwrap_or(false)
         })
         .await?;
         let fields = form.find_all(By::Css(".pin")).await?;
         fields[1].send_keys("246813").await?;
-        form.find(By::Css("button")).await?.click().await?;
+        form.find(By::Css("button[type=submit]")).await?.click().await?;
         // The page reloads into the remote, already in admin mode to go on with the setup.
         wait_until(Duration::from_secs(10), || async {
             remote.find(By::Css(".status-dot.connected")).await.is_ok()

@@ -12,7 +12,6 @@ mod bundle;
 mod calibration;
 mod calibration_form;
 mod editor;
-mod hold;
 mod import;
 mod key_settings;
 mod keypad;
@@ -23,6 +22,7 @@ mod picture;
 mod power;
 mod search;
 mod set_list;
+mod ui;
 
 use leptos::prelude::*;
 use messages::{Msg, pl, section_label};
@@ -65,22 +65,35 @@ pub struct Commands {
     client: StoredValue<Client, LocalStorage>,
     state: RwSignal<Option<RemoteState>>,
     seq: StoredValue<u32>,
+    toasts: ui::Toasts,
 }
 
 impl Commands {
+    /// Sends a command; without a connection the operator gets a toast instead.
     pub fn send(self, cmd: Command) {
+        let _ = self.try_send(cmd);
+    }
+
+    /// Sends a command; false (and a toast) if there is no connection. Commands are never queued:
+    /// a "next" replayed after a reconnect would move the screen unexpectedly.
+    pub fn try_send(self, cmd: Command) -> bool {
         let base_rev =
             self.state.with_untracked(|state| state.as_ref().map(|state| state.rev).unwrap_or_default());
         self.seq.update_value(|seq| *seq = seq.wrapping_add(1));
         let message = ClientMsg::Cmd { seq: self.seq.get_value(), base_rev, cmd };
-        self.client.with_value(|client| client.send(&message));
+        let sent = self.client.with_value(|client| client.send(&message));
+        if !sent {
+            self.toasts.show(pl(Msg::NotSent));
+        }
+        sent
     }
 }
 
 #[component]
 fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     let state = RwSignal::new(None::<RemoteState>);
-    let notice = RwSignal::new(None::<Msg>);
+    let toasts = ui::Toasts::default();
+    provide_context(toasts);
     let session = admin::Session(RwSignal::new(info));
     provide_context(session);
 
@@ -88,20 +101,20 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         ServerMsg::Welcome { .. } if needs_reload(&message) => reload(),
         ServerMsg::Remote { state: snapshot } => state.set(Some(snapshot)),
         ServerMsg::CmdResult { outcome: CmdOutcome::Stale { .. }, .. } => {
-            notice.set(Some(Msg::AlreadyAdvanced));
+            toasts.show(pl(Msg::AlreadyAdvanced));
         }
         ServerMsg::CmdResult { outcome: CmdOutcome::Rejected { code }, .. } => {
-            notice.set(Some(messages::rejection(code)));
+            toasts.show(pl(messages::rejection(code)));
             if code == sursum_protocol::ErrorCode::Forbidden {
                 // Perhaps admin mode expired: show the right tools again.
                 session.refresh();
             }
         }
-        ServerMsg::CmdResult { outcome: CmdOutcome::Applied { .. }, .. } => notice.set(None),
         _ => {}
     });
     let status = client.status();
-    let commands = Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0) };
+    let commands =
+        Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0), toasts };
     provide_context(commands);
     let keys = key_settings::Keys { map: RwSignal::new(keys::KeyMap::load()), learning: RwSignal::new(None) };
     provide_context(keys);
@@ -120,22 +133,19 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         {editor_view}
         {calibration_view}
         <main class="remote">
-            <TopBar status notice state />
+            <TopBar status state />
             <power::DisplayPowerBar state commands />
             <Previews state />
             <SectionChips state commands />
             <Library state commands />
             <Controls state commands />
         </main>
+        <ui::Toast toasts send=move |command| commands.send(command) />
     }
 }
 
 #[component]
-fn TopBar(
-    status: RwSignal<Status>,
-    notice: RwSignal<Option<Msg>>,
-    state: RwSignal<Option<RemoteState>>,
-) -> impl IntoView {
+fn TopBar(status: RwSignal<Status>, state: RwSignal<Option<RemoteState>>) -> impl IntoView {
     let status_text = move || {
         pl(match status.get() {
             Status::Connected => Msg::Connected,
@@ -156,16 +166,23 @@ fn TopBar(
             <span class="status-dot" class:connected=move || status.get() == Status::Connected></span>
             <span>{status_text}</span>
             <span>" · "{set_name}</span>
-            <span class="notice">{move || notice.get().map(pl)}</span>
-            <Show when=screen_missing>
-                <span class="notice" data-testid="screen-missing">
-                    {pl(Msg::ScreenMissing)}
-                </span>
-            </Show>
+
             <a class="about" href="/licenses" target="_blank">
                 {pl(Msg::About)}
             </a>
         </header>
+        <div class="banners">
+            <Show when=move || status.get() != Status::Connected>
+                <ui::Banner kind=ui::BannerKind::Danger testid="disconnected">
+                    {pl(Msg::Disconnected)}
+                </ui::Banner>
+            </Show>
+            <Show when=screen_missing>
+                <ui::Banner kind=ui::BannerKind::Warn testid="screen-missing">
+                    {pl(Msg::ScreenMissing)}
+                </ui::Banner>
+            </Show>
+        </div>
     }
 }
 

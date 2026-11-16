@@ -123,7 +123,7 @@ away everywhere, and plain-text song entry (ADR 0017).
 
 - [x] Layout screenshots at three sizes, operator and admin (`just remote-sizes`)
 - [x] Server: gap after an item's last slide (device setting), showing lifts black/logo, `ShowNow` without duplicates, `next_step`, set rename/delete, song ids and numbers in the set view (ADR 0004 amendment)
-- [ ] Shared UI parts: tokens, one button class, sheet, toast, banner, hold button
+- [x] Shared UI parts: tokens, one button class, sheet, toast, banner, hold button, PIN field with "show"; notices became toasts, dialogs became sheets, removal toasts offer undo
 - [ ] Shell and the Msza view: tabs, three layouts, now/slides/set/controls, problem banners, search sheet, live strip, button side; "#" keypad removed
 - [ ] Zestaw view: set picker, rename/delete, items, search that stays open, song card
 - [ ] Ustawienia view: screen, display, this device, song library, devices, about

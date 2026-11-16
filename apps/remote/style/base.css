@@ -1,0 +1,265 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Elements shared by every view: buttons, form fields, sheets, the toast and banners. */
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-body);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* One button: size modifiers --lg/--md/--sm, variants --primary/--danger/--quiet/--live. */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap-md);
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 60ms ease-out, filter 60ms ease-out;
+}
+.btn--lg {
+  min-height: var(--tap-lg);
+  font-size: 22px;
+}
+.btn--sm {
+  min-height: var(--tap-sm);
+  padding: 0 12px;
+  font-size: 16px;
+}
+.btn--primary {
+  background: var(--accent);
+}
+.btn--danger {
+  background: #7f1d1d;
+}
+.btn--quiet {
+  background: transparent;
+  border-color: var(--line);
+}
+.btn--live {
+  background: var(--live);
+}
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* Clear feedback on every press: a lighter fill and a slight push. */
+.btn:not(:disabled):active,
+.tappable:active {
+  transform: scale(0.97);
+  filter: brightness(1.5);
+}
+.btn:focus-visible,
+.tappable:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn input[type="file"] {
+  display: none;
+}
+
+/* Hold-to-confirm: the whole button fills from the left while held. */
+.btn.hold::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+.btn.hold.holding::before {
+  width: 100%;
+  transition: width var(--hold-ms) linear;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.field input,
+.field textarea,
+.field select {
+  min-height: var(--tap-sm);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-body);
+  user-select: text;
+}
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.status-text {
+  margin: 0;
+  color: var(--warn);
+}
+
+/* PIN field with a "show" switch. */
+.pin-field {
+  display: flex;
+  gap: 8px;
+}
+.pin-field input {
+  flex: 1;
+  min-width: 0;
+  font-size: 30px;
+  letter-spacing: 0.25em;
+  text-align: center;
+}
+
+/* Sheets: the only kind of window. Full screen on phones, a card on wider screens. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+}
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100vw);
+  max-height: 100dvh;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.sheet-header {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.sheet-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-title);
+}
+.sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+}
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap);
+}
+@media (max-width: 599px) {
+  .sheet {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+  }
+}
+
+/* One toast above the controls; it never moves anything. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--toast-bottom, 250px) + env(safe-area-inset-bottom));
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #262626;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  font-size: var(--font-small);
+  transform: translateX(-50%);
+}
+.toast-text {
+  flex: 1;
+}
+
+/* Problem banners under the top bar, laid over the content. */
+.banners {
+  position: fixed;
+  top: 56px;
+  left: 8px;
+  right: 8px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+.banner--danger {
+  background: var(--danger);
+}
+.banner--warn {
+  background: var(--warn);
+  color: #111;
+}
+.banner .btn {
+  margin-left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+.sheet-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}

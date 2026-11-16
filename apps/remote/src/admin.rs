@@ -9,8 +9,8 @@ use sursum_protocol::{AdminRequest, DeviceView, PairOutcome, SessionInfo};
 
 use crate::api::{get_json, post_json, request_status};
 use crate::calibration::Calibrating;
-use crate::hold::HoldButton;
 use crate::messages::{Msg, locked_for, pl};
+use crate::ui::HoldButton;
 
 /// While admin mode is on, the session is re-read this often so the tools hide when it expires.
 const REFRESH_MS: u32 = 60_000;
@@ -114,28 +114,24 @@ fn AdminUnlock(open: RwSignal<bool>, session: Session) -> impl IntoView {
         });
     };
     view! {
-        <form class="dialog" on:submit=submit>
-            <label>
-                {pl(Msg::AdminPin)}
-                <input
-                    class="pin"
-                    type="password"
-                    inputmode="numeric"
-                    autocomplete="off"
-                    prop:value=pin
-                    on:input=move |event| pin.set(event_target_value(&event))
-                />
-            </label>
-            <p class="editor-status">{move || status.get()}</p>
-            <div class="editor-buttons">
-                <button type="button" on:click=move |_| open.set(false)>
-                    {pl(Msg::Cancel)}
-                </button>
-                <button type="submit" class="primary">
-                    {pl(Msg::Unlock)}
-                </button>
-            </div>
-        </form>
+        <crate::ui::Sheet
+            title=pl(Msg::AdminMode).to_owned()
+            on_close=move || open.set(false)
+            testid="admin-unlock"
+        >
+            <form class="sheet-form" on:submit=submit>
+                <p class="hint">{pl(Msg::AdminHint)}</p>
+                <label class="field">
+                    {pl(Msg::AdminPin)} <crate::ui::PinField value=pin autofocus=true />
+                </label>
+                <p class="status-text">{move || status.get()}</p>
+                <div class="sheet-actions">
+                    <button type="submit" class="btn btn--primary" data-testid="admin-unlock-submit">
+                        {pl(Msg::Unlock)}
+                    </button>
+                </div>
+            </form>
+        </crate::ui::Sheet>
     }
 }
 

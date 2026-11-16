@@ -34,17 +34,7 @@ pub fn Pairing() -> impl IntoView {
     view! {
         <form class="pairing" on:submit=submit>
             <h1>{pl(Msg::PairingTitle)}</h1>
-            <label>
-                {pl(Msg::Pin)}
-                <input
-                    class="pin"
-                    type="password"
-                    inputmode="numeric"
-                    autocomplete="off"
-                    prop:value=pin
-                    on:input=move |event| pin.set(event_target_value(&event))
-                />
-            </label>
+            <label>{pl(Msg::Pin)} <crate::ui::PinField value=pin autofocus=true /></label>
             <label>
                 {pl(Msg::DeviceName)}
                 <input prop:value=name on:input=move |event| name.set(event_target_value(&event)) />
@@ -81,24 +71,16 @@ pub fn Setup() -> impl IntoView {
             }
         });
     };
-    let pin_input = move |value: RwSignal<String>| {
-        view! {
-            <input
-                class="pin"
-                type="password"
-                inputmode="numeric"
-                autocomplete="new-password"
-                prop:value=value
-                on:input=move |event| value.set(event_target_value(&event))
-            />
-        }
-    };
     view! {
         <form class="pairing" data-testid="setup" on:submit=submit>
             <h1>{pl(Msg::SetupTitle)}</h1>
             <p>{pl(Msg::SetupHint)}</p>
-            <label>{pl(Msg::Pin)} {pin_input(pin)}</label>
-            <label>{pl(Msg::RepeatPin)} {pin_input(repeat)}</label>
+            <label>
+                {pl(Msg::Pin)} <crate::ui::PinField value=pin autocomplete="new-password" autofocus=true />
+            </label>
+            <label>
+                {pl(Msg::RepeatPin)} <crate::ui::PinField value=repeat autocomplete="new-password" />
+            </label>
             <label>
                 {pl(Msg::DeviceName)}
                 <input prop:value=name on:input=move |event| name.set(event_target_value(&event)) />

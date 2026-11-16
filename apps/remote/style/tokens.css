@@ -1,0 +1,34 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Colours with one meaning each, sizes and type. The remote is read at arm's length in a dim
+   organ loft, so contrast is high and nothing important is smaller than 15 px. */
+
+:root {
+  --bg: #111;
+  --panel: #1d1d1d;
+  --panel-2: #2a2a2a;
+  --line: #3a3a3a;
+  --text: #f2f2f2;
+  --muted: #a8a8a8;
+
+  /* The main action: Next, Show now, primary buttons. */
+  --accent: #2f6fe0;
+  /* What the congregation sees: live preview frame, live slide, live set item. */
+  --live: #16a34a;
+  /* Attention: warnings, "next goes to another song". */
+  --warn: #eab308;
+  /* Errors and destruction: no connection, hold-to-delete. */
+  --danger: #c62828;
+
+  --gap: 10px;
+  --radius: 10px;
+  --tap-lg: 72px;
+  --tap-md: 56px;
+  --tap-sm: 48px;
+
+  --font-body: 18px;
+  --font-small: 15px;
+  --font-title: 21px;
+
+  font-family: "Lato", system-ui, sans-serif;
+  color-scheme: dark;
+}
