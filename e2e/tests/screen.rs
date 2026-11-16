@@ -27,6 +27,9 @@ async fn first_frame_is_black_before_the_app_loads() -> anyhow::Result<()> {
             "body background is {:?}",
             background.json()
         );
+        // A translation offer is browser UI over the screen; the page opts out in every engine.
+        let translate = driver.execute("return document.documentElement.translate;", Vec::new()).await?;
+        anyhow::ensure!(translate.json().as_bool() == Some(false), "the screen must opt out of translation");
         let image = screenshot(driver).await?;
         anyhow::ensure!(
             is_black(&image, 0, 0, image.width(), image.height()),

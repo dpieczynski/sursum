@@ -20,3 +20,12 @@ alternatives; the Pi platform optimizes Chromium first; ESR lags features); nati
 The screen uses only standard web APIs; the kiosk command lives in `/var/lib/sursum/kiosk.env`. A
 half-day comparison spike with WPE/cog runs in M1 and M4 (boot to first frame, RAM after 8 h,
 1080p60 crossfade, white frame at start, HDMI replug). Revisit only with measurements.
+
+## Observation (2026-11-16): browser UI over the screen
+First run on a real TV (x86 PC, Chromium 157 flatpak in `--kiosk`): Chromium offered to translate
+the Polish page, a bubble over the screen, although the kiosk command had
+`--disable-features=Translate`. Command-line flags are not a stable contract. Mitigations now: both
+pages opt out (`<html translate="no">`, `<meta name="google" content="notranslate">`, checked by
+the first-frame e2e test); in the device image, Chromium **managed policies** (e.g.
+`TranslateEnabled: false`) rather than flags. The spike's checklist adds: "any browser UI ever
+appears over the page" — a point in favour of cog, which has no browser UI at all.
