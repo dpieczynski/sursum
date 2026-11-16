@@ -18,6 +18,20 @@ pub struct LibraryImport {
 const SKIPPED_EXTENSIONS: &[&str] =
     &["jpg", "jpeg", "png", "gif", "bmp", "db", "ini", "pdf", "mp3", "wav", "zip"];
 
+/// Parses one file into `import` (used for folders and for ZIP uploads).
+pub fn add_file(import: &mut LibraryImport, relative: String, bytes: &[u8], songbook: &str) {
+    match parse_song(bytes, &relative, songbook) {
+        Ok(song) => import.songs.push((relative, song)),
+        Err(error) => import.failures.push((relative, error.to_string())),
+    }
+}
+
+/// True for files that are never songs (images, databases), judged by the extension.
+pub fn is_skipped(path: &str) -> bool {
+    let extension = path.rsplit_once('.').map(|(_, extension)| extension.to_lowercase());
+    extension.is_some_and(|extension| SKIPPED_EXTENSIONS.contains(&extension.as_str()))
+}
+
 /// Reads every song in `songs_dir` and its subfolders, in a stable (sorted) order.
 pub fn read_library(songs_dir: &Path, songbook: &str) -> std::io::Result<LibraryImport> {
     let mut files = Vec::new();

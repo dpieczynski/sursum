@@ -68,15 +68,13 @@ async fn main() -> anyhow::Result<()> {
     if let Some(Task::ImportOpensong { songs_dir, songbook }) = &args.command {
         let mut database = sursum_server::db::Database::open(&args.data_dir)?;
         database.backup(&args.data_dir, "before-import")?;
-        let summary = sursum_server::import::import_opensong(
-            &mut database,
-            songs_dir,
-            songbook,
-            &mut std::io::stderr(),
-        )?;
+        let report = sursum_server::import::import_opensong(&mut database, songs_dir, songbook)?;
+        for line in &report.problems {
+            eprintln!("{line}");
+        }
         println!(
-            "imported: {} new, {} updated, {} unchanged, {} failed, {} warnings",
-            summary.inserted, summary.updated, summary.unchanged, summary.failed, summary.warnings
+            "imported: {} new, {} updated, {} unchanged, {} failed",
+            report.inserted, report.updated, report.unchanged, report.failed
         );
         return Ok(());
     }

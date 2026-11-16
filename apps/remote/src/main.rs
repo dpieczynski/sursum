@@ -8,6 +8,7 @@
 
 mod api;
 mod editor;
+mod import;
 mod messages;
 mod search;
 
@@ -195,7 +196,10 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
     view! {
         <section class="library">
             <search::SearchBox query />
-            <NewSongButton />
+            <div class="library-tools">
+                <NewSongButton />
+                <import::ImportButton />
+            </div>
             <Show when=searching fallback=set_list>
                 <search::SearchResults query commands />
             </Show>

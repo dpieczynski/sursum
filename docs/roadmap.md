@@ -48,7 +48,7 @@ manual run on a laptop + tablet and both hardware spikes are still open.
 ## M2 — OpenSong import, library, search, editor
 
 - [x] `sursum-formats`: OpenSong songs, import report, idempotent re-import; CLI `sursum-server import-opensong <Songs dir>` (875 real songs, 0 failures)
-- [ ] ZIP upload of an OpenSong folder from the browser
+- [x] ZIP upload of an OpenSong folder from the browser (`POST /api/import/opensong`, backup first, library reloaded, one-line report in the remote)
 - [x] Extended OpenSong conventions checked against a real Polish library (see [opensong-format.md](opensong-format.md)); numbered lines still ⚠
 - [x] SQLite schema (migration 2: `songs` with revisions, `song_history`)
 - [x] Backups (`VACUUM INTO`, 14 kept, at startup and before imports), `quick_check` at startup + automatic restore of the newest backup (damaged file kept in `corrupt/`)

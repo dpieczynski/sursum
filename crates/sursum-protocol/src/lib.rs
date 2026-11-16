@@ -12,7 +12,7 @@ mod message;
 mod slide;
 mod state;
 
-pub use editor::{DraftPreview, SaveOutcome, SongDraft};
+pub use editor::{DraftPreview, ImportReport, SaveOutcome, SongDraft};
 pub use ids::{AssetId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{
     ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH, ScreenLayout, ScreenProfile,

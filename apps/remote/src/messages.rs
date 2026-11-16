@@ -41,6 +41,9 @@ pub enum Msg {
     LyricsMissing,
     SaveFailed,
     LoadFailed,
+    ImportOpenSong,
+    Importing,
+    ImportFailed,
 }
 
 /// The Polish text for a message.
@@ -85,7 +88,17 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::LyricsMissing => "Brak tekstu (zacznij od [V1] i linii ze spacją na początku)",
         Msg::SaveFailed => "Nie udało się zapisać",
         Msg::LoadFailed => "Nie udało się wczytać pieśni",
+        Msg::ImportOpenSong => "Import z OpenSong (ZIP)",
+        Msg::Importing => "Importowanie…",
+        Msg::ImportFailed => "Import nie powiódł się – czy to plik ZIP z folderem OpenSong?",
     }
+}
+
+/// One-line import report, e.g. "Zaimportowano: 12 nowych, 3 zmienionych, …".
+pub fn import_summary(inserted: u32, updated: u32, unchanged: u32, failed: u32, problems: usize) -> String {
+    format!(
+        "Zaimportowano: {inserted} nowych, {updated} zmienionych, {unchanged} bez zmian, {failed} błędów, {problems} uwag"
+    )
 }
 
 /// Human label for a section code sent by the server (`v1`, `c`, `c2`, `b`, …).

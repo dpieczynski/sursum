@@ -23,6 +23,7 @@ sursum-core.workspace = true
 sursum-formats.workspace = true
 sha2.workspace = true
 uuid.workspace = true
+zip.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 tokio.workspace = true

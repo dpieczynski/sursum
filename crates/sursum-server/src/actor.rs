@@ -64,6 +64,18 @@ impl StateHandle {
         draft.await.ok().flatten()
     }
 
+    /// Stores imported songs (after a backup) and reloads the library.
+    pub async fn import(
+        &self,
+        library: sursum_formats::opensong::LibraryImport,
+    ) -> sursum_protocol::ImportReport {
+        let (reply, report) = oneshot::channel();
+        if self.requests.send(Request::Import { library, reply }).await.is_err() {
+            return sursum_protocol::ImportReport::default();
+        }
+        report.await.unwrap_or_default()
+    }
+
     /// Saves an edited or new song (optimistic locking on the revision).
     pub async fn save_song(&self, draft: SongDraft) -> SaveOutcome {
         let (reply, outcome) = oneshot::channel();
@@ -76,10 +88,29 @@ impl StateHandle {
 }
 
 enum Request {
-    Command { actor: ClientId, base_rev: Rev, command: Command, reply: oneshot::Sender<CmdOutcome> },
-    Search { query: String, limit: usize, reply: oneshot::Sender<Vec<SongSummary>> },
-    Draft { song_id: SongId, reply: oneshot::Sender<Option<SongDraft>> },
-    SaveSong { draft: SongDraft, reply: oneshot::Sender<SaveOutcome> },
+    Command {
+        actor: ClientId,
+        base_rev: Rev,
+        command: Command,
+        reply: oneshot::Sender<CmdOutcome>,
+    },
+    Search {
+        query: String,
+        limit: usize,
+        reply: oneshot::Sender<Vec<SongSummary>>,
+    },
+    Draft {
+        song_id: SongId,
+        reply: oneshot::Sender<Option<SongDraft>>,
+    },
+    SaveSong {
+        draft: SongDraft,
+        reply: oneshot::Sender<SaveOutcome>,
+    },
+    Import {
+        library: sursum_formats::opensong::LibraryImport,
+        reply: oneshot::Sender<sursum_protocol::ImportReport>,
+    },
 }
 
 /// Starts the actor thread with restored state.
@@ -97,6 +128,7 @@ pub fn spawn(
     tracing::info!(songs = songs.len(), "song library loaded");
     let mut state = AppState {
         index: SearchIndex::build(&songs),
+        data_dir: config.data_dir.clone(),
         songs: songs.into_iter().map(|song| (song.id.clone(), song)).collect(),
         set: Some(demo::set(&demo_songs)),
         next_item: 1,
@@ -135,6 +167,12 @@ pub fn spawn(
                     Request::Draft { song_id, reply } => {
                         let _ = reply.send(state.draft(&song_id));
                     }
+                    Request::Import { library, reply } => {
+                        let report = state.import(&library);
+                        screen_tx.send_replace(Arc::new(state.screen_state()));
+                        remote_tx.send_replace(Arc::new(state.remote_state()));
+                        let _ = reply.send(report);
+                    }
                     Request::SaveSong { draft, reply } => {
                         let outcome = state.save_song(&draft);
                         if matches!(outcome, SaveOutcome::Saved { .. }) {
@@ -155,6 +193,7 @@ pub fn spawn(
 struct AppState {
     songs: HashMap<SongId, Song>,
     index: SearchIndex,
+    data_dir: std::path::PathBuf,
     set: Option<ServiceSet>,
     /// Counter for ids of items added during this run (sets are persisted from M3).
     next_item: u32,
@@ -234,6 +273,28 @@ impl AppState {
                 (CmdOutcome::Rejected { code: ErrorCode::Unsupported }, false)
             }
         }
+    }
+
+    /// Imports songs after backing up the database, then reloads the library and the index.
+    fn import(&mut self, library: &sursum_formats::opensong::LibraryImport) -> sursum_protocol::ImportReport {
+        if let Err(error) = self.database.backup(&self.data_dir, "before-import") {
+            tracing::error!(?error, "could not back up before importing");
+        }
+        let report = match crate::import::store(&mut self.database, library) {
+            Ok(report) => report,
+            Err(error) => {
+                sursum_protocol::ImportReport { problems: vec![error.to_string()], ..Default::default() }
+            }
+        };
+        match self.database.load_songs() {
+            Ok(songs) => {
+                self.index = SearchIndex::build(&songs);
+                self.songs = songs.into_iter().map(|song| (song.id.clone(), song)).collect();
+            }
+            Err(error) => tracing::error!(?error, "could not reload the song library"),
+        }
+        self.rev = self.rev.next();
+        report
     }
 
     fn draft(&self, song_id: &SongId) -> Option<SongDraft> {

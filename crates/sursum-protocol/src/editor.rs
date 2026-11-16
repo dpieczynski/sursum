@@ -30,6 +30,17 @@ pub struct DraftPreview {
     pub warnings: Vec<String>,
 }
 
+/// What an import of songs did.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportReport {
+    pub inserted: u32,
+    pub updated: u32,
+    pub unchanged: u32,
+    pub failed: u32,
+    /// Warnings and failures, one line each (at most a few hundred).
+    pub problems: Vec<String>,
+}
+
 /// Result of saving a draft.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]

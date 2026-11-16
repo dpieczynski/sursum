@@ -303,3 +303,43 @@ async fn editor_creates_edits_detects_conflicts_and_validates() {
     assert!(matches!(invalid, SaveOutcome::Invalid { .. }));
     server.stop().await.unwrap();
 }
+
+async fn http_post_bytes(server: &RunningServer, path: &str, body: &[u8]) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = TcpStream::connect(server.addr).await.unwrap();
+    let head = format!(
+        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/zip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(head.as_bytes()).await.unwrap();
+    stream.write_all(body).await.unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    response.split_once("\r\n\r\n").map(|(_, body)| body.to_owned()).unwrap_or_default()
+}
+
+#[tokio::test]
+async fn zip_upload_imports_songs_into_the_running_library() {
+    use std::io::Write as _;
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/opensong/Songs");
+    let mut buffer = std::io::Cursor::new(Vec::new());
+    let mut writer = zip::ZipWriter::new(&mut buffer);
+    for name in ["Synthetic Basic", "Synthetic CP1250", "Synthetic Broken"] {
+        writer.start_file(format!("Songs/{name}"), zip::write::SimpleFileOptions::default()).unwrap();
+        writer.write_all(&std::fs::read(fixtures.join(name)).unwrap()).unwrap();
+    }
+    writer.finish().unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let report: sursum_protocol::ImportReport = serde_json::from_str(
+        &http_post_bytes(&server, "/api/import/opensong?songbook=Test", buffer.get_ref()).await,
+    )
+    .unwrap();
+    assert_eq!((report.inserted, report.failed), (2, 1), "{report:?}");
+    let found: Vec<sursum_protocol::SongSummary> =
+        serde_json::from_str(&http_get(&server, "/api/songs?q=windows%201250").await).unwrap();
+    assert_eq!(found[0].title, "Syntetyczna pieśń w kodowaniu Windows-1250");
+    assert!(dir.path().join("backups").read_dir().unwrap().count() >= 2, "startup and pre-import backups");
+    server.stop().await.unwrap();
+}

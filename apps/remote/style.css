@@ -132,8 +132,27 @@ body {
   display: flex;
   gap: var(--gap);
 }
-.library > .new-song {
-  justify-self: start;
+.library-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+.import-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 18px;
+  font-weight: 700;
+}
+.import-button input {
+  display: none;
+}
+.import-status {
+  color: #facc15;
 }
 .search-input {
   flex: 1;

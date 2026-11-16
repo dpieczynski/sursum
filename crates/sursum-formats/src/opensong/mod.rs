@@ -10,7 +10,7 @@ mod song;
 mod warning;
 
 pub use decode::decode_text;
-pub use library::{LibraryImport, read_library};
+pub use library::{LibraryImport, add_file, is_skipped, read_library};
 pub use lyrics::{ParsedLyrics, parse_lyrics, parse_presentation};
 pub use markup::{OPTIONAL_BREAK, lyrics_markup, presentation_markup};
 pub use song::{ImportedSong, SongError, parse_song, song_id_for_path};

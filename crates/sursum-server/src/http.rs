@@ -59,6 +59,11 @@ pub fn router(state: StateHandle, config: &Config) -> Router {
         .route("/api/songs/preview", axum::routing::post(preview_song))
         .route("/api/songs/save", axum::routing::post(save_song))
         .route("/api/songs/{id}/draft", get(song_draft))
+        .route(
+            "/api/import/opensong",
+            axum::routing::post(import_opensong)
+                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+        )
         .route("/ws/screen", get(screen_socket))
         .route("/ws/remote", get(remote_socket))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))
@@ -85,6 +90,33 @@ fn default_limit() -> usize {
 /// `GET /api/songs?q=…`: search by songbook number, title or lyrics (ADR 0006).
 async fn search_songs(State(app): State<App>, Query(query): Query<SearchQuery>) -> Response {
     axum::Json(app.state.search(query.q, query.limit.min(100)).await).into_response()
+}
+
+/// Largest accepted ZIP upload (a large OpenSong library with images fits easily).
+const MAX_IMPORT_BYTES: usize = 256 * 1024 * 1024;
+
+#[derive(Deserialize)]
+struct ImportQuery {
+    #[serde(default = "default_songbook")]
+    songbook: String,
+}
+
+fn default_songbook() -> String {
+    "OpenSong".to_owned()
+}
+
+/// `POST /api/import/opensong`: the body is a ZIP of an OpenSong folder (or of `Songs/`).
+async fn import_opensong(
+    State(app): State<App>,
+    Query(query): Query<ImportQuery>,
+    body: axum::body::Bytes,
+) -> Response {
+    let parsed = tokio::task::spawn_blocking(move || crate::import::read_zip(&body, &query.songbook)).await;
+    match parsed {
+        Ok(Ok(library)) => axum::Json(app.state.import(library).await).into_response(),
+        Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 /// `GET /api/songs/{id}/draft`: a song in the editor's text form.
