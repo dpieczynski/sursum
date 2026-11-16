@@ -76,7 +76,8 @@ expression: state
       {
         "item_id": "item-1",
         "number": 1,
-        "title": "Pieśń"
+        "title": "Pieśń",
+        "kind": "song"
       }
     ]
   },

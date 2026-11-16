@@ -760,9 +760,21 @@ impl AppState {
                 item_id: item.id.clone(),
                 number: index as u32 + 1,
                 title: self.item_title(item),
+                kind: self.item_kind(item),
             })
             .collect();
         SetView { set_id: set.id.clone(), name: set.name.clone(), items }
+    }
+
+    fn item_kind(&self, item: &SetItem) -> sursum_protocol::SetItemKind {
+        use sursum_protocol::SetItemKind;
+        match &item.kind {
+            ItemKind::Song { song_id, .. } if self.songs.contains_key(song_id) => SetItemKind::Song,
+            ItemKind::Song { .. } => SetItemKind::MissingSong,
+            ItemKind::Text { .. } => SetItemKind::Text,
+            ItemKind::Image { .. } => SetItemKind::Image,
+            ItemKind::Blank { .. } => SetItemKind::Pause,
+        }
     }
 
     fn item_title(&self, item: &SetItem) -> String {

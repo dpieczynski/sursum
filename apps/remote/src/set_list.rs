@@ -3,7 +3,7 @@
 //! Editing never changes the screen; only tapping an item does (ADR 0004, ADR 0005).
 
 use leptos::prelude::*;
-use sursum_protocol::{Command, ItemId, RemoteState, SetId, SetItemView};
+use sursum_protocol::{Command, ItemId, RemoteState, SetId, SetItemKind, SetItemView};
 
 use crate::Commands;
 use crate::hold::HoldButton;
@@ -121,7 +121,12 @@ fn set_row(
     let number = item.number;
     let item_id = item.item_id.clone();
     let is_live = move || live_item.with(|live| live.as_ref() == Some(&item_id));
-    let title = if item.title.is_empty() { pl(Msg::Untitled).to_owned() } else { item.title.clone() };
+    let title = match item.kind {
+        SetItemKind::MissingSong => pl(Msg::DeletedSong).to_owned(),
+        _ if item.title.is_empty() => pl(Msg::Untitled).to_owned(),
+        _ => item.title.clone(),
+    };
+    let marker = kind_marker(item.kind);
     let show = move |_| {
         if !editing.get_untracked() {
             commands.send(Command::GoToItemNumber { number });
@@ -132,8 +137,19 @@ fn set_row(
         <li class="set-item" class:live=is_live on:click=show>
             <span class="number">{number}</span>
             <span class="set-title">{title}</span>
+            <span class="set-kind">{marker}</span>
             {controls}
         </li>
+    }
+}
+
+/// A small hint after the title for items that are not songs.
+fn kind_marker(kind: SetItemKind) -> &'static str {
+    match kind {
+        SetItemKind::Song | SetItemKind::MissingSong => "",
+        SetItemKind::Text => pl(Msg::KindText),
+        SetItemKind::Image => pl(Msg::KindImage),
+        SetItemKind::Pause => pl(Msg::KindPause),
     }
 }
 

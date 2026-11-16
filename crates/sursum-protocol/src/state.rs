@@ -98,6 +98,21 @@ pub struct SetItemView {
     /// 1-based position, used for "go to item N".
     pub number: u32,
     pub title: String,
+    #[serde(default)]
+    pub kind: SetItemKind,
+}
+
+/// What a set item is, so the remote can mark it (and explain a song that no longer exists).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SetItemKind {
+    #[default]
+    Song,
+    Text,
+    Image,
+    Pause,
+    /// The song was deleted from the library; the item cannot be shown any more.
+    MissingSong,
 }
 
 /// A set in the list of sets.

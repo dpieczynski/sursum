@@ -98,7 +98,12 @@ fn remote_state() {
         active_set: Some(SetView {
             set_id: SetId::from("set"),
             name: "Msza".into(),
-            items: vec![SetItemView { item_id: ItemId::from("item-1"), number: 1, title: "Pieśń".into() }],
+            items: vec![SetItemView {
+                item_id: ItemId::from("item-1"),
+                number: 1,
+                title: "Pieśń".into(),
+                kind: SetItemKind::Song,
+            }],
         }),
         sets: vec![SetSummary { set_id: SetId::from("set"), name: "Msza".into(), items: 1 }],
         can_undo: false,

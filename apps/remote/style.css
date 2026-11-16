@@ -760,3 +760,8 @@ label.set-tool {
   min-height: 48px;
   font-size: 18px;
 }
+
+.set-kind {
+  color: var(--muted);
+  font-size: 14px;
+}

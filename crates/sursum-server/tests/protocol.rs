@@ -925,6 +925,11 @@ async fn a_deleted_song_leaves_search_but_not_the_screen() {
     assert!(found.is_empty(), "gone from search");
     let again = command(&mut remote, 3, Rev(u32::MAX), Command::DeleteSong { song_id }).await;
     assert!(matches!(again, CmdOutcome::Rejected { .. }));
+    // A fresh remote gets the current snapshot: the set item says its song is gone.
+    let mut fresh = connect(&server, Role::Remote, "sacristan").await;
+    let items = next_remote_state(&mut fresh).await.active_set.unwrap().items;
+    assert_eq!(items[0].kind, sursum_protocol::SetItemKind::MissingSong);
+    assert_eq!(items[1].kind, sursum_protocol::SetItemKind::Song);
     // The screen keeps the frozen deck that was live (ADR 0005).
     let state = next_screen_state(&mut screen).await;
     assert_eq!(state.live.unwrap().deck.deck_id, shown.deck.deck_id);

@@ -101,6 +101,10 @@ pub enum Msg {
     ItemNumber,
     ScreenMissing,
     DeleteSong,
+    DeletedSong,
+    KindText,
+    KindImage,
+    KindPause,
     EditSet,
     DoneEditing,
     Remove,
@@ -240,6 +244,10 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ItemNumber => "Numer pozycji w zestawie",
         Msg::ScreenMissing => "Uwaga: ekran nie jest połączony z sursum",
         Msg::DeleteSong => "Usuń pieśń z bazy (przytrzymaj)",
+        Msg::DeletedSong => "(pieśń usunięta z bazy)",
+        Msg::KindText => "tekst",
+        Msg::KindImage => "obraz",
+        Msg::KindPause => "przerwa",
     }
 }
 
