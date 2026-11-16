@@ -8,15 +8,17 @@ milestone. ⚠ = assumption to verify in a spike before relying on it.
 - [x] Git repository, `.gitignore`, `.gitattributes`, `.editorconfig`
 - [x] License (GPL-3.0-or-later), README, CONTRIBUTING (DCO), `fixtures/LICENSES.md`
 - [x] Guidance files (`CLAUDE.md` ×4), docs, ADRs
-- [ ] Devcontainer (Debian trixie: rustup + `wasm32-unknown-unknown`, trunk 0.22, wasm-bindgen-cli matching Cargo.lock, binaryen, leptosfmt, zig + cargo-zigbuild, chromium + chromium-driver, cog + wpewebkit-webdriver; no Node/Python)
-- [ ] Cargo workspace: `sursum-protocol`, `sursum-core`, `sursum-formats`, `sursum-server`, `sursum-slide`, `sursum-client`, `apps/screen`, `apps/remote`, `e2e`; `default-members` = native crates; `rust-toolchain.toml`, `deny.toml`
-- [ ] Leptos 0.8 CSR skeletons for both apps with Trunk (`index.html`, `Trunk.toml` with `/api` + `/ws` proxy ⚠ WS proxy)
-- [ ] rust-embed serving both `apps/*/dist` ⚠ debug builds read from disk, ⚠ `allow_missing` when dist is absent
-- [ ] Bundled OFL fonts in `assets/fonts/` with `LICENSES.md`
-- [ ] `justfile`, SPDX check script, third-party license page (`cargo about` + fonts) at `/licenses`
-- [ ] First WebDriver test (thirtyfour + chromium-driver ⚠ in the container): screen opens with a black background
-- [ ] Same test on WPE WebKit: `wpewebkit-webdriver` + `cog --automation --platform=headless` ⚠ capability format (ADR 0015)
-- [ ] GitHub Actions CI (fmt, leptosfmt, clippy native + wasm32, nextest, wasm-bindgen-test, trunk build + WASM size check, WebDriver e2e (Chromium; screen subset also on WPE, blocking), cargo-deny, cross builds)
+- [x] Devcontainer definition (Debian trixie: rustup + `wasm32-unknown-unknown`, trunk 0.22, wasm-bindgen-cli 0.2.130, binaryen, leptosfmt, chromium + chromium-driver, cog + wpewebkit-webdriver; no Node/Python). Not yet built/tried in VS Code; zig + cargo-zigbuild still to add
+- [x] Browsers image for e2e (`e2e/browsers.Containerfile`, podman, host network): Chromium 156 + chromedriver, cog 0.18.4 + WPEWebDriver (WPE WebKit 2.48.3) + Mesa
+- [x] Cargo workspace: `sursum-protocol`, `sursum-core`, `sursum-formats`, `sursum-server`, `sursum-slide`, `sursum-client`, `apps/screen`, `apps/remote`, `e2e`; `default-members` = native crates; `rust-toolchain.toml`, `deny.toml`
+- [x] Leptos 0.8 CSR apps with Trunk (`index.html`, `Trunk.toml` with `/ws` proxy ⚠ WS proxy in `trunk serve` not yet tried)
+- [x] rust-embed serving both `apps/*/dist`; `allow_missing` verified (server compiles without a frontend build; `/screen/` then serves a black page)
+- [x] Bundled OFL fonts in `assets/fonts/` with `LICENSES.md` (Lato 400/700, latin + latin-ext)
+- [x] `justfile`, SPDX check script, `deny.toml` (licenses, bans, sources, advisories pass)
+- [ ] Third-party license page (`cargo about` + fonts) at `/licenses`
+- [x] First WebDriver tests (thirtyfour 0.38 + chromedriver in the container)
+- [x] Same tests on WPE WebKit: capability `wpe:browserOptions { binary: "cog", args: ["--automation", "--platform=headless", "--bg-color=black"] }` verified; WPE needs Mesa (`libgles2`, `libegl1`, `libgl1-mesa-dri`) or its renderer crashes
+- [x] GitHub Actions CI written, not yet run on GitHub (cross builds and wasm-bindgen-test still missing) (fmt, leptosfmt, clippy native + wasm32, nextest, wasm-bindgen-test, trunk build + WASM size check, WebDriver e2e (Chromium; screen subset also on WPE, blocking), cargo-deny, cross builds)
 
 **Done when:** `just dev` gives auto-reload for both apps with a working WS echo using
 `sursum-protocol` types; `just build` produces one binary serving both apps; the first WebDriver
@@ -24,20 +26,23 @@ test passes in Chromium and WPE; CI is green.
 
 ## M1 — Screen, remote and one song on a laptop
 
-- [ ] `sursum-protocol`: messages and snapshots with `insta` JSON snapshots
-- [ ] core: song model, slide compiler, program state machine (next/prev/goto/overlay), PD seed song
-- [ ] core: `content_region` (exclusion zones) and `ScreenLayout` in the snapshot; profile from `config.toml`
-- [ ] server: state actor, `watch` fan-out, `/ws/screen`, `/ws/remote`, `runtime_state` with `boot_id`
-- [ ] `sursum-slide`: `Stage`, `LayeredStage` (A/B + overlay + masks), `fit_deck` (pure algorithm + DOM measuring), local fonts
-- [ ] `sursum-client`: WebSocket with reconnect, heartbeat, stale-`rev` dropping; signal store
-- [ ] remote: current/next preview, next/prev, section chips, BLACK/LOGO
+- [x] `sursum-protocol`: messages and snapshots with `insta` JSON snapshots
+- [x] core: song model, slide compiler, program state machine (next/prev/goto/overlay, Stale rule, frozen deck), PD + synthetic demo songs
+- [x] core: `content_region` (exclusion zones) and `ScreenLayout` in the snapshot; profile from `config.toml`
+- [x] server: state actor, `watch` fan-out, `/ws/screen`, `/ws/remote`, Origin check, local-network guard, `runtime_state` with `boot_id` (migrations hand-rolled with `PRAGMA user_version`: `rusqlite_migration` 2.7 requires rusqlite 0.41)
+- [x] `sursum-slide`: `Stage`, `LayeredStage` (A/B + overlay + masks), `fit_deck` (pure algorithm + DOM measuring), local fonts
+- [x] `sursum-client`: WebSocket with reconnect (backoff + jitter), heartbeat, Hello/Welcome, build-id reload. No stale-`rev` dropping: messages arrive in order per connection and server revisions restart after a server restart, so clients apply every snapshot
+- [x] remote: current/next preview, next/prev, item prev/next, section chips, set list, BLACK/LOGO, pedal keys (PgDn/PgUp/arrows/space/B). UI texts via a compile-time message enum (`apps/remote/src/messages.rs`); `leptos_i18n` deferred until a second language is needed
 - [ ] On-site display power spike: `cec-ctl` on both displays (on / standby / power status), projector LAN (PJLink) and RS-232 check in Tulce; record result in ADR 0012
 - [ ] Hardware spike on a Pi 5: cage + Chromium (flags ⚠, cursor ⚠, white flash ⚠), crossfade smoothness; WPE/cog comparison (`--platform=drm`, `--bg-color=black`, `--webprocess-failure=exit`); first look at the Tulce pillar
-- [ ] Screen WebDriver subset blocking on WPE in CI; cross-engine fit test (WPE screen vs Chromium remote)
+- [x] Screen WebDriver tests pass on WPE locally; cross-engine fit test (WPE screen vs Chromium remote) passes. Blocking in CI once CI runs
 
 **Done when:** WebDriver tests pass (black first frame; last slide stays on disconnect; reconnect
 without a transition; one font size per song; preview matches screen font size and line count;
 text never enters an exclusion zone); manual run on a Linux laptop + Android tablet.
+
+Status 2026-11-16: all listed WebDriver tests pass on Chromium and (screen) WPE WebKit; the
+manual run on a laptop + tablet and both hardware spikes are still open.
 
 ## M2 — OpenSong import, library, search, editor
 

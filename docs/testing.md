@@ -1,13 +1,30 @@
 # Testing
 
-Commands become available during M0 (`justfile` is the source of truth). No Node or Python is
-needed: all tests are Rust.
+All tests are Rust; no Node or Python is needed.
 
 | Command | Runs |
 |---|---|
-| `just test` | Rust unit + integration tests (cargo-nextest), `wasm-bindgen-test` for `sursum-slide` and `sursum-client` in headless Chromium |
-| `just e2e` | WebDriver tests (`e2e/`, thirtyfour) against the built binary on a random port with a temporary data dir |
-| `just lint` | rustfmt, `leptosfmt --check`, clippy `-D warnings` (native and `wasm32-unknown-unknown`), SPDX check, cargo-deny |
+| `just test` | unit + integration tests (native), incl. pure frontend logic (`fit_font_size`, backoff, labels) |
+| `just e2e` | builds the web apps and an `e2e-hooks` server, then WebDriver tests: all on Chromium, then on WPE WebKit |
+| `just lint` | rustfmt, leptosfmt, clippy `-D warnings` (native and `wasm32-unknown-unknown`), SPDX check, cargo-deny |
+| `just screenshots [dir]` | PNG screenshots of the screen and the remote (needs `just browsers`) |
+
+## WebDriver servers
+
+The browsers run in a podman image with host networking, bound to localhost:
+
+```sh
+just browsers-image   # once: Chromium + chromedriver, cog + WPEWebDriver, Mesa
+just browsers         # chromedriver on :9515, WPEWebDriver on :9516
+just e2e
+just browsers-stop
+```
+
+Environment for `cargo test -p sursum-e2e -- --ignored`: `SURSUM_E2E_BROWSER=chromium|wpe`,
+`SURSUM_SERVER_BIN` (default `target/debug/sursum-server`), `SURSUM_WEBDRIVER_URL`. Each test
+starts its own server on a random port with a temporary data directory; the server's stderr is
+kept in that directory and printed if it fails to start. WPEWebDriver allows one session at a
+time, so tests always close their session (`with_browser`) and run with `--test-threads=1`.
 
 ## Layers
 

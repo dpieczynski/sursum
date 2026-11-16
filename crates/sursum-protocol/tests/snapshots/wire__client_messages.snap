@@ -1,0 +1,47 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: messages
+---
+[
+  {
+    "t": "hello",
+    "protocol": 1,
+    "role": "remote",
+    "client_id": "c1",
+    "build_id": "b"
+  },
+  {
+    "t": "cmd",
+    "seq": 3,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "next"
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 4,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "go_to",
+      "item_id": "item-2",
+      "slide_index": 1
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 5,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "set_overlay",
+      "overlay": "logo"
+    }
+  },
+  {
+    "t": "ping"
+  },
+  {
+    "t": "log",
+    "message": "font missing"
+  }
+]

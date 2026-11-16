@@ -1,0 +1,89 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: messages
+---
+[
+  {
+    "t": "welcome",
+    "protocol": 1,
+    "build_id": "b"
+  },
+  {
+    "t": "screen",
+    "state": {
+      "rev": 7,
+      "live": {
+        "deck": {
+          "deck_id": "0123456789abcdef",
+          "fit_group": "0123456789abcdef",
+          "item_id": "item-1",
+          "title": "Kiedy ranne wstają zorze",
+          "slides": [
+            {
+              "key": "v1#0@0",
+              "label": "v1",
+              "body": {
+                "kind": "lyrics",
+                "lines": [
+                  "Kiedy ranne wstają zorze,"
+                ]
+              }
+            }
+          ],
+          "background": {
+            "kind": "color",
+            "css": "#000000"
+          }
+        },
+        "slide_index": 0
+      },
+      "upcoming": null,
+      "overlay": "black",
+      "theme": {
+        "font_family": "Lato",
+        "font_weight": 700,
+        "text_color": "#ffffff",
+        "line_height_permille": 1250,
+        "text_align": "center",
+        "min_font_px": 36,
+        "max_font_px": 120
+      },
+      "transition_ms": 250,
+      "layout": {
+        "content": {
+          "x": 600,
+          "y": 48,
+          "width": 1272,
+          "height": 984
+        },
+        "masks": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 600,
+            "height": 1080
+          }
+        ]
+      }
+    }
+  },
+  {
+    "t": "cmd_result",
+    "seq": 3,
+    "outcome": {
+      "outcome": "stale",
+      "rev": 8
+    }
+  },
+  {
+    "t": "cmd_result",
+    "seq": 4,
+    "outcome": {
+      "outcome": "rejected",
+      "code": "not_found"
+    }
+  },
+  {
+    "t": "pong"
+  }
+]

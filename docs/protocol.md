@@ -46,8 +46,9 @@ Pong      { }
 ## Snapshots, not patches
 
 Each domain is small (a deck is a few KB, a set < 10 KB), so the server sends whole snapshots.
-There is no event log and no patch ordering. Clients drop messages with a `rev` lower than the
-last one seen.
+There is no event log and no patch ordering. Within one connection messages arrive in order, and
+after a reconnect the snapshot that follows `Welcome` replaces the client state; server revisions
+restart after a server restart, so clients apply every snapshot instead of comparing `rev`.
 
 ## Conflict rules
 

@@ -96,7 +96,8 @@ actor only receives the resulting `DisplayPowerState`, so navigation never waits
 
 ## Persistence
 
-SQLite in WAL mode with `synchronous=FULL`, `foreign_keys=ON`; daily and pre-import backups with
+SQLite in WAL mode with `synchronous=FULL`, `foreign_keys=ON`; schema migrations are plain SQL
+scripts applied in order and tracked with `PRAGMA user_version` (`sursum-server/src/db.rs`); daily and pre-import backups with
 `VACUUM INTO`; `quick_check` at startup with automatic restore of the last good backup.
 
 ## Device image and updates (ADR 0013)

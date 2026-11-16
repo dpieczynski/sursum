@@ -1,0 +1,11 @@
+{
+  "name": "sursum",
+  "build": { "dockerfile": "Containerfile" },
+  "forwardPorts": [8080, 8081, 8082],
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml", "skellock.just"]
+    }
+  },
+  "remoteUser": "root"
+}

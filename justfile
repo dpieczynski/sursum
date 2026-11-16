@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Developer commands. Run `just` to list them.
+
+export SURSUM_BUILD_ID := `git describe --always --dirty 2>/dev/null || echo dev`
+
+# List recipes.
+default:
+    @just --list
+
+# Build both web apps (WebAssembly) with Trunk.
+build-web:
+    cd apps/screen && trunk build --release
+    cd apps/remote && trunk build --release
+
+# Build the release server with both apps embedded.
+build: build-web
+    cargo build --release -p sursum-server
+
+# Run the server and both apps with auto-reload (server :8080, remote :8081, screen :8082).
+dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'kill 0' EXIT
+    cargo run -p sursum-server -- --data-dir sursum-data --listen 127.0.0.1:8080 \
+        --allow-origin http://127.0.0.1:8081 --allow-origin http://localhost:8081 \
+        --allow-origin http://127.0.0.1:8082 --allow-origin http://localhost:8082 &
+    (cd apps/remote && trunk serve) &
+    (cd apps/screen && trunk serve) &
+    wait
+
+# Unit and integration tests (native).
+test:
+    cargo test --workspace
+    cargo test -p sursum-slide -p sursum-client -p sursum-remote
+
+# Build the image with browsers and WebDriver servers for the end-to-end tests.
+browsers-image:
+    podman build -t localhost/sursum-browsers -f e2e/browsers.Containerfile e2e
+
+# Start chromedriver (:9515) and WPEWebDriver (:9516) in the background, on localhost only.
+browsers:
+    podman run -d --rm --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
+    podman run -d --rm --name sursum-wpedriver --network host localhost/sursum-browsers WPEWebDriver --port=9516
+
+# Stop the WebDriver containers.
+browsers-stop:
+    -podman stop sursum-chromedriver sursum-wpedriver
+
+# End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015).
+e2e: build-web
+    cargo build -p sursum-server --features e2e-hooks
+    SURSUM_E2E_BROWSER=chromium cargo test -p sursum-e2e -- --ignored --test-threads=1
+    SURSUM_E2E_BROWSER=wpe cargo test -p sursum-e2e -- --ignored --test-threads=1
+
+# Screenshots of the screen and the remote, for a quick visual check.
+screenshots dir="screenshots": build-web
+    cargo build -p sursum-server
+    cargo run -p sursum-e2e --example screenshots -- {{dir}}
+
+# Formatting, lints (native and wasm32), SPDX headers and dependency policy.
+lint:
+    cargo fmt --all --check
+    leptosfmt --check crates/sursum-slide apps
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy -p sursum-slide -p sursum-client -p sursum-screen -p sursum-remote --target wasm32-unknown-unknown -- -D warnings
+    scripts/check-spdx.sh
+    cargo deny check
+
+# Cross-compile the server for the Raspberry Pi (needs zig and cargo-zigbuild).
+cross-pi: build-web
+    cargo zigbuild --release -p sursum-server --target aarch64-unknown-linux-gnu.2.36
+
+# Cross-compile the server for Windows (needs zig and cargo-zigbuild).
+cross-win: build-web
+    cargo zigbuild --release -p sursum-server --target x86_64-pc-windows-gnu

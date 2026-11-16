@@ -12,7 +12,9 @@ use leptos::ev;
 use leptos::prelude::*;
 use messages::{Msg, pl, section_label};
 use sursum_client::{Client, Status, needs_reload};
-use sursum_protocol::{ClientMsg, CmdOutcome, Command, Overlay, RemoteState, Role, ServerMsg};
+use sursum_protocol::{
+    ClientMsg, CmdOutcome, Command, ItemId, Overlay, RemoteState, Role, SectionJump, ServerMsg, SetItemView,
+};
 use sursum_slide::{PreviewData, SlidePreview};
 
 fn main() {
@@ -147,77 +149,62 @@ fn Previews(state: RwSignal<Option<RemoteState>>) -> impl IntoView {
 
 #[component]
 fn SectionChips(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let current = move || {
+    let current = Signal::derive(move || {
         state.with(|state| state.as_ref().and_then(|s| s.program.live.as_ref().map(|live| live.slide_index)))
+    });
+    let chips = move || {
+        let sections =
+            state.with(|state| state.as_ref().map(|state| state.sections.clone()).unwrap_or_default());
+        let ends: Vec<u32> =
+            sections.iter().skip(1).map(|next| next.slide_index).chain(std::iter::once(u32::MAX)).collect();
+        sections.into_iter().zip(ends).map(|(jump, end)| chip(jump, end, current, commands)).collect_view()
     };
-    let chips =
-        move || state.with(|state| state.as_ref().map(|state| state.sections.clone()).unwrap_or_default());
+    view! { <nav class="chips">{chips}</nav> }
+}
+
+/// One section button; highlighted while the live slide is inside its section.
+fn chip(jump: SectionJump, end: u32, current: Signal<Option<u32>>, commands: Commands) -> impl IntoView {
+    let start = jump.slide_index;
+    let active = move || current.get().is_some_and(|index| index >= start && index < end);
+    let jump_here = move |_| commands.send(Command::GoToSlide { slide_index: start });
+    let label = section_label(&jump.label);
     view! {
-        <nav class="chips">
-            {move || {
-                let sections = chips();
-                sections
-                    .iter()
-                    .enumerate()
-                    .map(|(position, jump)| {
-                        let start = jump.slide_index;
-                        let end = sections.get(position + 1).map_or(u32::MAX, |next| next.slide_index);
-                        let active = move || current().is_some_and(|index| index >= start && index < end);
-                        view! {
-                            <button
-                                class="chip"
-                                class:active=active
-                                on:click=move |_| commands.send(Command::GoToSlide { slide_index: start })
-                            >
-                                {section_label(&jump.label)}
-                            </button>
-                        }
-                    })
-                    .collect_view()
-            }}
-        </nav>
+        <button class="chip" class:active=active on:click=jump_here>
+            {label}
+        </button>
     }
 }
 
 #[component]
 fn SetList(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let live_item = move || {
+    let live_item = Signal::derive(move || {
         state.with(|state| {
             state.as_ref().and_then(|s| s.program.live.as_ref().map(|live| live.deck.item_id.clone()))
         })
-    };
-    let items = move || {
-        state.with(|state| {
+    });
+    let rows = move || {
+        let items = state.with(|state| {
             state
                 .as_ref()
                 .and_then(|s| s.active_set.as_ref().map(|set| set.items.clone()))
                 .unwrap_or_default()
-        })
+        });
+        items.into_iter().map(|item| set_row(item, live_item, commands)).collect_view()
     };
+    view! { <ul class="set-list">{rows}</ul> }
+}
+
+/// One entry of the set; tapping it shows the item's first slide.
+fn set_row(item: SetItemView, live_item: Signal<Option<ItemId>>, commands: Commands) -> impl IntoView {
+    let number = item.number;
+    let is_live = move || live_item.with(|live| live.as_ref() == Some(&item.item_id));
+    let title = if item.title.is_empty() { pl(Msg::Untitled).to_owned() } else { item.title.clone() };
+    let show = move |_| commands.send(Command::GoToItemNumber { number });
     view! {
-        <ul class="set-list">
-            {move || {
-                items()
-                    .into_iter()
-                    .map(|item| {
-                        let number = item.number;
-                        let item_id = item.item_id.clone();
-                        let is_live = move || live_item().as_ref() == Some(&item_id);
-                        let title = if item.title.is_empty() { pl(Msg::Untitled).to_owned() } else { item.title };
-                        view! {
-                            <li
-                                class="set-item"
-                                class:live=is_live
-                                on:click=move |_| commands.send(Command::GoToItemNumber { number })
-                            >
-                                <span class="number">{number}</span>
-                                <span>{title}</span>
-                            </li>
-                        }
-                    })
-                    .collect_view()
-            }}
-        </ul>
+        <li class="set-item" class:live=is_live on:click=show>
+            <span class="number">{number}</span>
+            <span>{title}</span>
+        </li>
     }
 }
 
@@ -231,11 +218,21 @@ fn Controls(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl In
     };
     view! {
         <footer class="controls">
-            <button class="prev-item" on:click=move |_| commands.send(Command::PrevItem)>{pl(Msg::PrevItem)}</button>
-            <button class="next-item" on:click=move |_| commands.send(Command::NextItem)>{pl(Msg::NextItem)}</button>
-            <button class="logo" class:active=move || overlay() == Overlay::Logo on:click=toggle_logo>{pl(Msg::Logo)}</button>
-            <button class="next" data-testid="next" on:click=move |_| commands.send(Command::Next)>{pl(Msg::Next)}</button>
-            <button class="prev" data-testid="prev" on:click=move |_| commands.send(Command::Prev)>{pl(Msg::Prev)}</button>
+            <button class="prev-item" on:click=move |_| commands.send(Command::PrevItem)>
+                {pl(Msg::PrevItem)}
+            </button>
+            <button class="next-item" on:click=move |_| commands.send(Command::NextItem)>
+                {pl(Msg::NextItem)}
+            </button>
+            <button class="logo" class:active=move || overlay() == Overlay::Logo on:click=toggle_logo>
+                {pl(Msg::Logo)}
+            </button>
+            <button class="next" data-testid="next" on:click=move |_| commands.send(Command::Next)>
+                {pl(Msg::Next)}
+            </button>
+            <button class="prev" data-testid="prev" on:click=move |_| commands.send(Command::Prev)>
+                {pl(Msg::Prev)}
+            </button>
             <button
                 class="black"
                 data-testid="black"

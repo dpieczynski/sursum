@@ -52,12 +52,24 @@ pub fn SlidePreview(
             let masks = data.layout.masks.clone();
             Some(view! {
                 <div class="sursum-layer" style=background>
-                    <SlideView slide theme=data.theme content=data.layout.content font_px=fit.font_px wrap=fit.wrap />
+                    <SlideView
+                        slide
+                        theme=data.theme
+                        content=data.layout.content
+                        font_px=fit.font_px
+                        wrap=fit.wrap
+                    />
                 </div>
                 {masks
                     .into_iter()
                     .map(|rect| {
-                        let style = format!("left:{}px;top:{}px;width:{}px;height:{}px;", rect.x, rect.y, rect.width, rect.height);
+                        let style = format!(
+                            "left:{}px;top:{}px;width:{}px;height:{}px;",
+                            rect.x,
+                            rect.y,
+                            rect.width,
+                            rect.height,
+                        );
                         view! { <div class="sursum-mask sursum-mask-preview" style=style></div> }
                     })
                     .collect_view()}
@@ -65,13 +77,18 @@ pub fn SlidePreview(
         })
     };
 
+    // Test hooks: the fitted size and line count, compared with the screen in end-to-end tests.
+    let font_px_attr = move || fit.with(|fit| fit.as_ref().map(|(_, fit)| fit.font_px.to_string()));
+    let line_count_attr = move || fit.with(|fit| fit.as_ref().map(|(data, _)| line_count(data).to_string()));
+    let opacity = move || if dimmed.get() { "0.35" } else { "1" };
+
     view! {
         <Stage class=format!("sursum-preview {class}")>
             <div
                 class="sursum-layer"
-                style:opacity=move || if dimmed.get() { "0.35" } else { "1" }
-                data-font-px=move || fit.with(|fit| fit.as_ref().map(|(_, fit)| fit.font_px.to_string()).unwrap_or_default())
-                data-line-count=move || fit.with(|fit| fit.as_ref().map(|(data, _)| line_count(data).to_string()).unwrap_or_default())
+                style:opacity=opacity
+                data-font-px=font_px_attr
+                data-line-count=line_count_attr
             >
                 {content}
             </div>

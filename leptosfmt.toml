@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Formatting of Leptos view! macros; matches rustfmt.toml.
+max_width = 110
+tab_spaces = 4

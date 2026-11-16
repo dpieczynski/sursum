@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Lint, test, build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Rust toolchain from rust-toolchain.toml
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,leptosfmt@0.1.33,cargo-deny@0.20.2
+      - run: just lint
+      - run: just test
+      - run: just build
+      - name: WebAssembly size report
+        run: ls -l apps/*/dist/*.wasm
+
+  e2e:
+    name: End-to-end (Chromium and WPE WebKit)
+    runs-on: ubuntu-24.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130
+      - run: just browsers-image
+      - run: just browsers
+      - run: just e2e
+      - if: always()
+        run: just browsers-stop

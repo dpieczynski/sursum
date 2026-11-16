@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Development container: Rust toolchain for native and WebAssembly builds, Trunk, and the
+# browsers/WebDriver servers used by the end-to-end tests. No Node, npm or Python.
+FROM docker.io/library/debian:trixie
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential ca-certificates curl git pkg-config just \
+      binaryen \
+      chromium chromium-driver cog wpewebkit-webdriver libgles2 libegl1 libgl1-mesa-dri fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
+# The toolchain version comes from rust-toolchain.toml on first use.
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none \
+ && chmod -R a+w "$RUSTUP_HOME" "$CARGO_HOME"
+
+# Tools pinned to the versions used by the project (wasm-bindgen-cli must match Cargo.lock).
+RUN rustup toolchain install 1.100 --profile minimal --component rustfmt,clippy --target wasm32-unknown-unknown \
+ && cargo install --locked cargo-binstall \
+ && cargo binstall --no-confirm trunk@0.22.1 wasm-bindgen-cli@0.2.130 leptosfmt@0.1.33 cargo-deny@0.20.2 cargo-nextest \
+ && chmod -R a+w "$CARGO_HOME"
+
+ENV XDG_RUNTIME_DIR=/tmp

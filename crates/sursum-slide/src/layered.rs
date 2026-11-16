@@ -75,35 +75,33 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
         state.with(|state| state.as_ref().map(|state| state.layout.masks.clone()).unwrap_or_default())
     };
 
+    // Test hooks for the WebDriver suite (ADR 0015): what is shown and how often it changed.
+    let deck_id_attr = move || shown().map(|shown| shown.deck_id.0).unwrap_or_default();
+    let slide_key_attr = move || shown().map(|shown| shown.slide.key.0).unwrap_or_default();
+    let font_px_attr = move || shown().map(|shown| shown.fit.font_px.to_string()).unwrap_or_default();
+    let transitions_attr = move || transitions.get().to_string();
+    let overlay_attr = move || overlay_name(overlay());
+    let mask_views = move || masks().into_iter().map(mask_view).collect_view();
+    let overlay_style = move || format!("z-index:10;transition-duration:{}ms;", overlay_ms());
+
     view! {
         <Stage class="sursum-screen">
             <div
                 class="sursum-layer"
-                data-deck-id=move || shown().map(|shown| shown.deck_id.0).unwrap_or_default()
-                data-slide-key=move || shown().map(|shown| shown.slide.key.0).unwrap_or_default()
-                data-font-px=move || shown().map(|shown| shown.fit.font_px.to_string()).unwrap_or_default()
-                data-transitions=move || transitions.get().to_string()
-                data-overlay=move || overlay_name(overlay())
+                data-deck-id=deck_id_attr
+                data-slide-key=slide_key_attr
+                data-font-px=font_px_attr
+                data-transitions=transitions_attr
+                data-overlay=overlay_attr
             >
                 {layer_view(layers[0], layer_refs[0])}
                 {layer_view(layers[1], layer_refs[1])}
                 <div class="sursum-layer sursum-measure" node_ref=measurer></div>
-                {move || {
-                    masks()
-                        .into_iter()
-                        .map(|rect| {
-                            let style = format!(
-                                "left:{}px;top:{}px;width:{}px;height:{}px;z-index:5;",
-                                rect.x, rect.y, rect.width, rect.height,
-                            );
-                            view! { <div class="sursum-mask" style=style></div> }
-                        })
-                        .collect_view()
-                }}
+                {mask_views}
                 <div
                     class="sursum-overlay"
                     class:visible=move || overlay() != Overlay::None
-                    style=move || format!("z-index:10;transition-duration:{}ms;", overlay_ms())
+                    style=overlay_style
                 ></div>
             </div>
         </Stage>
@@ -182,7 +180,12 @@ fn layer_view(shown: RwSignal<Option<Shown>>, node_ref: NodeRef<Div>) -> impl In
         <div
             class="sursum-layer"
             node_ref=node_ref
-            style=move || shown.with(|shown| shown.as_ref().map(|shown| background_style(&shown.background)).unwrap_or_default())
+            style=move || {
+                shown
+                    .with(|shown| {
+                        shown.as_ref().map(|shown| background_style(&shown.background)).unwrap_or_default()
+                    })
+            }
         >
             {move || {
                 shown
@@ -216,4 +219,13 @@ fn overlay_name(overlay: Overlay) -> &'static str {
         Overlay::Black => "black",
         Overlay::Logo => "logo",
     }
+}
+
+/// A black rectangle over an exclusion zone (above content, below the overlay).
+fn mask_view(rect: sursum_protocol::Rect) -> impl IntoView {
+    let style = format!(
+        "left:{}px;top:{}px;width:{}px;height:{}px;z-index:5;",
+        rect.x, rect.y, rect.width, rect.height
+    );
+    view! { <div class="sursum-mask" style=style></div> }
 }

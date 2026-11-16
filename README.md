@@ -25,9 +25,22 @@ preview is the same component as the screen. Details: [docs/architecture.md](doc
 
 ## Development
 
-The dev environment is a devcontainer (Rust with the `wasm32-unknown-unknown` target, Trunk,
-Chromium + chromedriver for WebDriver tests). No Node or npm. Setup instructions arrive with
-milestone M0; see [docs/testing.md](docs/testing.md) and [CLAUDE.md](CLAUDE.md) for commands.
+Requirements: rustup (the toolchain comes from `rust-toolchain.toml`), `trunk` 0.22,
+`wasm-bindgen-cli` 0.2.130 (must match `Cargo.lock`), `just`, and podman for the browser tests.
+The devcontainer in `.devcontainer/` has all of them. No Node or npm.
+
+```sh
+just build                       # web apps (Trunk) + release server with the apps embedded
+target/release/sursum-server --data-dir sursum-data --listen 127.0.0.1:8080
+# screen: http://127.0.0.1:8080/screen/   remote: http://127.0.0.1:8080/remote/
+just dev                         # server + both apps with auto-reload (:8080, :8081, :8082)
+just test && just lint
+just browsers-image && just browsers && just e2e
+```
+
+The demo set contains a public-domain hymn, a synthetic song and an announcement. A
+`config.toml` in the data directory sets the listen address, the crossfade duration and the screen
+profile (safe area, exclusion zones); see `crates/sursum-server/src/config.rs`.
 
 ## Contributing
 
