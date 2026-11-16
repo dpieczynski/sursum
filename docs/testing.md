@@ -9,6 +9,7 @@ All tests are Rust; no Node or Python is needed.
 | `just e2e` | builds the web apps and an `e2e-hooks` server, then WebDriver tests: all on Chromium, then on WPE WebKit |
 | `just lint` | rustfmt, leptosfmt, clippy `-D warnings` (native and `wasm32-unknown-unknown`), SPDX check, cargo-deny |
 | `just screenshots [dir]` | PNG screenshots of the screen and the remote (needs `just browsers`) |
+| `just remote-sizes [dir]` | PNG screenshots of the remote at 360×800, 800×1280 and 1280×800, operator and admin (needs `just browsers`) |
 
 ## WebDriver servers
 

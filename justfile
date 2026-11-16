@@ -64,6 +64,11 @@ screenshots dir="screenshots": build-web
     cargo build -p sursum-server
     cargo run -p sursum-e2e --example screenshots -- {{dir}}
 
+# Screenshots of the remote on a phone, an upright and a landscape tablet (operator and admin).
+remote-sizes dir="remote-sizes": build-web
+    cargo build -p sursum-server
+    cargo run -p sursum-e2e --example remote_sizes -- {{dir}}
+
 # Regenerate the third-party license notices served at /licenses (commit the result).
 licenses:
     cargo about generate --fail -m crates/sursum-server/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs

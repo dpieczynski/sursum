@@ -56,6 +56,11 @@ impl Server {
         Self::start_prepared(&[], Some("transition_ms = 0\n"), Access::Pin(pin)).await
     }
 
+    /// Starts a server with a `config.toml` whose remotes must pair with `pin`.
+    pub async fn start_configured_with_pin(pin: &str, config_toml: &str) -> anyhow::Result<Server> {
+        Self::start_prepared(&[], Some(config_toml), Access::Pin(pin)).await
+    }
+
     /// Starts a server as freshly installed: no PIN, so the first remote must set one.
     pub async fn start_new_device() -> anyhow::Result<Server> {
         Self::start_prepared(&[], Some("transition_ms = 0\n"), Access::NewDevice).await
@@ -138,7 +143,29 @@ impl Server {
 
     /// Connects a scripted remote.
     pub async fn remote(&self, name: &str) -> anyhow::Result<Remote> {
-        Remote::connect(self.addr, name).await
+        Remote::connect(self.addr, name, None).await
+    }
+
+    /// Pairs a scripted remote with `pin` (`POST /api/pair`) and connects it with the cookie.
+    pub async fn paired_remote(&self, name: &str, pin: &str) -> anyhow::Result<Remote> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let body =
+            serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: name.into() })?;
+        let mut stream = tokio::net::TcpStream::connect(self.addr).await?;
+        let request = format!(
+            "POST /api/pair HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(request.as_bytes()).await?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await?;
+        let cookie = response
+            .lines()
+            .find_map(|line| line.strip_prefix("set-cookie: "))
+            .and_then(|value| value.split(';').next())
+            .with_context(|| format!("pairing refused: {response}"))?
+            .to_owned();
+        Remote::connect(self.addr, name, Some(&cookie)).await
     }
 
     /// Uploads a picture like the remote does (`POST /api/assets`) and returns its id.
@@ -177,8 +204,13 @@ pub struct Remote {
 }
 
 impl Remote {
-    async fn connect(addr: SocketAddr, name: &str) -> anyhow::Result<Remote> {
-        let (socket, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws/remote")).await?;
+    async fn connect(addr: SocketAddr, name: &str, cookie: Option<&str>) -> anyhow::Result<Remote> {
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
+        let mut request = format!("ws://{addr}/ws/remote").into_client_request()?;
+        if let Some(cookie) = cookie {
+            request.headers_mut().insert("cookie", cookie.parse()?);
+        }
+        let (socket, _) = tokio_tungstenite::connect_async(request).await?;
         let mut remote = Remote { socket, seq: 0 };
         let hello = ClientMsg::Hello {
             protocol: PROTOCOL_VERSION,
