@@ -21,6 +21,7 @@ pub mod library;
 pub mod licenses;
 pub mod limits;
 pub mod platform;
+pub mod service;
 pub mod sets;
 pub mod ws;
 
@@ -72,6 +73,7 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?));
     let state = actor::spawn(&config, database, platform)?;
     let power = display_power::spawn(&config.display_power, state.clone());
+    let state_for_watchdog = state.clone();
     let router = http::router(state, &config, access, power);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
@@ -86,5 +88,11 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
             .context("serving HTTP")
     });
     tracing::info!(%addr, build = BUILD_ID, "sursum server listening");
+    service::ready();
+    let watched = state_for_watchdog;
+    service::spawn_watchdog(move || {
+        let state = watched.clone();
+        async move { state.alive().await }
+    });
     Ok(RunningServer { addr, shutdown: Some(shutdown), task })
 }

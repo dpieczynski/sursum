@@ -86,6 +86,12 @@ impl StateHandle {
         stored.await.unwrap_or(false)
     }
 
+    /// True if the state actor answers (for the systemd watchdog).
+    pub async fn alive(&self) -> bool {
+        let (reply, answer) = oneshot::channel();
+        self.requests.send(Request::Ping { reply }).await.is_ok() && answer.await.is_ok()
+    }
+
     /// Records the display's power state (from the display power task).
     pub async fn display_power_changed(&self, state: DisplayPowerState) {
         let _ = self.requests.send(Request::DisplayPower { state }).await;
@@ -171,6 +177,9 @@ enum Request {
     },
     DisplayPower {
         state: DisplayPowerState,
+    },
+    Ping {
+        reply: oneshot::Sender<()>,
     },
     Devices {
         reply: oneshot::Sender<Vec<(String, String, String, String)>>,
@@ -272,6 +281,9 @@ pub fn spawn(
                             remote_tx.send_replace(Arc::new(state.remote_state()));
                         }
                         let _ = reply.send(report);
+                    }
+                    Request::Ping { reply } => {
+                        let _ = reply.send(());
                     }
                     Request::DisplayPower { state: power } => {
                         state.display_power = power;
