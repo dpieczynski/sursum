@@ -130,7 +130,7 @@ impl Database {
         let mut statement =
             self.connection.prepare("SELECT body_json FROM songs WHERE deleted_at IS NULL ORDER BY title")?;
         let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
-        rows.map(|json| Ok(serde_json::from_str(&json?).context("decoding a stored song")?)).collect()
+        rows.map(|json| serde_json::from_str(&json?).context("decoding a stored song")).collect()
     }
 
     /// Inserts a song or, if its content changed, stores a new revision (keeping the old one in
