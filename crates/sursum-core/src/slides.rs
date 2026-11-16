@@ -10,6 +10,8 @@
 use sha2::{Digest, Sha256};
 use sursum_protocol::{Background, Deck, DeckId, ItemId, Slide, SlideBody, SlideKey};
 
+#[cfg(test)]
+use crate::model::Line;
 use crate::model::{BreakKind, LinesBlock, Song, Verse, VerseName};
 
 /// Settings that control how verses are split into slides.
@@ -93,7 +95,7 @@ fn split_verse(blocks: &[LinesBlock], max_lines: usize) -> Vec<Vec<String>> {
             continue;
         }
         if total <= max_lines {
-            chunks.push(segment.iter().flat_map(|block| block.lines.iter().cloned()).collect());
+            chunks.push(segment.iter().flat_map(|block| block.texts().map(str::to_owned)).collect());
             continue;
         }
         for group in optional_groups(&segment, max_lines) {
@@ -125,7 +127,7 @@ fn optional_groups(segment: &[&LinesBlock], max_lines: usize) -> Vec<Vec<String>
         if !current.is_empty() && !fits {
             groups.push(std::mem::take(&mut current));
         }
-        current.extend(block.lines.iter().cloned());
+        current.extend(block.texts().map(str::to_owned));
     }
     if !current.is_empty() {
         groups.push(current);
@@ -197,12 +199,20 @@ mod tests {
         (1..=count).map(|n| format!("linia {n}")).collect()
     }
 
+    fn block(count: usize, break_after: BreakKind) -> LinesBlock {
+        LinesBlock { lines: lines(count).into_iter().map(Line::text).collect(), break_after }
+    }
+
     fn song(verses: Vec<Verse>, order: &[&str]) -> Song {
         Song {
             id: SongId::from("song"),
             titles: vec!["Pieśń".to_owned()],
             authors: vec![],
             songbooks: vec![],
+            copyright: None,
+            ccli: None,
+            themes: vec![],
+            extra: Default::default(),
             verse_order: order.iter().map(|name| VerseName::new(name)).collect(),
             verses,
         }
@@ -245,10 +255,7 @@ mod tests {
         let verse = Verse {
             name: VerseName::new("v1"),
             label: None,
-            blocks: vec![
-                LinesBlock { lines: lines(2), break_after: BreakKind::Forced },
-                LinesBlock { lines: lines(2), break_after: BreakKind::None },
-            ],
+            blocks: vec![block(2, BreakKind::Forced), block(2, BreakKind::None)],
         };
         let deck = compile_song(&song(vec![verse], &[]), &ItemId::from("i"), None, SlideRules::default());
         assert_eq!(keys(&deck), ["v1#0@0", "v1#1@0"]);
@@ -259,10 +266,7 @@ mod tests {
         let verse = |count| Verse {
             name: VerseName::new("v1"),
             label: None,
-            blocks: vec![
-                LinesBlock { lines: lines(count), break_after: BreakKind::Optional },
-                LinesBlock { lines: lines(count), break_after: BreakKind::None },
-            ],
+            blocks: vec![block(count, BreakKind::Optional), block(count, BreakKind::None)],
         };
         let short = compile_song(&song(vec![verse(2)], &[]), &ItemId::from("i"), None, SlideRules::default());
         assert_eq!(short.slides.len(), 1);
@@ -283,7 +287,7 @@ mod tests {
         let mut b = a.clone();
         let id = |song: &Song| compile_song(song, &ItemId::from("i"), None, SlideRules::default()).deck_id;
         assert_eq!(id(&a), id(&b));
-        b.verses[0].blocks[0].lines[0] = "zmiana".to_owned();
+        b.verses[0].blocks[0].lines[0] = Line::text("zmiana");
         assert_ne!(id(&a), id(&b));
     }
 

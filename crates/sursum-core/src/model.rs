@@ -29,12 +29,70 @@ pub enum BreakKind {
     Optional,
 }
 
+/// A chord placed above a lyric line, at a character position (OpenSong `.` chord lines).
+/// Stored so imports are lossless and exports can keep them; not shown on the screen.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChordAt {
+    /// Position in characters (not bytes) within the line's text.
+    pub position: usize,
+    pub chord: String,
+}
+
+/// One line of lyrics. In JSON a line without chords is just a string.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(from = "LineRepr", into = "LineRepr")]
+pub struct Line {
+    pub text: String,
+    pub chords: Vec<ChordAt>,
+}
+
+impl Line {
+    /// A line without chords.
+    pub fn text(text: impl Into<String>) -> Self {
+        Line { text: text.into(), chords: Vec::new() }
+    }
+}
+
+/// Compact JSON form of [`Line`]: a plain string when there are no chords.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum LineRepr {
+    Text(String),
+    WithChords { text: String, chords: Vec<ChordAt> },
+}
+
+impl From<LineRepr> for Line {
+    fn from(repr: LineRepr) -> Self {
+        match repr {
+            LineRepr::Text(text) => Line::text(text),
+            LineRepr::WithChords { text, chords } => Line { text, chords },
+        }
+    }
+}
+
+impl From<Line> for LineRepr {
+    fn from(line: Line) -> Self {
+        if line.chords.is_empty() {
+            LineRepr::Text(line.text)
+        } else {
+            LineRepr::WithChords { text: line.text, chords: line.chords }
+        }
+    }
+}
+
 /// A run of lines inside a verse.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LinesBlock {
-    pub lines: Vec<String>,
+    pub lines: Vec<Line>,
     #[serde(default)]
     pub break_after: BreakKind,
+}
+
+impl LinesBlock {
+    /// The plain text of each line.
+    pub fn texts(&self) -> impl Iterator<Item = &str> {
+        self.lines.iter().map(|line| line.text.as_str())
+    }
 }
 
 /// One verse, chorus, bridge…
@@ -54,7 +112,7 @@ impl Verse {
             name: VerseName::new(name),
             label: None,
             blocks: vec![LinesBlock {
-                lines: lines.iter().map(|line| (*line).to_owned()).collect(),
+                lines: lines.iter().map(|line| Line::text(*line)).collect(),
                 break_after: BreakKind::None,
             }],
         }
@@ -84,10 +142,20 @@ pub struct Song {
     pub authors: Vec<String>,
     #[serde(default)]
     pub songbooks: Vec<SongbookEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copyright: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ccli: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub themes: Vec<String>,
     /// Presentation order; empty means "verses in the order they are written".
     #[serde(default)]
     pub verse_order: Vec<VerseName>,
     pub verses: Vec<Verse>,
+    /// Imported fields without a dedicated place (e.g. OpenSong `key`, `capo`, `user1`), kept so
+    /// nothing is lost on import and can be exported again.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub extra: std::collections::BTreeMap<String, String>,
 }
 
 impl Song {
@@ -141,6 +209,18 @@ impl ServiceSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lines_without_chords_serialize_as_strings() {
+        let block: LinesBlock = serde_json::from_str(
+            r#"{"lines": ["a", {"text": "b", "chords": [{"position": 0, "chord": "G"}]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(block.lines[0], Line::text("a"));
+        assert_eq!(block.lines[1].chords[0].chord, "G");
+        let json = serde_json::to_string(&block.lines[0]).unwrap();
+        assert_eq!(json, r#""a""#);
+    }
 
     #[test]
     fn verse_names_are_lowercase() {

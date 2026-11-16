@@ -25,27 +25,45 @@ From <https://opensong.org/documentation/getting-started/>:
 - Each section starts a new slide; `||` forces a slide break inside a section.
 - Song title is also the file name.
 
-## To verify in M2 ⚠
+## Observed in a real Polish library (2026-11-16)
 
-Check against the OpenSong in-app help, the public OpenSong repository documentation and real
-files (the parish library in `/local/`):
+Statistics over 875 songs of a public Polish OpenSong songbook (markup only; no text was copied):
+all UTF-8 without BOM; the element is `time_sig` (the spec says `timesig`; both are accepted);
+`linked_songs` and `backgrounds` appear; headers `[V1]`, `[C]`, `[C2]`, lower-case `[v1]`,
+suffixed `[V1A]`, and `[R1]`/`[R2]` (Polish *refren*) referenced as `C1`/`C2` in the presentation;
+presentation tokens `1` meaning `V1`; a single `|` at the end of lines; occasional stray `.` or `/`
+lines; typos in presentation orders (`CV2`, `V78`). The importer now handles all of these (typos are
+reported). Result: 875 songs, 0 failures, 6291 slides, 9 warnings (all genuine typos).
 
-- `;` comment lines; other leading characters
-- numbered lyric lines (`1`, `2`, … at line start inside `[V]`) expanding into V1, V2 with a shared
-  chord line
-- `|` single bar (line break?), `---`, `_`, `-`
-- default order when `<presentation>` is empty; separators and case in `presentation`
-- song references in sets: `name` + `path` attributes; `presentation` override on a set entry
-- `image` slide groups (embedded image data?), other group types (`style`, external/video)
-- `Songs/` subfolders, files without extension, BOM, CRLF, `&#13;` entities, legacy codepages
-  (windows-1250 / ISO-8859-2 for Polish)
+## Implemented rules (`crates/sursum-formats/src/opensong/`)
+
+- Section headers map to OpenLyrics names: `V1`→`v1`, `C`→`c`, **`R`→`c`** (Polish refrain),
+  `B`→`b`, `P`→`p`, `T`/`E`→`e`, `I`→`i`, `1`…`9`→`v1`…`v9`, `V1A`→`v1a`; anything else → `o<n>`
+  with the header as label. Case-insensitive.
+- Presentation tokens resolve case-insensitively; `C1` ≡ `C` and `V1` ≡ `V`; unknown → warning.
+- `;` comments are dropped; `.` lines are chords attached to the next lyric line (positions kept,
+  not displayed); a line starting with another character is kept with a warning.
+- `||` forces a new slide; `|` breaks the line; empty fragments are dropped (so a trailing `|`
+  adds nothing).
+- Numbered lines (`1 …`, `2 …`) inside a section become verses `<kind>1`, `<kind>2`, sharing the
+  chord line above them. ⚠ Inferred from OpenSong usage; not seen in the sample library.
+- Duplicate section headers are merged with a slide break and a warning.
+- Encoding: BOM, then the declared encoding, then UTF-8, then windows-1250 (with a warning).
+- Song ids derive from the path inside `Songs/`, so re-importing updates instead of duplicating.
+
+## Still to verify ⚠
+
+- `_` and `-` inside lyric lines (not seen in the sample; kept as text);
+- set files: `image` slide groups, `presentation` override on song entries, `style` groups;
+- legacy encodings in real parish files.
 
 ## Mapping to the internal model (OpenLyrics 0.9-compatible)
 
 | OpenSong | sursum / OpenLyrics |
 |---|---|
 | `[V1]`, `[C]`, `[B]`, `[P]` | verse names `v1`, `c`, `b`, `p` |
-| `[T]` | `e` (ending/tag) ⚠ confirm meaning |
+| `[T]` | `e` (ending/tag) |
+| `[R]`, `[R1]` | `c`, `c1` (Polish *refren*) |
 | custom `[Name]` | `o<n>` with `label = "Name"` |
 | `||` | new `LinesBlock` with `Forced` break (export: separate `<lines>`) |
 | chord line `.` | chords attached to the next lyric line (stored, not displayed in MVP) |

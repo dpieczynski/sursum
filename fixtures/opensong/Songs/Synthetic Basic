@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song>
+  <title>Syntetyczna pieśń podstawowa</title>
+  <author>sursum (tekst syntetyczny)</author>
+  <copyright>CC0</copyright>
+  <presentation>V1 C V2 C</presentation>
+  <hymn_number>101</hymn_number>
+  <capo print="false"></capo>
+  <aka></aka>
+  <key>D</key>
+  <time_sig>4/4</time_sig>
+  <lyrics>[V1]
+.D        G
+ Pierwsza linia zwrotki,
+;komentarz, którego nie widać
+ druga linia zwrotki.|
+[C]
+ Refren pierwszej części||
+ refren po podziale slajdu.
+[V2]
+ Druga zwrotka, linia jeden,
+ druga zwrotka, linia dwa.</lyrics>
+</song>

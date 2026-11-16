@@ -282,6 +282,10 @@ mod tests {
             titles: vec![id.to_owned()],
             authors: vec![],
             songbooks: vec![],
+            copyright: None,
+            ccli: None,
+            themes: vec![],
+            extra: Default::default(),
             verse_order: vec![],
             verses: vec![
                 Verse::simple("v1", &["a"]),
