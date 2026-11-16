@@ -382,3 +382,53 @@ async fn power_state(remote: &WebDriver) -> String {
         Err(_) => String::new(),
     }
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    with_engine(screen_engine(), 1920, 1080, async |screen| {
+        screen.goto(server.url("/screen/")).await?;
+        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+            remote.goto(server.url("/remote/")).await?;
+            wait_until(Duration::from_secs(10), || async {
+                remote.find(By::Css(".status-dot.connected")).await.is_ok()
+            })
+            .await?;
+            // The default page-turner key moves on.
+            remote.action_chain().send_keys(Key::PageDown).perform().await?;
+            wait_for_slide(screen, "v1#").await?;
+
+            // Learn mode: "Naucz" next to "Dalej", then press the pedal (here: F8).
+            remote.find(By::XPath("//button[text()='Pedał i klawisze']")).await?.click().await?;
+            remote.find(By::Css("[data-action=next] button")).await?.click().await?;
+            remote.action_chain().send_keys(Key::F8).perform().await?;
+            wait_until(Duration::from_secs(5), || async {
+                match remote.find(By::Css("[data-action=next] .key-names")).await {
+                    Ok(names) => names.text().await.unwrap_or_default().contains("F8"),
+                    Err(_) => false,
+                }
+            })
+            .await?;
+            remote.action_chain().send_keys(Key::F8).perform().await?;
+            wait_for_slide(screen, "v2#").await?;
+
+            // Typing a "b" in the search field does not black the screen, but PageDown still turns.
+            let search = remote.find(By::Css(".search-input")).await?;
+            search.send_keys("b").await?;
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            anyhow::ensure!(
+                attribute(screen, SCREEN_ROOT, "data-overlay").await == "none",
+                "typing blacked out"
+            );
+            search.send_keys(Key::PageDown).await?;
+            wait_until(Duration::from_secs(5), || async {
+                !attribute(screen, SCREEN_ROOT, "data-slide-key").await.starts_with("v2#")
+            })
+            .await?;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}

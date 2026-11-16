@@ -38,9 +38,11 @@ browsers-image:
     podman build -t localhost/sursum-browsers -f e2e/browsers.Containerfile e2e
 
 # Start chromedriver (:9515) and WPEWebDriver (:9516) in the background, on localhost only.
+# `--init` reaps finished browser processes; without it they pile up as zombies until new
+# sessions fail ("Timed out receiving message from renderer").
 browsers:
-    podman run -d --rm --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
-    podman run -d --rm --name sursum-wpedriver --network host localhost/sursum-browsers WPEWebDriver --port=9516
+    podman run -d --rm --init --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
+    podman run -d --rm --init --name sursum-wpedriver --network host localhost/sursum-browsers WPEWebDriver --port=9516
 
 # Stop the WebDriver containers.
 browsers-stop:

@@ -104,7 +104,7 @@ a hardware plan).
 
 ## M5 — Pedal and keyboard shortcuts
 
-- [ ] Default mapping, ignore key repeat, learn mode, per-device mapping
+- [x] Default mapping, ignore key repeat, learn mode, per-device mapping (kept in the browser's `localStorage` — it belongs to the tablet the pedal is paired with and works without pairing; the plan's `devices.prefs_json` is not needed so far); in text fields only PageUp/PageDown act
 - [ ] Android: on-screen keyboard with a hardware keyboard paired ⚠ (docs)
 
 **Done when:** mapping tests pass; the organist runs a full service with a pedal only.

@@ -14,6 +14,8 @@ mod calibration_form;
 mod editor;
 mod hold;
 mod import;
+mod key_settings;
+mod keys;
 mod messages;
 mod pairing;
 mod picture;
@@ -21,7 +23,6 @@ mod power;
 mod search;
 mod set_list;
 
-use leptos::ev;
 use leptos::prelude::*;
 use messages::{Msg, pl, section_label};
 use sursum_client::{Client, Status, needs_reload};
@@ -94,7 +95,9 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     });
     let status = client.status();
     let commands = Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0) };
-    keyboard_shortcuts(commands);
+    let keys = key_settings::Keys { map: RwSignal::new(keys::KeyMap::load()), learning: RwSignal::new(None) };
+    provide_context(keys);
+    key_settings::listen(keys, commands);
     let editing = RwSignal::new(None::<editor::EditorTarget>);
     provide_context(editing);
     let editor_view =
@@ -238,6 +241,7 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
             <div class="library-tools">
                 <NewSongButton />
                 <bundle::ExportLink />
+                <key_settings::KeysButton />
                 <admin::AdminTools />
             </div>
             <Show when=searching fallback=set_list>
@@ -297,32 +301,6 @@ fn Controls(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl In
 
 /// Keys sent by typical Bluetooth pedals and presentation clickers. Configurable mapping and a
 /// learn mode follow in milestone M5.
-fn keyboard_shortcuts(commands: Commands) {
-    let handle = window_event_listener(ev::keydown, move |event| {
-        if event.repeat() || typing_in_a_field(&event) {
-            return;
-        }
-        let command = match event.key().as_str() {
-            "PageDown" | "ArrowRight" | "ArrowDown" | " " | "Enter" => Command::Next,
-            "PageUp" | "ArrowLeft" | "ArrowUp" => Command::Prev,
-            "b" | "B" | "." => Command::ToggleBlack,
-            _ => return,
-        };
-        event.prevent_default();
-        commands.send(command);
-    });
-    // The listener lives as long as the page.
-    std::mem::forget(handle);
-}
-
-fn typing_in_a_field(event: &web_sys::KeyboardEvent) -> bool {
-    use wasm_bindgen::JsCast;
-    event
-        .target()
-        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
-        .is_some_and(|element| matches!(element.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"))
-}
-
 fn reload() {
     if let Some(window) = web_sys::window() {
         let _ = window.location().reload();

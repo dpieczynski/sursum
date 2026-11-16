@@ -91,6 +91,12 @@ pub enum Msg {
     DisplayNoAnswer,
     DisplayBusy,
     DisplayAuthFailed,
+    Keys,
+    KeysHelp,
+    KeysReset,
+    KeysNone,
+    KeysLearn,
+    KeysPressNow,
     EditSet,
     DoneEditing,
     Remove,
@@ -217,6 +223,15 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::DisplayNoAnswer => "Ekran: brak odpowiedzi",
         Msg::DisplayBusy => "Ekran jest zajęty – spróbuj za chwilę",
         Msg::DisplayAuthFailed => "Ekran odrzucił hasło – sprawdź config.toml",
+        Msg::Keys => "Pedał i klawisze",
+        Msg::KeysHelp => {
+            "Pedał lub pilot do prezentacji działa jak klawiatura. Kliknij „Naucz” i naciśnij \
+             przycisk pedału, aby przypisać go do akcji. Ustawienia zapamiętuje to urządzenie."
+        }
+        Msg::KeysReset => "Przywróć domyślne",
+        Msg::KeysNone => "brak",
+        Msg::KeysLearn => "Naucz",
+        Msg::KeysPressNow => "Naciśnij teraz…",
     }
 }
 

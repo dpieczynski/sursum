@@ -702,3 +702,12 @@ label.set-tool {
 .power-warning {
   color: #facc15;
 }
+
+/* Pedal and key settings (M5). */
+.key-settings {
+  width: 100%;
+}
+.key-names {
+  flex: 1;
+  color: var(--muted);
+}

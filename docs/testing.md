@@ -30,8 +30,10 @@ time, so tests always close their session (`with_browser`) and run with `--test-
 **Build ids must match.** `just` exports `SURSUM_BUILD_ID` (`git describe --dirty`) for the web
 apps; a server built with plain `cargo build` has a different id, and the pages then reload in a
 loop (by design: a client never talks to a server of another build). Build both through `just`,
-or export the same `SURSUM_BUILD_ID` yourself. If chromedriver starts answering "Timed out
-receiving message from renderer", restart its container (`just browsers-stop && just browsers`).
+or export the same `SURSUM_BUILD_ID` yourself. The containers run with `--init`: without an init
+process the finished browser processes stay as zombies and after a few hundred sessions chromedriver
+answers "Timed out receiving message from renderer" (`just browsers-stop && just browsers` if you
+started them another way).
 
 ## Layers
 
