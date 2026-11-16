@@ -102,9 +102,9 @@ async fn longer_lines_and_narrower_areas_get_smaller_text() {
     let short = fit_deck(&deck("short", &[SHORT]), &theme, FULL, &measurer).await;
     let long = fit_deck(&deck("long", &[LONG]), &theme, FULL, &measurer).await;
     assert!(long.font_px < short.font_px, "{long:?} vs {short:?}");
-    // The same song next to a pillar (exclusion zone): less width, smaller text.
-    let beside_pillar = Rect::new(648, 48, 1224, 984);
-    let narrow = fit_deck(&deck("long", &[LONG]), &theme, beside_pillar, &measurer).await;
+    // The same song next to an exclusion zone: less width, smaller text.
+    let beside_zone = Rect::new(648, 48, 1224, 984);
+    let narrow = fit_deck(&deck("long", &[LONG]), &theme, beside_zone, &measurer).await;
     assert!(narrow.font_px < long.font_px, "{narrow:?} vs {long:?}");
 }
 

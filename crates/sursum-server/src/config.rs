@@ -160,7 +160,7 @@ transition_ms = 0
 safe_area = { top = 10, right = 10, bottom = 10, left = 10 }
 
 [[screen_profile.exclusions]]
-name = "słup"
+name = "Strefa 1"
 rect = { x = 0, y = 0, width = 300, height = 1080 }
 "#,
         )
@@ -168,7 +168,7 @@ rect = { x = 0, y = 0, width = 300, height = 1080 }
         let config = Config::with_data_dir(dir.path()).load_file().unwrap();
         assert_eq!(config.listen.port(), 9000);
         assert_eq!(config.transition_ms, 0);
-        assert_eq!(config.screen_profile.exclusions[0].name, "słup");
+        assert_eq!(config.screen_profile.exclusions[0].name, "Strefa 1");
     }
 
     #[test]

@@ -41,7 +41,7 @@ fn sample_profile() -> ScreenProfile {
     ScreenProfile {
         safe_area: Insets::uniform(48),
         exclusions: vec![ExclusionZone {
-            name: "słup".into(),
+            name: "Strefa 1".into(),
             rect: Rect::new(0, 0, 600, 1080),
             mask: MaskMode::Black,
         }],

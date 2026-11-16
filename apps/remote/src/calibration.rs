@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Screen calibration (ADR 0008): mark the pillar so text avoids it. Outside services only.
+//! Screen calibration (ADR 0008): mark the parts of the frame that text must avoid. Outside services only.
 //!
 //! The panel holds no profile of its own: every change is sent to the server at once
 //! (`SetScreenProfile`), the server validates it and answers with a new snapshot, and both the

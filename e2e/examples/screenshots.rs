@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let output = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "screenshots".to_owned()));
     std::fs::create_dir_all(&output)?;
     let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 48, right = 48, bottom = 48, left = 48 }\n\n\
-                  [[screen_profile.exclusions]]\nname = \"pillar\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
+                  [[screen_profile.exclusions]]\nname = \"Strefa 1\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
     // A fake PJLink projector, so the display power controls show too.
     let projector = sursum_e2e::fake_projector().await?;
     let config = format!("{config}\n[display_power]\nbackend = \"pjlink\"\nhost = \"{projector}\"\n");

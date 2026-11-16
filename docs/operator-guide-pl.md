@@ -99,9 +99,10 @@ spróbuj za chwilę”) — to normalne.
   zapisuje. Nic nie jest nadpisywane po cichu: gdy tę samą pieśń zmieniono w obu miejscach, druga
   wersja trafia do bazy jako kopia „(kopia ze scalenia)”. Eksport to też dobra kopia zapasowa.
 - **Kalibracja ekranu (przytrzymaj)** — tylko poza mszą: na ekranie pojawia się siatka z literami
-  i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć słup lub inną przeszkodę
-  (czerwona strefa) — tekst będzie ją omijał, a sama strefa będzie czarna. Zielona ramka pokazuje,
-  gdzie zmieści się tekst. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
+  i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć strefę bez tekstu, np.
+  ciemną powierzchnię lub przeszkodę (czerwona strefa) — tekst będzie ją omijał, a sama strefa
+  będzie czarna. Zielona ramka pokazuje, gdzie zmieści się tekst. Pola liczbowe nie pozwalają
+  wysunąć strefy poza ekran. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
 - **Usuń pieśń z bazy (przytrzymaj)** — w edytorze pieśni, np. dla duplikatów po imporcie.
   Pieśń znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca. Przy
   scalaniu baz usunięcie przechodzi do drugiego kościoła, chyba że tam pieśń poprawiono później.

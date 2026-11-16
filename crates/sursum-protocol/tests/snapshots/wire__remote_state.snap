@@ -102,7 +102,7 @@ expression: state
     },
     "exclusions": [
       {
-        "name": "słup",
+        "name": "Strefa 1",
         "rect": {
           "x": 0,
           "y": 0,

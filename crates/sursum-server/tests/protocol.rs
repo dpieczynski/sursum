@@ -593,19 +593,29 @@ async fn calibration_changes_the_layout_at_once_and_survives_a_restart() {
     assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
     assert!(next_screen_state(&mut screen).await.calibration.is_some());
 
-    let pillar = ScreenProfile {
+    let zone = ScreenProfile {
         safe_area: Insets::uniform(48),
         exclusions: vec![ExclusionZone {
-            name: "słup".into(),
+            name: "Strefa 1".into(),
             rect: Rect::new(0, 0, 600, 1080),
             mask: MaskMode::Black,
         }],
     };
-    command(&mut remote, 2, Rev(u32::MAX), Command::SetScreenProfile { profile: pillar.clone() }).await;
+    command(&mut remote, 2, Rev(u32::MAX), Command::SetScreenProfile { profile: zone.clone() }).await;
     let state = next_screen_state(&mut screen).await;
-    assert!(state.layout.content.x >= 600, "text moves right of the pillar: {:?}", state.layout);
+    assert!(state.layout.content.x >= 600, "text moves right of the zone: {:?}", state.layout);
     assert_eq!(state.layout.masks, [Rect::new(0, 0, 600, 1080)]);
-    assert_eq!(state.calibration.as_ref(), Some(&pillar), "the pattern follows the new profile");
+    assert_eq!(state.calibration.as_ref(), Some(&zone), "the pattern follows the new profile");
+
+    // A zone typed wider than the stage is cut at its edge, not stored as typed.
+    let mut too_wide = zone.clone();
+    too_wide.exclusions[0].rect = Rect::new(1700, 0, 900, 1080);
+    command(&mut remote, 4, Rev(u32::MAX), Command::SetScreenProfile { profile: too_wide }).await;
+    let state = next_screen_state(&mut screen).await;
+    let stored = state.calibration.as_ref().map(|profile| profile.exclusions[0].rect);
+    assert_eq!(stored, Some(Rect::new(1700, 0, 220, 1080)), "{:?}", state.calibration);
+    command(&mut remote, 5, Rev(u32::MAX), Command::SetScreenProfile { profile: zone.clone() }).await;
+    next_screen_state(&mut screen).await;
 
     let covering = ScreenProfile {
         safe_area: Insets::uniform(0),

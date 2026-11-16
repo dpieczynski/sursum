@@ -144,7 +144,7 @@ async fn black_overlay_hides_content_and_navigation_under_it_stays_hidden() -> a
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn text_stays_out_of_exclusion_zones_and_zones_are_black() -> anyhow::Result<()> {
     let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 40, right = 40, bottom = 40, left = 40 }\n\n\
-                  [[screen_profile.exclusions]]\nname = \"pillar\"\nrect = { x = 0, y = 0, width = 600, height = 1080 }\n";
+                  [[screen_profile.exclusions]]\nname = \"Strefa 1\"\nrect = { x = 0, y = 0, width = 600, height = 1080 }\n";
     let server = Server::start_with(&[], Some(config)).await?;
     with_browser(WIDTH, HEIGHT, async |driver| {
         driver.goto(server.url("/screen/")).await?;
@@ -156,7 +156,10 @@ async fn text_stays_out_of_exclusion_zones_and_zones_are_black() -> anyhow::Resu
         let measured = measured.json();
         let lefts: Vec<f64> = serde_json::from_value(measured["lefts"].clone())?;
         anyhow::ensure!(!lefts.is_empty(), "no visible lines found");
-        anyhow::ensure!(lefts.iter().all(|left| *left >= 600.0), "text entered the pillar zone: {lefts:?}");
+        anyhow::ensure!(
+            lefts.iter().all(|left| *left >= 600.0),
+            "text entered the exclusion zone: {lefts:?}"
+        );
         let scale = measured["scale"].as_f64().unwrap_or(1.0);
         let left = measured["stageLeft"].as_f64().unwrap_or(0.0) as u32;
         let top = measured["stageTop"].as_f64().unwrap_or(0.0) as u32;
@@ -170,7 +173,7 @@ async fn text_stays_out_of_exclusion_zones_and_zones_are_black() -> anyhow::Resu
             to_pixels(600.0).saturating_sub(4),
             to_pixels(1080.0).saturating_sub(4),
         );
-        anyhow::ensure!(zone_is_black, "the pillar zone must be black");
+        anyhow::ensure!(zone_is_black, "the exclusion zone must be black");
         Ok(())
     })
     .await

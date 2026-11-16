@@ -15,6 +15,26 @@ pub enum LayoutError {
     NoFreeSpace,
 }
 
+/// The profile with every zone and margin inside the stage: a zone never starts outside the stage
+/// or reaches past its edge (it keeps its position and loses what sticks out), and each margin is
+/// at most what the opposite one leaves. Remotes may send any numbers (typed values, old
+/// profiles); the server stores and draws only fitted profiles, so no edge computation overflows.
+pub fn fit_to_scene(profile: &ScreenProfile) -> ScreenProfile {
+    let mut fitted = profile.clone();
+    for zone in &mut fitted.exclusions {
+        let x = zone.rect.x.min(SCENE_WIDTH);
+        let y = zone.rect.y.min(SCENE_HEIGHT);
+        zone.rect =
+            Rect::new(x, y, zone.rect.width.min(SCENE_WIDTH - x), zone.rect.height.min(SCENE_HEIGHT - y));
+    }
+    let margins = &mut fitted.safe_area;
+    margins.left = margins.left.min(SCENE_WIDTH);
+    margins.right = margins.right.min(SCENE_WIDTH - margins.left);
+    margins.top = margins.top.min(SCENE_HEIGHT);
+    margins.bottom = margins.bottom.min(SCENE_HEIGHT - margins.top);
+    fitted
+}
+
 /// The safe area: the stage minus the overscan margins.
 pub fn safe_area(profile: &ScreenProfile) -> Result<Rect, LayoutError> {
     let insets = profile.safe_area;
@@ -127,21 +147,38 @@ mod tests {
     }
 
     #[test]
-    fn pillar_on_the_left_shifts_content_right() {
-        let pillar = Rect::new(0, 0, 400, 1080);
-        assert_eq!(content_region(&profile(0, &[pillar])), Ok(Rect::new(400, 0, 1520, 1080)));
+    fn zones_and_margins_are_cut_to_the_stage() {
+        let mut wide = profile(0, &[Rect::new(1700, 900, 4000, 4000), Rect::new(u32::MAX, 5, 10, 10)]);
+        wide.safe_area = Insets { top: 2000, bottom: 2000, left: 1000, right: 1000 };
+        let fitted = fit_to_scene(&wide);
+        assert_eq!(
+            fitted.exclusions[0].rect,
+            Rect::new(1700, 900, 220, 180),
+            "keeps its place, loses the rest"
+        );
+        assert_eq!(fitted.exclusions[1].rect, Rect::new(SCENE_WIDTH, 5, 0, 10), "nothing left on the stage");
+        assert_eq!(fitted.safe_area, Insets { top: 1080, bottom: 0, left: 1000, right: 920 });
+        assert_eq!(content_region(&fitted), Err(LayoutError::SafeAreaEmpty), "an error, not an overflow");
+        let inside = profile(48, &[Rect::new(0, 0, 400, 1080)]);
+        assert_eq!(fit_to_scene(&inside), inside, "a profile inside the stage is unchanged");
     }
 
     #[test]
-    fn pillar_on_the_right_shifts_content_left() {
-        let pillar = Rect::new(1500, 0, 420, 1080);
-        assert_eq!(content_region(&profile(0, &[pillar])), Ok(Rect::new(0, 0, 1500, 1080)));
+    fn a_zone_on_the_left_shifts_content_right() {
+        let zone = Rect::new(0, 0, 400, 1080);
+        assert_eq!(content_region(&profile(0, &[zone])), Ok(Rect::new(400, 0, 1520, 1080)));
     }
 
     #[test]
-    fn pillar_in_the_middle_picks_the_larger_side() {
-        let pillar = Rect::new(800, 0, 200, 1080);
-        assert_eq!(content_region(&profile(0, &[pillar])), Ok(Rect::new(1000, 0, 920, 1080)));
+    fn a_zone_on_the_right_shifts_content_left() {
+        let zone = Rect::new(1500, 0, 420, 1080);
+        assert_eq!(content_region(&profile(0, &[zone])), Ok(Rect::new(0, 0, 1500, 1080)));
+    }
+
+    #[test]
+    fn a_zone_in_the_middle_picks_the_larger_side() {
+        let zone = Rect::new(800, 0, 200, 1080);
+        assert_eq!(content_region(&profile(0, &[zone])), Ok(Rect::new(1000, 0, 920, 1080)));
     }
 
     #[test]

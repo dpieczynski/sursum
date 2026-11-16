@@ -210,7 +210,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Calibrate => "Kalibracja ekranu (przytrzymaj)",
         Msg::CalibrationTitle => "Kalibracja ekranu",
         Msg::CalibrationHelp => {
-            "Tylko poza mszą: na ekranie jest teraz siatka. Przeciągnij palcem po podglądzie, by              zaznaczyć słup (czerwony). Zielona ramka to miejsce na tekst, żółta – margines              bezpieczny. Zmiany zapisują się od razu."
+            "Tylko poza mszą: na ekranie jest teraz siatka. Przeciągnij palcem po podglądzie, by \
+             zaznaczyć strefę, w której nie może być tekstu (czerwona). Zielona ramka to miejsce na \
+             tekst, żółta – margines bezpieczny. Zmiany zapisują się od razu."
         }
         Msg::Zone => "Strefa",
         Msg::AddZone => "Dodaj strefę",

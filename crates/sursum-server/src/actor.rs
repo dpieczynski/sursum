@@ -240,7 +240,7 @@ pub fn spawn(
     if saved_profile.is_some() {
         tracing::info!("using the screen profile calibrated from a remote (config.toml's is ignored)");
     }
-    let profile = saved_profile.unwrap_or_else(|| config.screen_profile.clone());
+    let profile = layout::fit_to_scene(&saved_profile.unwrap_or_else(|| config.screen_profile.clone()));
     let logo: Option<sursum_protocol::AssetId> =
         database.setting::<Option<sursum_protocol::AssetId>>(LOGO_KEY).context("loading the logo")?.flatten();
     let mut state = AppState {
@@ -493,14 +493,15 @@ impl AppState {
         }
     }
 
-    /// Validates, applies and stores a new screen profile.
+    /// Fits a new screen profile to the stage, validates, applies and stores it.
     fn set_screen_profile(&mut self, profile: &ScreenProfile) -> Result<Option<ServiceSet>, ErrorCode> {
-        let layout = layout::screen_layout(profile).map_err(|_| ErrorCode::InvalidProfile)?;
-        if let Err(error) = self.database.set_setting(SCREEN_PROFILE_KEY, profile) {
+        let profile = layout::fit_to_scene(profile);
+        let layout = layout::screen_layout(&profile).map_err(|_| ErrorCode::InvalidProfile)?;
+        if let Err(error) = self.database.set_setting(SCREEN_PROFILE_KEY, &profile) {
             tracing::error!(?error, "could not store the screen profile");
         }
         self.layout = layout;
-        self.profile = profile.clone();
+        self.profile = profile;
         Ok(None)
     }
 

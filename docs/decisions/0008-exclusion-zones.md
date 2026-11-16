@@ -31,3 +31,12 @@ of library export.
   the same `CalibrationPattern` from that snapshot, so tablet and screen cannot disagree.
 - A profile saved from a remote wins over `config.toml` (logged at startup). There is no admin
   role yet (M3 roles item); until then any paired remote may calibrate.
+
+## Amendment (2026-11-16): zones stay on the stage; generic names
+- The server fits every profile to the 1920×1080 stage before validating and storing it
+  (`sursum_core::layout::fit_to_scene`): a zone keeps its position and loses what sticks out, and
+  margins are capped by the opposite margin. This also keeps edge arithmetic from overflowing on
+  absurd input. The remote's number fields cap each other (moving keeps the size, resizing keeps
+  the position), so the operator never types a zone off the screen.
+- The UI and code speak of exclusion zones ("Strefa 1", …), not of a pillar: the Tulce pillar is
+  this ADR's motivation, not the only use (other churches have other obstacles).

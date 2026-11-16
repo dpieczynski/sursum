@@ -40,7 +40,7 @@ pub fn CalibrationPattern(
 }
 
 /// Column letters along the top and row numbers along the left, so the person in the nave can
-/// say "the pillar covers columns D to E".
+/// say "the zone covers columns D to E".
 fn grid_labels() -> impl IntoView {
     let columns = (0..SCENE_WIDTH / GRID_CELL).map(|column| {
         let letter = char::from(b'A' + u8::try_from(column).unwrap_or(0));

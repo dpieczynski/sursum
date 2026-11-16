@@ -82,7 +82,8 @@ pub enum MaskMode {
     None,
 }
 
-/// A part of the frame that is unusable for text, e.g. a dark pillar the projector hits.
+/// A part of the frame that is unusable for text, e.g. a dark or uneven surface the projector
+/// hits, or an obstacle in front of the screen.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ExclusionZone {
     /// Human-readable name shown in the calibration panel.

@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Exact numbers for the calibration panel: one row per exclusion zone, and the safe area.
 //! Every edit goes straight to the server through [`ProfileEditor`].
+//!
+//! The fields are capped by each other so a zone always stays on the stage: moving a zone keeps
+//! its size (the offset stops where the zone touches the edge), resizing keeps its position (the
+//! size stops at the edge). The server cuts whatever still arrives to the stage, too.
 
 use leptos::prelude::*;
-use sursum_protocol::{ExclusionZone, Insets, MaskMode, Rect};
+use sursum_protocol::{ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH};
 
 use crate::calibration::{ProfileEditor, new_zone};
 use crate::messages::{Msg, pl};
@@ -83,10 +87,25 @@ fn zone_row(
                     event_target_value(&event),
                 )
             />
-            {number_field("x", rect.x, move |value| edit(set_x, value))}
-            {number_field("y", rect.y, move |value| edit(set_y, value))}
-            {number_field(pl(Msg::Width), rect.width, move |value| edit(set_width, value))}
-            {number_field(pl(Msg::Height), rect.height, move |value| edit(set_height, value))}
+            {number_field("x", rect.x, max_offset(SCENE_WIDTH, rect.width), move |value| edit(set_x, value))}
+            {number_field(
+                "y",
+                rect.y,
+                max_offset(SCENE_HEIGHT, rect.height),
+                move |value| edit(set_y, value),
+            )}
+            {number_field(
+                pl(Msg::Width),
+                rect.width,
+                SCENE_WIDTH - rect.x.min(SCENE_WIDTH),
+                move |value| edit(set_width, value),
+            )}
+            {number_field(
+                pl(Msg::Height),
+                rect.height,
+                SCENE_HEIGHT - rect.y.min(SCENE_HEIGHT),
+                move |value| edit(set_height, value),
+            )}
             <label class="zone-mask">
                 <input type="checkbox" prop:checked=masked on:change=toggle_mask />
                 {pl(Msg::MaskZone)}
@@ -98,17 +117,27 @@ fn zone_row(
     }
 }
 
+/// The largest offset at which a zone of `size` still fits on a stage side of `side`.
+fn max_offset(side: u32, size: u32) -> u32 {
+    side.saturating_sub(size)
+}
+
 fn set_x(zone: &mut ExclusionZone, value: &str) {
-    zone.rect.x = parse_px(value, zone.rect.x);
+    zone.rect.x = parse_px(value, zone.rect.x).min(max_offset(SCENE_WIDTH, zone.rect.width));
 }
 fn set_y(zone: &mut ExclusionZone, value: &str) {
-    zone.rect.y = parse_px(value, zone.rect.y);
+    zone.rect.y = parse_px(value, zone.rect.y).min(max_offset(SCENE_HEIGHT, zone.rect.height));
 }
 fn set_width(zone: &mut ExclusionZone, value: &str) {
-    zone.rect.width = parse_px(value, zone.rect.width);
+    zone.rect.width = parse_px(value, zone.rect.width).min(max_offset(SCENE_WIDTH, zone.rect.x));
 }
 fn set_height(zone: &mut ExclusionZone, value: &str) {
-    zone.rect.height = parse_px(value, zone.rect.height);
+    zone.rect.height = parse_px(value, zone.rect.height).min(max_offset(SCENE_HEIGHT, zone.rect.y));
+}
+
+/// The largest margin that still leaves one pixel next to the opposite margin.
+fn max_margin(side: u32, opposite: u32) -> u32 {
+    side.saturating_sub(opposite).saturating_sub(1)
 }
 
 /// The safe area (overscan margins) in scene pixels.
@@ -124,15 +153,15 @@ pub fn SafeAreaForm(editor: ProfileEditor) -> impl IntoView {
     };
     let fields = move || {
         let insets = insets();
+        let top = max_margin(SCENE_HEIGHT, insets.bottom);
+        let bottom = max_margin(SCENE_HEIGHT, insets.top);
+        let left = max_margin(SCENE_WIDTH, insets.right);
+        let right = max_margin(SCENE_WIDTH, insets.left);
         view! {
-            {number_field(pl(Msg::MarginTop), insets.top, move |value| edit(|i, v| i.top = v, value))}
-            {number_field(
-                pl(Msg::MarginBottom),
-                insets.bottom,
-                move |value| edit(|i, v| i.bottom = v, value),
-            )}
-            {number_field(pl(Msg::MarginLeft), insets.left, move |value| edit(|i, v| i.left = v, value))}
-            {number_field(pl(Msg::MarginRight), insets.right, move |value| edit(|i, v| i.right = v, value))}
+            {number_field(pl(Msg::MarginTop), insets.top, top, move |value| edit(set_top, value))}
+            {number_field(pl(Msg::MarginBottom), insets.bottom, bottom, move |value| edit(set_bottom, value))}
+            {number_field(pl(Msg::MarginLeft), insets.left, left, move |value| edit(set_left, value))}
+            {number_field(pl(Msg::MarginRight), insets.right, right, move |value| edit(set_right, value))}
         }
     };
     view! {
@@ -143,8 +172,27 @@ pub fn SafeAreaForm(editor: ProfileEditor) -> impl IntoView {
     }
 }
 
-/// A labelled number input in scene pixels; `on_change` gets the raw text when it is committed.
-fn number_field(label: &'static str, value: u32, on_change: impl Fn(String) + 'static) -> impl IntoView {
+fn set_top(insets: &mut Insets, value: u32) {
+    insets.top = value.min(max_margin(SCENE_HEIGHT, insets.bottom));
+}
+fn set_bottom(insets: &mut Insets, value: u32) {
+    insets.bottom = value.min(max_margin(SCENE_HEIGHT, insets.top));
+}
+fn set_left(insets: &mut Insets, value: u32) {
+    insets.left = value.min(max_margin(SCENE_WIDTH, insets.right));
+}
+fn set_right(insets: &mut Insets, value: u32) {
+    insets.right = value.min(max_margin(SCENE_WIDTH, insets.left));
+}
+
+/// A labelled number input in scene pixels up to `max`; `on_change` gets the raw text when it is
+/// committed.
+fn number_field(
+    label: &'static str,
+    value: u32,
+    max: u32,
+    on_change: impl Fn(String) + 'static,
+) -> impl IntoView {
     view! {
         <label class="number-field">
             <span>{label}</span>
@@ -152,7 +200,7 @@ fn number_field(label: &'static str, value: u32, on_change: impl Fn(String) + 's
                 type="number"
                 inputmode="numeric"
                 min="0"
-                max="1920"
+                max=max.to_string()
                 prop:value=value.to_string()
                 on:change=move |event| on_change(event_target_value(&event))
             />
@@ -168,6 +216,27 @@ fn parse_px(text: &str, old: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_zone_stays_on_the_stage_whichever_field_is_typed() {
+        let mut zone = ExclusionZone {
+            name: "Strefa 1".into(),
+            rect: Rect::new(100, 0, 400, 1080),
+            mask: MaskMode::Black,
+        };
+        set_x(&mut zone, "1800");
+        assert_eq!(zone.rect, Rect::new(1520, 0, 400, 1080), "moving keeps the size");
+        set_width(&mut zone, "5000");
+        assert_eq!(zone.rect.width, 400, "already touches the edge");
+        set_x(&mut zone, "0");
+        set_width(&mut zone, "5000");
+        assert_eq!(zone.rect, Rect::new(0, 0, 1920, 1080), "resizing keeps the position");
+        set_y(&mut zone, "10");
+        assert_eq!(zone.rect.y, 0, "a full-height zone cannot move down");
+        let mut insets = Insets::uniform(48);
+        set_left(&mut insets, "9999".parse().unwrap());
+        assert_eq!(insets.left, 1920 - 48 - 1, "one pixel stays between the margins");
+    }
 
     #[test]
     fn bad_numbers_keep_the_old_value() {

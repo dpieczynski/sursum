@@ -54,7 +54,7 @@ async fn buttons_on_the_remote_drive_the_screen() -> anyhow::Result<()> {
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn preview_on_the_remote_matches_the_screen() -> anyhow::Result<()> {
     let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 48, right = 48, bottom = 48, left = 48 }\n\n\
-                  [[screen_profile.exclusions]]\nname = \"pillar\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
+                  [[screen_profile.exclusions]]\nname = \"Strefa 1\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
     let server = Server::start_with(&[], Some(config)).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
@@ -321,7 +321,7 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
-async fn pillar_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> anyhow::Result<()> {
+async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
