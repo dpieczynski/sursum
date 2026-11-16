@@ -219,3 +219,37 @@ async fn uploaded_picture_is_decoded_before_it_is_shown() -> anyhow::Result<()> 
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn the_logo_button_shows_the_parish_logo() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let logo = image::RgbaImage::from_pixel(200, 200, image::Rgba([40, 60, 220, 255]));
+    let mut png = std::io::Cursor::new(Vec::new());
+    logo.write_to(&mut png, image::ImageFormat::Png)?;
+    let asset_id = server.upload_asset(png.get_ref()).await?;
+    with_browser(WIDTH, HEIGHT, async |driver| {
+        driver.goto(server.url("/screen/")).await?;
+        let mut remote = server.remote("organist").await?;
+        remote.command(Command::SetLogo { asset_id: Some(asset_id.clone()) }).await?;
+        remote.command(Command::SetOverlay { overlay: Overlay::Logo }).await?;
+        wait_until(Duration::from_secs(5), || async {
+            let decoded = driver
+                .execute(
+                    "const logo = document.querySelector('.sursum-logo'); \
+                     return logo ? logo.complete && logo.naturalWidth : 0;",
+                    Vec::new(),
+                )
+                .await;
+            decoded.is_ok_and(|value| value.json().as_u64() == Some(200))
+        })
+        .await?;
+        // Let the overlay finish fading in, then the centre shows the logo's colour.
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let shot = screenshot(driver).await?;
+        let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
+        anyhow::ensure!(centre[2] > 150 && centre[0] < 100, "the logo is not visible: {centre:?}");
+        Ok(())
+    })
+    .await
+}

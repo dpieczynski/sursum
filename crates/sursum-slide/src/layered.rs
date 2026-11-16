@@ -15,9 +15,10 @@ use sursum_protocol::{
 };
 use wasm_bindgen::JsCast;
 
-use crate::calibration::CalibrationPattern;
+use crate::calibration::{CalibrationPattern, rect_style};
 use crate::dom;
 use crate::fit::{Fit, fit_deck};
+use crate::slide_view::asset_url;
 use crate::slide_view::{SlideView, background_style};
 use crate::stage::Stage;
 
@@ -88,6 +89,22 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
     let calibration = move || state.with(|state| state.as_ref().and_then(|state| state.calibration.clone()));
     let content =
         move || state.with(|state| state.as_ref().map_or(Rect::SCENE, |state| state.layout.content));
+    let logo = move || state.with(|state| state.as_ref().and_then(|state| state.logo.clone()));
+    // Decode a new logo right away, so the logo overlay never fades in half-loaded.
+    Effect::new(move |_| {
+        if let Some(asset_id) = logo() {
+            leptos::task::spawn_local(async move { dom::decode_image(&asset_url(&asset_id)).await });
+        }
+    });
+    let logo_view = move || {
+        logo().map(|asset_id| {
+            view! {
+                <div class="sursum-logo-box" style=rect_style(content())>
+                    <img class="sursum-logo" src=asset_url(&asset_id) alt="" />
+                </div>
+            }
+        })
+    };
     let pattern = move || {
         calibration().map(|profile| view! { <CalibrationPattern profile content=Signal::derive(content) /> })
     };
@@ -111,7 +128,9 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
                     class="sursum-overlay"
                     class:visible=move || overlay() != Overlay::None
                     style=overlay_style
-                ></div>
+                >
+                    {logo_view}
+                </div>
                 {pattern}
             </div>
         </Stage>

@@ -97,6 +97,7 @@ pub enum Msg {
     KeysNone,
     KeysLearn,
     KeysPressNow,
+    ParishLogo,
     EditSet,
     DoneEditing,
     Remove,
@@ -232,6 +233,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KeysNone => "brak",
         Msg::KeysLearn => "Naucz",
         Msg::KeysPressNow => "Naciśnij teraz…",
+        Msg::ParishLogo => "Logo parafii",
     }
 }
 

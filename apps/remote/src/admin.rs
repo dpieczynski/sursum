@@ -37,6 +37,7 @@ pub fn AdminTools() -> impl IntoView {
     let unlocking = RwSignal::new(false);
     let devices = RwSignal::new(false);
     let calibrating = expect_context::<Calibrating>();
+    let commands = expect_context::<crate::Commands>();
     let refresh = gloo_timers::callback::Interval::new(REFRESH_MS, move || {
         if session.0.get_untracked().admin {
             session.refresh();
@@ -58,6 +59,7 @@ pub fn AdminTools() -> impl IntoView {
             <crate::import::ImportButton />
             <crate::bundle::MergeButton />
             <HoldButton label=pl(Msg::Calibrate) on_hold=move || calibrating.0.set(true) />
+            <crate::picture::LogoButton commands />
             <Show when=with_pin>
                 <button class="import-button" on:click=move |_| devices.update(|open| *open = !*open)>
                     {pl(Msg::Devices)}

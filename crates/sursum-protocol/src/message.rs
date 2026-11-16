@@ -81,6 +81,8 @@ pub enum Command {
     SetScreenProfile { profile: ScreenProfile },
     /// Show or hide the calibration pattern on the screen (outside services only).
     Calibrate { on: bool },
+    /// Set or remove the parish logo (an uploaded picture, `POST /api/assets`).
+    SetLogo { asset_id: Option<AssetId> },
     /// Switch the projector or monitor on, or to standby (ADR 0012).
     DisplayPower { action: PowerAction },
 }

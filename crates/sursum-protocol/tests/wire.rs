@@ -33,6 +33,7 @@ fn sample_screen() -> ScreenState {
             masks: vec![Rect::new(0, 0, 600, 1080)],
         },
         calibration: None,
+        logo: Some(AssetId::from("0f0f.png")),
     }
 }
 

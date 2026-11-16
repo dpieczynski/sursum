@@ -211,6 +211,8 @@ pub fn spawn(
         tracing::info!("using the screen profile calibrated from a remote (config.toml's is ignored)");
     }
     let profile = saved_profile.unwrap_or_else(|| config.screen_profile.clone());
+    let logo: Option<sursum_protocol::AssetId> =
+        database.setting::<Option<sursum_protocol::AssetId>>(LOGO_KEY).context("loading the logo")?.flatten();
     let mut state = AppState {
         index: SearchIndex::build(&songs),
         data_dir: config.data_dir.clone(),
@@ -223,6 +225,7 @@ pub fn spawn(
         profile,
         calibrating: false,
         display_power: DisplayPowerState::Unknown,
+        logo,
         transition_ms: config.transition_ms,
         rules: SlideRules::default(),
         boot_id: platform.boot_id(),
@@ -337,6 +340,8 @@ struct AppState {
     calibrating: bool,
     /// Last state reported by the display power task.
     display_power: DisplayPowerState,
+    /// The parish logo for the logo overlay.
+    logo: Option<sursum_protocol::AssetId>,
     transition_ms: u32,
     rules: SlideRules,
     boot_id: Option<String>,
@@ -382,6 +387,16 @@ impl AppState {
                 }
             }
             Command::SetScreenProfile { profile } => self.set_screen_profile(profile),
+            Command::SetLogo { asset_id } => {
+                if asset_id.as_ref().is_some_and(|id| !crate::assets::exists(&self.data_dir, id)) {
+                    return (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false);
+                }
+                if let Err(error) = self.database.set_setting(LOGO_KEY, asset_id) {
+                    tracing::error!(?error, "could not store the logo");
+                }
+                self.logo.clone_from(asset_id);
+                Ok(None)
+            }
             Command::Calibrate { on } => {
                 self.calibrating = *on;
                 Ok(None)
@@ -659,6 +674,7 @@ impl AppState {
             transition_ms: self.transition_ms,
             layout: self.layout.clone(),
             calibration: self.calibrating.then(|| self.profile.clone()),
+            logo: self.logo.clone(),
         }
     }
 
@@ -732,6 +748,8 @@ fn new_item_id() -> ItemId {
 
 /// The settings key holding the active set.
 const ACTIVE_SET_KEY: &str = "active_set";
+/// Settings key of the parish logo (an asset id).
+const LOGO_KEY: &str = "logo";
 /// Settings key of a screen profile calibrated from a remote; it wins over `config.toml`.
 const SCREEN_PROFILE_KEY: &str = "screen_profile";
 

@@ -59,7 +59,8 @@ expression: state
         }
       ]
     },
-    "calibration": null
+    "calibration": null,
+    "logo": "0f0f.png"
   },
   "next": null,
   "sections": [

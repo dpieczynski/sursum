@@ -95,6 +95,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     });
     let status = client.status();
     let commands = Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0) };
+    provide_context(commands);
     let keys = key_settings::Keys { map: RwSignal::new(keys::KeyMap::load()), learning: RwSignal::new(None) };
     provide_context(keys);
     key_settings::listen(keys, commands);

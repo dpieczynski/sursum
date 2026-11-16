@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ItemId, Rev, SetId, SongId};
+use crate::ids::{AssetId, ItemId, Rev, SetId, SongId};
 use crate::layout::{ScreenLayout, ScreenProfile};
 use crate::slide::Deck;
 
@@ -79,6 +79,9 @@ pub struct ScreenState {
     /// While set, the screen draws the calibration pattern for this profile on top of everything.
     #[serde(default)]
     pub calibration: Option<ScreenProfile>,
+    /// The parish logo shown by [`Overlay::Logo`]; without one the logo overlay is plain black.
+    #[serde(default)]
+    pub logo: Option<AssetId>,
 }
 
 /// A jump button for one section of the live deck.

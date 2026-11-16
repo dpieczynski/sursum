@@ -831,3 +831,28 @@ async fn without_power_control_the_remote_is_told_so() {
     assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::DisplayUnreachable });
     server.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn the_parish_logo_is_stored_and_reaches_the_screen_after_a_restart() {
+    use sursum_protocol::{AssetId, ErrorCode};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let png = b"\x89PNG\r\n\x1a\nsynthetic logo";
+    let id: AssetId = serde_json::from_str(&http_post_bytes(&server, "/api/assets", png).await).unwrap();
+    let mut remote = connect(&server, Role::Remote, "admin").await;
+    let unknown = Command::SetLogo { asset_id: Some(AssetId(format!("{}.png", "1".repeat(64)))) };
+    assert_eq!(
+        command(&mut remote, 1, Rev(0), unknown).await,
+        CmdOutcome::Rejected { code: ErrorCode::NotFound }
+    );
+    let set = Command::SetLogo { asset_id: Some(id.clone()) };
+    assert!(matches!(command(&mut remote, 2, Rev(0), set).await, CmdOutcome::Applied { .. }));
+    drop(remote);
+    server.stop().await.unwrap();
+
+    let server = start(dir.path(), "boot-2").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    let state = next_screen_state(&mut screen).await;
+    assert_eq!(state.logo, Some(id));
+    server.stop().await.unwrap();
+}

@@ -118,6 +118,12 @@
 .sursum-overlay.visible {
   opacity: 1;
 }
+.sursum-logo-box {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .sursum-logo {
   max-width: 60%;
   max-height: 60%;
