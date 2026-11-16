@@ -490,3 +490,47 @@ body {
     grid-area: controls;
   }
 }
+
+/* Pairing form: big PIN field for a thumb. */
+.pairing {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 420px;
+  margin: 10dvh auto;
+  padding: var(--gap);
+}
+.pairing label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+}
+.pairing input {
+  min-height: 56px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 22px;
+  user-select: text;
+}
+.pairing input.pin {
+  font-size: 32px;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+.pairing button {
+  min-height: 64px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+}
+.loading {
+  padding: 2rem;
+  color: var(--muted);
+}

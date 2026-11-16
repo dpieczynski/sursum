@@ -53,6 +53,12 @@ pub enum Msg {
     Announcement,
     AnnouncementText,
     Cancel,
+    PairingTitle,
+    Pin,
+    DeviceName,
+    DefaultDeviceName,
+    Pair,
+    WrongPin,
 }
 
 /// The Polish text for a message.
@@ -108,6 +114,12 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Announcement => "Ogłoszenie",
         Msg::AnnouncementText => "Treść (pusta linia zaczyna nowy slajd)",
         Msg::Cancel => "Anuluj",
+        Msg::PairingTitle => "Połącz pilota z ekranem",
+        Msg::Pin => "PIN",
+        Msg::DeviceName => "Nazwa tego urządzenia",
+        Msg::DefaultDeviceName => "Pilot",
+        Msg::Pair => "Połącz",
+        Msg::WrongPin => "Błędny PIN",
         Msg::ImportFailed => "Import nie powiódł się – czy to plik ZIP z folderem OpenSong?",
     }
 }
@@ -117,6 +129,11 @@ pub fn import_summary(inserted: u32, updated: u32, unchanged: u32, failed: u32, 
     format!(
         "Zaimportowano: {inserted} nowych, {updated} zmienionych, {unchanged} bez zmian, {failed} błędów, {problems} uwag"
     )
+}
+
+/// "Za dużo prób – spróbuj ponownie za 30 s".
+pub fn locked_for(seconds: u32) -> String {
+    format!("Za dużo prób – spróbuj ponownie za {seconds} s")
 }
 
 /// Human label for a section code sent by the server (`v1`, `c`, `c2`, `b`, …).

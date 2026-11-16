@@ -63,6 +63,14 @@ const MIGRATIONS: &[&str] = &[
         kind_json TEXT NOT NULL,
         PRIMARY KEY (set_id, position)
     );",
+    // 4: paired remote devices (only a hash of each device's token is stored).
+    "CREATE TABLE devices (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        revoked_at TEXT
+    );",
 ];
 
 /// The database file inside the data directory.
@@ -283,6 +291,23 @@ impl Database {
         }
         transaction.commit()?;
         Ok(())
+    }
+
+    /// Records a newly paired device.
+    pub fn add_device(&self, id: &str, name: &str, token_hash: &str) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO devices (id, name, token_hash) VALUES (?1, ?2, ?3)",
+            params![id, name, token_hash],
+        )?;
+        Ok(())
+    }
+
+    /// Token hashes of all devices that are not revoked.
+    pub fn device_token_hashes(&self) -> anyhow::Result<Vec<String>> {
+        let mut statement =
+            self.connection.prepare("SELECT token_hash FROM devices WHERE revoked_at IS NULL")?;
+        let hashes = statement.query_map([], |row| row.get(0))?.collect::<Result<_, _>>()?;
+        Ok(hashes)
     }
 
     /// Reads a JSON setting.

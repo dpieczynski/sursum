@@ -7,6 +7,7 @@
 //! - [`db`]: SQLite persistence of the runtime state.
 
 pub mod actor;
+pub mod auth;
 pub mod config;
 pub mod db;
 pub mod demo;
@@ -57,8 +58,15 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     if let Err(error) = database.backup(&config.data_dir, "startup") {
         tracing::error!(?error, "could not write the startup backup");
     }
+    let pin: Option<auth::PinHash> = database.setting(auth::PIN_SETTING).context("loading the PIN")?;
+    if pin.is_none() {
+        tracing::warn!(
+            "no PIN is set: any device on the local network can control the screen (sursum-server set-pin)"
+        );
+    }
+    let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?));
     let state = actor::spawn(&config, database, platform)?;
-    let router = http::router(state, &config);
+    let router = http::router(state, &config, access);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;

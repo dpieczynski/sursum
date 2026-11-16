@@ -11,6 +11,7 @@ mod editor;
 mod hold;
 mod import;
 mod messages;
+mod pairing;
 mod search;
 mod set_list;
 
@@ -23,7 +24,24 @@ use sursum_slide::{PreviewData, SlidePreview};
 
 fn main() {
     console_error_panic_hook::set_once();
-    mount_to_body(App);
+    mount_to_body(Root);
+}
+
+/// Asks the server whether this browser may control the screen, then shows the remote or the
+/// pairing form.
+#[component]
+fn Root() -> impl IntoView {
+    let session = RwSignal::new(None::<sursum_protocol::SessionInfo>);
+    leptos::task::spawn_local(async move {
+        let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
+        // If the question itself fails, try to connect anyway; the server decides.
+        session.set(Some(info.unwrap_or(sursum_protocol::SessionInfo { pin_required: false, paired: true })));
+    });
+    move || match session.get() {
+        None => view! { <p class="loading">{pl(Msg::Connecting)}</p> }.into_any(),
+        Some(info) if info.pin_required && !info.paired => view! { <pairing::Pairing /> }.into_any(),
+        Some(_) => view! { <App /> }.into_any(),
+    }
 }
 
 /// Sends commands with the revision the operator currently sees (for the `Stale` rule).

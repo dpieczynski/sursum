@@ -9,6 +9,7 @@ mod editor;
 mod ids;
 mod layout;
 mod message;
+mod pairing;
 mod slide;
 mod state;
 
@@ -18,6 +19,7 @@ pub use layout::{
     ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH, ScreenLayout, ScreenProfile,
 };
 pub use message::{ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, Role, ServerMsg};
+pub use pairing::{PairOutcome, PairRequest, SessionInfo};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
     DisplayPowerState, LiveSlide, Overlay, RemoteState, ScreenState, SectionJump, SetItemView, SetSummary,

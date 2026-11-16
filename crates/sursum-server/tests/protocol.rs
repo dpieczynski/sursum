@@ -399,3 +399,63 @@ async fn set_edits_persist_never_change_the_screen_and_removal_can_be_undone() {
     assert_eq!(next_remote_state(&mut remote).await.active_set.unwrap().items.len(), 4);
     server.stop().await.unwrap();
 }
+
+/// A raw HTTP request; returns the whole response (status line, headers, body).
+async fn http_raw(server: &RunningServer, request: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = TcpStream::connect(server.addr).await.unwrap();
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    response
+}
+
+async fn pair_with(server: &RunningServer, pin: &str) -> String {
+    let body =
+        serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: "Tablet".into() })
+            .unwrap();
+    http_raw(
+        server,
+        &format!(
+            "POST /api/pair HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let database = sursum_server::db::Database::open(dir.path()).unwrap();
+        let pin = sursum_server::auth::PinHash::new("2468").unwrap();
+        database.set_setting(sursum_server::auth::PIN_SETTING, &pin).unwrap();
+    }
+    let server = start(dir.path(), "boot-1").await;
+    let url = format!("ws://{}/ws/remote", server.addr);
+    assert!(tokio_tungstenite::connect_async(&url).await.is_err(), "an unpaired remote must be refused");
+    assert!(http_get(&server, "/api/songs?q=a").await.is_empty(), "the API is closed too");
+    let session: sursum_protocol::SessionInfo =
+        serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
+    assert_eq!(session, sursum_protocol::SessionInfo { pin_required: true, paired: false });
+
+    assert!(pair_with(&server, "1111").await.starts_with("HTTP/1.1 401"));
+    let response = pair_with(&server, "2468").await;
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    let cookie = response
+        .lines()
+        .find_map(|line| line.strip_prefix("set-cookie: "))
+        .and_then(|value| value.split(';').next())
+        .expect("a cookie is set")
+        .to_owned();
+    assert!(response.to_lowercase().contains("httponly") && response.contains("SameSite=Strict"));
+
+    let mut request =
+        tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(&url).unwrap();
+    request.headers_mut().insert("cookie", cookie.parse().unwrap());
+    assert!(tokio_tungstenite::connect_async(request).await.is_ok(), "a paired remote connects");
+    // The screen never needs pairing.
+    let _screen = connect(&server, Role::Screen, "screen").await;
+    server.stop().await.unwrap();
+}

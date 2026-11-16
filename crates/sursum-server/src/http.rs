@@ -13,9 +13,10 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use rust_embed::Embed;
 use serde::Deserialize;
-use sursum_protocol::Role;
+use sursum_protocol::{PairOutcome, PairRequest, Role, SessionInfo};
 
 use crate::actor::StateHandle;
+use crate::auth::{self, Access, PinCheck};
 use crate::config::Config;
 use crate::ws;
 
@@ -38,23 +39,24 @@ const SCREEN_FALLBACK: &str = "<!doctype html><html style=\"background:#000\"><h
 #[derive(Clone)]
 struct App {
     state: StateHandle,
+    access: Arc<Access>,
     allowed_origins: Arc<Vec<String>>,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
 }
 
 /// Builds the router.
-pub fn router(state: StateHandle, config: &Config) -> Router {
+pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Router {
     let app = App {
         state,
+        access,
         allowed_origins: Arc::new(config.allowed_origins.clone()),
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
     };
-    Router::new()
-        .route("/", get(|| async { Redirect::temporary("/remote/") }))
-        .route("/healthz", get(|| async { "ok" }))
-        .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
+    // Everything that controls the screen or changes data needs a paired device (once a PIN is set).
+    let protected = Router::new()
+        .route("/ws/remote", get(remote_socket))
         .route("/api/songs", get(search_songs))
         .route("/api/songs/preview", axum::routing::post(preview_song))
         .route("/api/songs/save", axum::routing::post(save_song))
@@ -64,16 +66,68 @@ pub fn router(state: StateHandle, config: &Config) -> Router {
             axum::routing::post(import_opensong)
                 .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
         )
+        .route_layer(middleware::from_fn_with_state(app.clone(), require_pairing));
+    Router::new()
+        .route("/", get(|| async { Redirect::temporary("/remote/") }))
+        .route("/healthz", get(|| async { "ok" }))
+        .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
+        .route("/api/session", get(session))
+        .route("/api/pair", axum::routing::post(pair))
         .route("/ws/screen", get(screen_socket))
-        .route("/ws/remote", get(remote_socket))
         .route("/screen", get(|| async { Redirect::permanent("/screen/") }))
         .route("/screen/", get(screen_index))
         .route("/screen/{*path}", get(screen_asset))
         .route("/remote", get(|| async { Redirect::permanent("/remote/") }))
         .route("/remote/", get(remote_index))
         .route("/remote/{*path}", get(remote_asset))
+        .merge(protected)
         .layer(middleware::from_fn_with_state(app.clone(), local_network_only))
         .with_state(app)
+}
+
+/// Refuses requests from unpaired browsers once a PIN is set.
+async fn require_pairing(State(app): State<App>, request: Request, next: Next) -> Response {
+    if app.access.allows(request.headers()) {
+        next.run(request).await
+    } else {
+        StatusCode::UNAUTHORIZED.into_response()
+    }
+}
+
+/// `GET /api/session`: whether a PIN is set and whether this browser is paired.
+async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
+    let info = SessionInfo { pin_required: app.access.pin_required(), paired: app.access.allows(&headers) };
+    axum::Json(info).into_response()
+}
+
+/// `POST /api/pair`: pairs this browser with the PIN (rate-limited per address).
+async fn pair(
+    State(app): State<App>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    axum::Json(request): axum::Json<PairRequest>,
+) -> Response {
+    match app.access.check_pin(peer.ip(), &request.pin, std::time::Instant::now()) {
+        PinCheck::Correct => {}
+        PinCheck::Wrong => {
+            return (StatusCode::UNAUTHORIZED, axum::Json(PairOutcome::WrongPin)).into_response();
+        }
+        PinCheck::Locked(wait) => {
+            let retry_after_s = u32::try_from(wait.as_secs().max(1)).unwrap_or(u32::MAX);
+            return (StatusCode::TOO_MANY_REQUESTS, axum::Json(PairOutcome::Locked { retry_after_s }))
+                .into_response();
+        }
+    }
+    let Ok((token, hash)) = auth::new_token() else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let name =
+        if request.name.trim().is_empty() { "Pilot".to_owned() } else { request.name.trim().to_owned() };
+    if !app.state.add_device(name, hash.clone()).await {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    app.access.add_token(hash);
+    let cookie = HeaderValue::from_str(&auth::cookie_header(&token)).expect("token is hex");
+    ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response()
 }
 
 #[derive(Deserialize)]

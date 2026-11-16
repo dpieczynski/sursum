@@ -38,9 +38,31 @@ impl Server {
 
     /// Starts a server with extra arguments and an optional `config.toml`.
     pub async fn start_with(extra_args: &[&str], config_toml: Option<&str>) -> anyhow::Result<Server> {
+        Self::start_prepared(extra_args, config_toml, None).await
+    }
+
+    /// Starts a server whose remotes must pair with `pin`.
+    pub async fn start_with_pin(pin: &str) -> anyhow::Result<Server> {
+        Self::start_prepared(&[], Some("transition_ms = 0\n"), Some(pin)).await
+    }
+
+    async fn start_prepared(
+        extra_args: &[&str],
+        config_toml: Option<&str>,
+        pin: Option<&str>,
+    ) -> anyhow::Result<Server> {
         let data_dir = tempfile::tempdir()?;
         if let Some(config) = config_toml {
             std::fs::write(data_dir.path().join("config.toml"), config)?;
+        }
+        if let Some(pin) = pin {
+            let status = Process::new(server_binary())
+                .arg("--data-dir")
+                .arg(data_dir.path())
+                .args(["set-pin", pin])
+                .stdout(Stdio::null())
+                .status()?;
+            anyhow::ensure!(status.success(), "set-pin failed");
         }
         let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
         let mut server = Server {

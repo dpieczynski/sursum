@@ -34,10 +34,8 @@ pub async fn post_file<T: DeserializeOwned>(url: &str, file: &web_sys::File) -> 
 }
 
 async fn decode<T: DeserializeOwned>(response: JsValue) -> Option<T> {
+    // Error responses may carry a JSON answer too (e.g. a wrong PIN); callers decide.
     let response: web_sys::Response = response.dyn_into().ok()?;
-    if !response.ok() {
-        return None;
-    }
     let text = JsFuture::from(response.text().ok()?).await.ok()?.as_string()?;
     serde_json::from_str(&text).ok()
 }

@@ -77,6 +77,15 @@ impl StateHandle {
         report.await.unwrap_or_default()
     }
 
+    /// Records a newly paired device; false if it could not be stored.
+    pub async fn add_device(&self, name: String, token_hash: String) -> bool {
+        let (reply, stored) = oneshot::channel();
+        if self.requests.send(Request::AddDevice { name, token_hash, reply }).await.is_err() {
+            return false;
+        }
+        stored.await.unwrap_or(false)
+    }
+
     /// Saves an edited or new song (optimistic locking on the revision).
     pub async fn save_song(&self, draft: SongDraft) -> SaveOutcome {
         let (reply, outcome) = oneshot::channel();
@@ -107,6 +116,11 @@ enum Request {
     SaveSong {
         draft: SongDraft,
         reply: oneshot::Sender<SaveOutcome>,
+    },
+    AddDevice {
+        name: String,
+        token_hash: String,
+        reply: oneshot::Sender<bool>,
     },
     Import {
         library: sursum_formats::opensong::LibraryImport,
@@ -173,6 +187,15 @@ pub fn spawn(
                     }
                     Request::Draft { song_id, reply } => {
                         let _ = reply.send(state.draft(&song_id));
+                    }
+                    Request::AddDevice { name, token_hash, reply } => {
+                        let id = format!("device-{}", uuid::Uuid::new_v4());
+                        let stored = state.database.add_device(&id, &name, &token_hash);
+                        if let Err(error) = &stored {
+                            tracing::error!(?error, "could not store a paired device");
+                        }
+                        tracing::info!(device = %name, "a remote was paired");
+                        let _ = reply.send(stored.is_ok());
                     }
                     Request::Import { library, reply } => {
                         let report = state.import(&library);
