@@ -39,10 +39,13 @@ Ping    { }
 Command = Next | Prev | NextItem | PrevItem                // relative: subject to `Stale`
         | GoTo { item_id, slide_index } | GoToItemNumber { number } | GoToSlide { slide_index }
         | SetOverlay { overlay: "none"|"black"|"logo" } | ToggleBlack
-        | ShowNow { song_id }           // insert after the live item and go live
+        | ShowNow { song_id }           // go to its next occurrence in the set, or insert it after
+                                        // the live item; goes live
         | AddSong { song_id } | AddText { title, text }
         | RemoveItem { item_id } | MoveItem { item_id, to_index } | UndoRemove
-        | NewSet { name } | ActivateSet { set_id }
+        | NewSet { name } | ActivateSet { set_id } | RenameSet { set_id, name }
+        | DeleteSet { set_id }          // refused with `set_on_screen` while one of its items is live
+        | SetEndOfItem { mode: "gap"|"continue" }   // what Next does after an item's last slide
         | AddImage { title, asset_id } | AddBlank { title }      // pictures (POST /api/assets) and pauses
         | DisplayPower { action: "on"|"standby" }              // ADR 0012, runs outside the actor
         // admin mode only:
@@ -54,9 +57,11 @@ Command = Next | Prev | NextItem | PrevItem                // relative: subject 
 
 ```text
 Welcome   { protocol, buildId, device?, serverTime }
-Screen    { rev, live?: { deck, slideIndex }, upcoming?: Deck, overlay, theme, transitionMs, logo?, layout: ScreenLayout }
-Remote    { rev, program: ProgramView, preview?: SlideRef, activeSet?: SetView, presence: [DeviceView],
-            displayPower: "unknown"|"on"|"standby"|"warmingUp"|"coolingDown"|{ unavailable: reason } }
+Screen    { rev, live?: { deck, slideIndex, gap }, upcoming?: Deck, overlay, theme, transitionMs, logo?, layout: ScreenLayout }
+Remote    { rev, program: Screen, next?: { deck, slideIndex, gap }, sections, activeSet?: SetView, sets,
+            canUndo, displayPower: "unknown"|"on"|"standby"|"warmingUp"|"coolingDown"|{ unavailable: reason },
+            screenProfile, screenConnected, nextStep: "slide"|"gap"|"item"|"start"|"end",
+            endOfItem: "gap"|"continue" }
 CmdResult { seq, outcome: Applied{rev} | Stale{rev} | Rejected{code} | Conflict{current} }
 Notice    { code, params }              // i18n codes, never ready-made text
 Pong      { }
@@ -75,6 +80,11 @@ restart after a server restart, so clients apply every snapshot instead of compa
   `baseRev == program.updatedRev` or the last program change came from the same client (fast
   repeated presses work); otherwise `Stale`. Two operators pressing "next" at once advance once.
 - **Absolute commands** (`GoTo…`, `SetOverlay`, `ShowNow`) always apply; last writer wins.
+  `GoTo`, `GoToItemNumber`, `GoToSlide` and `ShowNow` also lift black or the logo (ADR 0004);
+  relative steps keep them, so a slide can be prepared under black.
+- **The gap**: with `endOfItem = gap` (the default), `Next` on an item's last slide shows an empty
+  slide (`live.gap = true`, same item) before the next item; `Prev` leaves it. Not after a pause
+  item; `NextItem`/`PrevItem` and absolute commands never stop in it.
 - **Set operations** address items by stable IDs; a missing ID returns `Rejected(NotFound)`.
 - **Song edits** use optimistic locking on `revision`; a mismatch returns `Conflict`.
 - **Display power** commands are executed asynchronously; failures return

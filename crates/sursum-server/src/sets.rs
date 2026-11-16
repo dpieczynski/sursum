@@ -54,10 +54,11 @@ impl SetStore {
         self.active.as_ref()
     }
 
-    /// The list for switching sets.
+    /// The list for switching sets, newest first (the next service is usually the newest).
     pub fn summaries(&self) -> Vec<SetSummary> {
         self.sets
             .iter()
+            .rev()
             .map(|set| SetSummary {
                 set_id: set.id.clone(),
                 name: set.name.clone(),
@@ -73,6 +74,31 @@ impl SetStore {
             self.active = Some(set_id.clone());
         }
         exists
+    }
+
+    /// Renames a set; returns it, or `None` if it does not exist.
+    pub fn rename(&mut self, set_id: &SetId, name: &str) -> Option<&ServiceSet> {
+        let name = name.trim();
+        if name.is_empty() {
+            return None;
+        }
+        let set = self.sets.iter_mut().find(|set| &set.id == set_id)?;
+        name.clone_into(&mut set.name);
+        Some(set)
+    }
+
+    /// Deletes a set; false if it does not exist. If it was active, the newest remaining set
+    /// becomes active.
+    pub fn delete(&mut self, set_id: &SetId) -> bool {
+        let Some(index) = self.sets.iter().position(|set| &set.id == set_id) else { return false };
+        self.sets.remove(index);
+        if self.last_removed.as_ref().is_some_and(|removed| &removed.set_id == set_id) {
+            self.last_removed = None;
+        }
+        if self.active.as_ref() == Some(set_id) {
+            self.active = self.sets.last().map(|set| set.id.clone());
+        }
+        true
     }
 
     /// Creates an empty set and makes it active.
@@ -172,6 +198,23 @@ mod tests {
         assert_eq!(ids(store.undo_remove().unwrap()), ["a", "b", "c"]);
         assert!(!store.can_undo());
         assert_eq!(store.active().unwrap().name, "Niedziela");
+    }
+
+    #[test]
+    fn sets_are_listed_newest_first_and_can_be_renamed_and_deleted() {
+        let mut store = SetStore::default();
+        store.create(SetId::from("a"), "Pierwszy");
+        store.create(SetId::from("b"), "Drugi");
+        let names: Vec<String> = store.summaries().into_iter().map(|set| set.name).collect();
+        assert_eq!(names, ["Drugi", "Pierwszy"]);
+        assert_eq!(
+            store.rename(&SetId::from("a"), "  Niedziela ").map(|set| set.name.as_str()),
+            Some("Niedziela")
+        );
+        assert!(store.rename(&SetId::from("a"), " ").is_none(), "a set needs a name");
+        assert!(store.delete(&SetId::from("b")));
+        assert_eq!(store.active_id(), Some(&SetId::from("a")), "the newest remaining set");
+        assert!(!store.delete(&SetId::from("b")));
     }
 
     #[test]

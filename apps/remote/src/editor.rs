@@ -187,7 +187,7 @@ fn EditorPreview(draft: RwSignal<SongDraft>, state: RwSignal<Option<RemoteState>
         let (theme, layout) = look();
         (0..preview.deck.slides.len())
             .map(|index| {
-                let live = LiveSlide { deck: preview.deck.clone(), slide_index: index as u32 };
+                let live = LiveSlide { deck: preview.deck.clone(), slide_index: index as u32, gap: false };
                 PreviewData { live, theme: theme.clone(), layout: layout.clone() }
             })
             .collect::<Vec<_>>()

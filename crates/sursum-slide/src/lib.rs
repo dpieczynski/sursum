@@ -18,6 +18,7 @@ pub mod calibration;
 pub mod fit;
 pub mod layered;
 pub mod preview;
+pub mod shown;
 pub mod slide_view;
 pub mod stage;
 
@@ -26,4 +27,5 @@ mod dom;
 pub use calibration::CalibrationPattern;
 pub use layered::LayeredStage;
 pub use preview::{PreviewData, SlidePreview};
+pub use shown::shown_slide;
 pub use stage::Stage;

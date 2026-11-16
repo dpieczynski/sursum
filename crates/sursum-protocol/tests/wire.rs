@@ -23,7 +23,7 @@ fn sample_deck() -> Deck {
 fn sample_screen() -> ScreenState {
     ScreenState {
         rev: Rev(7),
-        live: Some(LiveSlide { deck: sample_deck(), slide_index: 0 }),
+        live: Some(LiveSlide { deck: sample_deck(), slide_index: 0, gap: false }),
         upcoming: None,
         overlay: Overlay::Black,
         theme: Theme::default(),
@@ -70,6 +70,17 @@ fn client_messages() {
             cmd: Command::SetScreenProfile { profile: sample_profile() },
         },
         ClientMsg::Cmd { seq: 7, base_rev: Rev(7), cmd: Command::Calibrate { on: true } },
+        ClientMsg::Cmd {
+            seq: 8,
+            base_rev: Rev(7),
+            cmd: Command::RenameSet { set_id: SetId::from("set"), name: "Niedziela".into() },
+        },
+        ClientMsg::Cmd { seq: 9, base_rev: Rev(7), cmd: Command::DeleteSet { set_id: SetId::from("old") } },
+        ClientMsg::Cmd {
+            seq: 10,
+            base_rev: Rev(7),
+            cmd: Command::SetEndOfItem { mode: EndOfItem::Continue },
+        },
         ClientMsg::Ping,
         ClientMsg::Log { message: "font missing".into() },
     ];
@@ -93,7 +104,7 @@ fn remote_state() {
     let state = RemoteState {
         rev: Rev(7),
         program: sample_screen(),
-        next: None,
+        next: Some(LiveSlide { deck: sample_deck(), slide_index: 0, gap: true }),
         sections: vec![SectionJump { label: "v1".into(), slide_index: 0 }],
         active_set: Some(SetView {
             set_id: SetId::from("set"),
@@ -103,6 +114,8 @@ fn remote_state() {
                 number: 1,
                 title: "Pieśń".into(),
                 kind: SetItemKind::Song,
+                song_id: Some(SongId::from("song-1")),
+                song_number: Some("123".into()),
             }],
         }),
         sets: vec![SetSummary { set_id: SetId::from("set"), name: "Msza".into(), items: 1 }],
@@ -110,6 +123,8 @@ fn remote_state() {
         display_power: DisplayPowerState::Unavailable { reason: "not_configured".into() },
         screen_profile: sample_profile(),
         screen_connected: true,
+        next_step: NextStep::Gap,
+        end_of_item: EndOfItem::Gap,
     };
     insta::assert_json_snapshot!(state);
 }

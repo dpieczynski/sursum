@@ -116,6 +116,20 @@ a hardware plan).
 
 **Done when:** mapping tests pass; the organist runs a full service with a pedal only.
 
+## UX — remote redesign (2026-11-17)
+
+Three views (Msza · Zestaw · Ustawienia) with fixed regions, a live strip that keeps black one tap
+away everywhere, and plain-text song entry (ADR 0017).
+
+- [x] Layout screenshots at three sizes, operator and admin (`just remote-sizes`)
+- [x] Server: gap after an item's last slide (device setting), showing lifts black/logo, `ShowNow` without duplicates, `next_step`, set rename/delete, song ids and numbers in the set view (ADR 0004 amendment)
+- [ ] Shared UI parts: tokens, one button class, sheet, toast, banner, hold button
+- [ ] Shell and the Msza view: tabs, three layouts, now/slides/set/controls, problem banners, search sheet, live strip, button side; "#" keypad removed
+- [ ] Zestaw view: set picker, rename/delete, items, search that stays open, song card
+- [ ] Ustawienia view: screen, display, this device, song library, devices, about
+- [ ] Editor: plain text, section buttons, Polish warnings, unsaved-changes guard
+- [ ] Docs: ADR 0017, operator guide rewritten with screenshots
+
 ## Later
 
 M6 optional HTTPS (device CA) + PWA + wake lock · M7 offline A/B **system** updates (rpi-image-gen

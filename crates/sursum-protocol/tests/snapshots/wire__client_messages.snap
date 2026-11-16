@@ -75,6 +75,34 @@ expression: messages
     }
   },
   {
+    "t": "cmd",
+    "seq": 8,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "rename_set",
+      "set_id": "set",
+      "name": "Niedziela"
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 9,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "delete_set",
+      "set_id": "old"
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 10,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "set_end_of_item",
+      "mode": "continue"
+    }
+  },
+  {
     "t": "ping"
   },
   {

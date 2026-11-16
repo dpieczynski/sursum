@@ -153,7 +153,7 @@ impl Parts {
     /// reconnect), so reconnecting never causes a visible transition.
     async fn transition_to(self, target: ScreenState) {
         let Some(live) = target.live else { return };
-        let Some(slide) = live.deck.slides.get(live.slide_index as usize).cloned() else { return };
+        let Some(slide) = crate::shown::shown_slide(&live) else { return };
         let current = self.front.get_untracked();
         let unchanged = self.layers[current].with_untracked(|shown| {
             shown.as_ref().is_some_and(|shown| {

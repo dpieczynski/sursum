@@ -62,6 +62,38 @@ impl Default for Theme {
 pub struct LiveSlide {
     pub deck: Deck,
     pub slide_index: u32,
+    /// The gap after the item's last slide: the screen shows an empty slide (black background)
+    /// until "next" moves on, so the next song's words do not appear before it starts.
+    #[serde(default)]
+    pub gap: bool,
+}
+
+/// What "next" does from here, so the remote can say it before the operator presses it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NextStep {
+    /// The next slide of the same item.
+    Slide,
+    /// The gap after the last slide (an empty screen).
+    Gap,
+    /// The first slide of the next item of the set.
+    Item,
+    /// Nothing is shown yet: "next" starts the set.
+    Start,
+    /// Nothing comes after this: "next" does nothing.
+    #[default]
+    End,
+}
+
+/// What "next" does after an item's last slide.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndOfItem {
+    /// An empty screen first, then the next item (like empty slides between songs in OpenSong).
+    #[default]
+    Gap,
+    /// Straight to the next item's first slide.
+    Continue,
 }
 
 /// Everything the audience screen needs; nothing about sets or editing.
@@ -100,6 +132,12 @@ pub struct SetItemView {
     pub title: String,
     #[serde(default)]
     pub kind: SetItemKind,
+    /// The song behind a song item (to open it in the editor or mark it as already in the set).
+    #[serde(default)]
+    pub song_id: Option<SongId>,
+    /// The song's number in its songbook, if any.
+    #[serde(default)]
+    pub song_number: Option<String>,
 }
 
 /// What a set item is, so the remote can mark it (and explain a song that no longer exists).
@@ -178,4 +216,10 @@ pub struct RemoteState {
     /// True while a screen (the kiosk browser) is connected.
     #[serde(default)]
     pub screen_connected: bool,
+    /// What "next" does from here.
+    #[serde(default)]
+    pub next_step: NextStep,
+    /// What "next" does after an item's last slide (a device setting).
+    #[serde(default)]
+    pub end_of_item: EndOfItem,
 }

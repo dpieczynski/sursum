@@ -105,6 +105,7 @@ pub enum Msg {
     KindText,
     KindImage,
     KindPause,
+    SetOnScreen,
     EditSet,
     DoneEditing,
     Remove,
@@ -267,6 +268,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KindText => "tekst",
         Msg::KindImage => "obraz",
         Msg::KindPause => "przerwa",
+        Msg::SetOnScreen => "Tego zestawu nie można usunąć – jego pozycja jest na ekranie",
     }
 }
 
@@ -275,6 +277,7 @@ pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
     use sursum_protocol::ErrorCode;
     match code {
         ErrorCode::InvalidProfile => Msg::InvalidProfile,
+        ErrorCode::SetOnScreen => Msg::SetOnScreen,
         ErrorCode::Forbidden => Msg::AdminRequired,
         ErrorCode::DisplayBusy => Msg::DisplayBusy,
         ErrorCode::DisplayAuthFailed => Msg::DisplayAuthFailed,

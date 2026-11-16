@@ -15,9 +15,9 @@ use sursum_core::program::{Context, Live, Outcome, Program, Rejection};
 use sursum_core::search::SearchIndex;
 use sursum_core::slides::SlideRules;
 use sursum_protocol::{
-    ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, ItemId, LiveSlide, Overlay, Rect,
-    RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenProfile, ScreenState, SetId, SetItemView, SetView,
-    SongDraft, SongId, SongSummary, Theme,
+    ClientId, CmdOutcome, Command, Deck, DisplayPowerState, EndOfItem, ErrorCode, ItemId, LiveSlide, Overlay,
+    Rect, RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenProfile, ScreenState, SetId, SetItemView,
+    SetView, SongDraft, SongId, SongSummary, Theme,
 };
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -243,6 +243,8 @@ pub fn spawn(
     let profile = layout::fit_to_scene(&saved_profile.unwrap_or_else(|| config.screen_profile.clone()));
     let logo: Option<sursum_protocol::AssetId> =
         database.setting::<Option<sursum_protocol::AssetId>>(LOGO_KEY).context("loading the logo")?.flatten();
+    let end_of_item: EndOfItem =
+        database.setting(END_OF_ITEM_KEY).context("loading the end-of-item setting")?.unwrap_or_default();
     let mut state = AppState {
         index: SearchIndex::build(&songs),
         data_dir: config.data_dir.clone(),
@@ -257,6 +259,7 @@ pub fn spawn(
         display_power: DisplayPowerState::Unknown,
         logo,
         screen_connected: false,
+        end_of_item,
         transition_ms: config.transition_ms,
         rules: SlideRules::default(),
         boot_id: platform.boot_id(),
@@ -407,6 +410,8 @@ struct AppState {
     logo: Option<sursum_protocol::AssetId>,
     /// True while a screen is connected.
     screen_connected: bool,
+    /// What "next" does after an item's last slide (a device setting).
+    end_of_item: EndOfItem,
     transition_ms: u32,
     rules: SlideRules,
     boot_id: Option<String>,
@@ -450,6 +455,17 @@ impl AppState {
                 } else {
                     Err(ErrorCode::NotFound)
                 }
+            }
+            Command::RenameSet { set_id, name } => {
+                self.sets.rename(set_id, name).cloned().ok_or(ErrorCode::NotFound).map(Some)
+            }
+            Command::DeleteSet { set_id } => self.delete_set(set_id),
+            Command::SetEndOfItem { mode } => {
+                if let Err(error) = self.database.set_setting(END_OF_ITEM_KEY, mode) {
+                    tracing::error!(?error, "could not store the end-of-item setting");
+                }
+                self.end_of_item = *mode;
+                Ok(None)
             }
             Command::SetScreenProfile { profile } => self.set_screen_profile(profile),
             Command::DeleteSong { song_id } => match self.database.delete_song(song_id.as_str()) {
@@ -505,9 +521,14 @@ impl AppState {
         Ok(None)
     }
 
-    /// Inserts a song right after the live item (or at the end if nothing is live) and shows it.
+    /// Shows a song at once: its next occurrence in the active set if it is there (no
+    /// duplicates), otherwise it is inserted right after the live item (or at the end).
     fn show_now(&mut self, actor: &ClientId, song_id: &SongId) -> (CmdOutcome, bool) {
         let anchor = self.program.live.as_ref().map(|live| live.item_id.clone());
+        if let Some(item_id) = self.occurrence_of(song_id, anchor.as_ref()) {
+            let command = Command::GoTo { item_id, slide_index: 0 };
+            return self.run_program_command(actor, Rev(u32::MAX), &command);
+        }
         match self.insert_song(song_id, anchor.as_ref()) {
             Ok((item_id, set)) => {
                 self.save_set(&set);
@@ -521,6 +542,33 @@ impl AppState {
             }
             Err(code) => (CmdOutcome::Rejected { code }, false),
         }
+    }
+
+    /// The item of the active set showing `song_id`: the first one after `after` (the live item),
+    /// else the first one at all.
+    fn occurrence_of(&self, song_id: &SongId, after: Option<&ItemId>) -> Option<ItemId> {
+        let set = self.sets.active()?;
+        let shows =
+            |item: &&SetItem| matches!(&item.kind, ItemKind::Song { song_id: id, .. } if id == song_id);
+        let start = after.and_then(|id| set.position(id)).map_or(0, |position| position + 1);
+        let later = set.items.iter().skip(start).find(shows);
+        later.or_else(|| set.items.iter().find(shows)).map(|item| item.id.clone())
+    }
+
+    /// Deletes a set unless an item of it is on screen.
+    fn delete_set(&mut self, set_id: &SetId) -> Result<Option<ServiceSet>, ErrorCode> {
+        let set = self.sets.get(set_id).ok_or(ErrorCode::NotFound)?;
+        let live = self.program.live.as_ref().map(|live| &live.item_id);
+        if live.is_some_and(|item_id| set.position(item_id).is_some()) {
+            return Err(ErrorCode::SetOnScreen);
+        }
+        if let Err(error) = self.database.delete_set(set_id.as_str()) {
+            tracing::error!(?error, "could not delete a set");
+            return Err(ErrorCode::NotFound);
+        }
+        self.sets.delete(set_id);
+        tracing::info!(%set_id, "set deleted");
+        Ok(None)
     }
 
     fn add_song(&mut self, song_id: &SongId) -> Result<Option<ServiceSet>, ErrorCode> {
@@ -586,7 +634,7 @@ impl AppState {
         let new_rev = self.rev.next();
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
-        let context = Context { set: self.sets.active(), deck_for: &deck_for };
+        let context = Context { set: self.sets.active(), deck_for: &deck_for, end_of_item: self.end_of_item };
         match self.program.execute(command, base_rev, actor, new_rev, &context) {
             Ok(Outcome::Changed) => {
                 self.rev = new_rev;
@@ -725,7 +773,7 @@ impl AppState {
             .as_ref()
             .and_then(|key| deck.slides.iter().position(|slide| &slide.key == key))
             .unwrap_or(0);
-        self.program.live = Some(Live { item_id: item.id, deck, slide_index });
+        self.program.live = Some(Live { gap: saved.gap, ..Live::at(item.id, deck, slide_index) });
         tracing::info!(same_boot, "restored the program position");
     }
 
@@ -736,6 +784,7 @@ impl AppState {
             item_id: live.map(|live| live.item_id.clone()),
             slide_key: live.map(|live| live.deck.slides[live.slide_index].key.clone()),
             overlay: self.program.overlay,
+            gap: live.is_some_and(|live| live.gap),
         };
         if let Err(error) = self.database.save_runtime(&saved, self.boot_id.as_deref()) {
             tracing::error!(?error, "could not save the program position");
@@ -759,7 +808,7 @@ impl AppState {
     fn remote_state(&self) -> RemoteState {
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
-        let context = Context { set: self.sets.active(), deck_for: &deck_for };
+        let context = Context { set: self.sets.active(), deck_for: &deck_for, end_of_item: self.end_of_item };
         RemoteState {
             rev: self.rev,
             program: self.screen_state(),
@@ -771,6 +820,8 @@ impl AppState {
             display_power: self.display_power.clone(),
             screen_profile: self.profile.clone(),
             screen_connected: self.screen_connected,
+            next_step: self.program.next_step(&context),
+            end_of_item: self.end_of_item,
         }
     }
 
@@ -784,6 +835,18 @@ impl AppState {
                 number: index as u32 + 1,
                 title: self.item_title(item),
                 kind: self.item_kind(item),
+                song_id: match &item.kind {
+                    ItemKind::Song { song_id, .. } => Some(song_id.clone()),
+                    _ => None,
+                },
+                song_number: match &item.kind {
+                    ItemKind::Song { song_id, .. } => self
+                        .songs
+                        .get(song_id)
+                        .and_then(|song| song.songbooks.first())
+                        .map(|entry| entry.entry.clone()),
+                    _ => None,
+                },
             })
             .collect();
         SetView { set_id: set.id.clone(), name: set.name.clone(), items }
@@ -839,6 +902,8 @@ fn new_item_id() -> ItemId {
 
 /// The settings key holding the active set.
 const ACTIVE_SET_KEY: &str = "active_set";
+/// Settings key of what "next" does after an item's last slide.
+const END_OF_ITEM_KEY: &str = "end_of_item";
 /// Settings key of the parish logo (an asset id).
 const LOGO_KEY: &str = "logo";
 /// Settings key of a screen profile calibrated from a remote; it wins over `config.toml`.
@@ -850,7 +915,7 @@ fn compile_item(songs: &HashMap<SongId, Song>, rules: SlideRules, item: &SetItem
 }
 
 fn live_slide(live: &Live) -> LiveSlide {
-    LiveSlide { deck: live.deck.clone(), slide_index: live.slide_index as u32 }
+    LiveSlide { deck: live.deck.clone(), slide_index: live.slide_index as u32, gap: live.gap }
 }
 
 /// The layout for a profile, or the plain safe area if the profile is invalid (logged).

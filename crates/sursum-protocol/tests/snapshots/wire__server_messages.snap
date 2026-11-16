@@ -35,7 +35,8 @@ expression: messages
             "css": "#000000"
           }
         },
-        "slide_index": 0
+        "slide_index": 0,
+        "gap": false
       },
       "upcoming": null,
       "overlay": "black",

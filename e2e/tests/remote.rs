@@ -119,9 +119,10 @@ async fn search_without_diacritics_and_show_now() -> anyhow::Result<()> {
             wait_for_slide(screen, "v1#").await?;
             let deck = attribute(screen, SCREEN_ROOT, "data-deck-id").await;
             anyhow::ensure!(!deck.is_empty(), "the screen shows no deck");
-            // The search field is cleared and the set list is back, with the new item.
+            // The search field is cleared and the set list is back. The song is already in the
+            // set, so it is shown from there, not added twice.
             wait_until(Duration::from_secs(5), || async {
-                remote.find_all(By::Css(".set-item")).await.map(|items| items.len()).unwrap_or(0) == 4
+                remote.find_all(By::Css(".set-item")).await.map(|items| items.len()).unwrap_or(0) == 3
             })
             .await?;
             Ok(())

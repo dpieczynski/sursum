@@ -47,7 +47,7 @@ pub fn SlidePreview(
 
     let content = move || {
         fit.get().and_then(|(data, fit)| {
-            let slide = data.live.deck.slides.get(data.live.slide_index as usize)?.clone();
+            let slide = crate::shown::shown_slide(&data.live)?;
             let background = background_style(&data.live.deck.background);
             let masks = data.layout.masks.clone();
             Some(view! {
@@ -99,7 +99,7 @@ pub fn SlidePreview(
 
 /// Number of lines on the previewed slide (exposed for tests comparing preview and screen).
 fn line_count(data: &PreviewData) -> usize {
-    match data.live.deck.slides.get(data.live.slide_index as usize).map(|slide| &slide.body) {
+    match crate::shown::shown_slide(&data.live).map(|slide| slide.body) {
         Some(
             sursum_protocol::SlideBody::Lyrics { lines } | sursum_protocol::SlideBody::Text { lines, .. },
         ) => lines.len(),

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{AssetId, ClientId, ItemId, Rev, SetId, SongId};
 use crate::layout::ScreenProfile;
-use crate::state::{Overlay, RemoteState, ScreenState};
+use crate::state::{EndOfItem, Overlay, RemoteState, ScreenState};
 
 /// Bumped on any incompatible change; a client with another version reloads itself.
 pub const PROTOCOL_VERSION: u16 = 1;
@@ -52,11 +52,14 @@ pub enum Command {
     GoToItemNumber { number: u32 },
     /// Show a slide of the live item by index, e.g. from a section chip (absolute).
     GoToSlide { slide_index: u32 },
+    // `GoTo`, `GoToItemNumber`, `GoToSlide` and `ShowNow` are explicit choices of what the
+    // congregation should see, so they also lift black or the logo (ADR 0004 amendment).
     /// Set the overlay (absolute).
     SetOverlay { overlay: Overlay },
     /// Black on/off in one tap (absolute).
     ToggleBlack,
-    /// Insert a song right after the live item and show it at once (absolute).
+    /// Show a song at once (absolute): the next occurrence in the active set if it is there,
+    /// otherwise it is inserted right after the live item.
     ShowNow { song_id: SongId },
     /// Append a song to the end of the active set (does not change the screen).
     AddSong { song_id: SongId },
@@ -76,6 +79,12 @@ pub enum Command {
     NewSet { name: String },
     /// Make another set active (the screen keeps its slide until the next navigation).
     ActivateSet { set_id: SetId },
+    /// Rename a set.
+    RenameSet { set_id: SetId, name: String },
+    /// Delete a set (not the one whose item is on screen).
+    DeleteSet { set_id: SetId },
+    /// What "next" does after an item's last slide (a device setting).
+    SetEndOfItem { mode: EndOfItem },
     /// Replace this device's screen profile (safe area and exclusion zones, ADR 0008). The server
     /// validates it, stores it and recomputes the layout for the screen and every preview.
     SetScreenProfile { profile: ScreenProfile },
@@ -120,6 +129,8 @@ pub enum ErrorCode {
     DisplayBusy,
     /// The display rejected the configured password.
     DisplayAuthFailed,
+    /// The set cannot be deleted: one of its items is on screen.
+    SetOnScreen,
 }
 
 /// Result of one command.

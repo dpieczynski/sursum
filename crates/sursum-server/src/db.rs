@@ -97,6 +97,9 @@ pub struct SavedProgram {
     pub item_id: Option<ItemId>,
     pub slide_key: Option<SlideKey>,
     pub overlay: Overlay,
+    /// True during the gap after the item's last slide.
+    #[serde(default)]
+    pub gap: bool,
 }
 
 /// A saved program together with the boot it was saved in.
@@ -336,6 +339,15 @@ impl Database {
             )?;
         }
         transaction.commit()?;
+        Ok(())
+    }
+
+    /// Marks a set as deleted (it stays in the database file, e.g. for a later undo tool).
+    pub fn delete_set(&self, id: &str) -> anyhow::Result<()> {
+        self.connection.execute(
+            "UPDATE sets SET deleted_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL",
+            [id],
+        )?;
         Ok(())
     }
 
@@ -677,6 +689,7 @@ mod tests {
             item_id: Some(ItemId::from("item")),
             slide_key: Some(SlideKey::from("c#0@0")),
             overlay,
+            gap: false,
         }
     }
 

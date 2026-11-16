@@ -5,17 +5,34 @@
 //! is on screen; only navigation does. When the operator navigates inside an item whose song
 //! was edited meanwhile, the fresh deck is used and the current slide is found again by its
 //! [`SlideKey`].
+//!
+//! After an item's last slide, "next" can first show a **gap** (an empty slide) before the next
+//! item, so the congregation does not see the next song's words before it starts. The gap is
+//! part of the content, not an overlay: black and logo stay the operator's own tools.
+//!
+//! Commands that name what to show (`GoTo`, `GoToItemNumber`, `GoToSlide`) lift black or the
+//! logo; relative steps keep them, so a slide can be prepared under black (ADR 0004).
 
-use sursum_protocol::{ClientId, Command, Deck, ItemId, Overlay, Rev, SectionJump};
+use sursum_protocol::{ClientId, Command, Deck, EndOfItem, ItemId, NextStep, Overlay, Rev, SectionJump};
 
-use crate::model::{ServiceSet, SetItem};
+use crate::model::{ItemKind, ServiceSet, SetItem};
 
 /// The slide on screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Live {
     pub item_id: ItemId,
     pub deck: Deck,
+    /// The slide shown, or (during the gap) the last slide the gap follows.
     pub slide_index: usize,
+    /// True during the gap after the item's last slide: the screen shows an empty slide.
+    pub gap: bool,
+}
+
+impl Live {
+    /// A slide of an item, not in the gap.
+    pub fn at(item_id: ItemId, deck: Deck, slide_index: usize) -> Live {
+        Live { item_id, deck, slide_index, gap: false }
+    }
 }
 
 /// What the congregation sees, plus who changed it last.
@@ -58,6 +75,8 @@ pub struct Context<'a> {
     pub set: Option<&'a ServiceSet>,
     /// Compiles the deck for a set item (the program does not know about songs or rules).
     pub deck_for: &'a dyn Fn(&SetItem) -> Option<Deck>,
+    /// What "next" does after an item's last slide.
+    pub end_of_item: EndOfItem,
 }
 
 /// Result of a successfully applied command.
@@ -105,9 +124,21 @@ impl Program {
             Command::Prev => self.prev(context),
             Command::NextItem => self.step_item(context, 1),
             Command::PrevItem => self.step_item(context, -1),
-            Command::GoTo { item_id, slide_index } => self.go_to(context, item_id, *slide_index as usize),
-            Command::GoToItemNumber { number } => self.go_to_number(context, *number),
-            Command::GoToSlide { slide_index } => self.go_to_slide(*slide_index as usize),
+            Command::GoTo { item_id, slide_index } => {
+                self.go_to(context, item_id, *slide_index as usize)?;
+                self.overlay = Overlay::None;
+                Ok(())
+            }
+            Command::GoToItemNumber { number } => {
+                self.go_to_number(context, *number)?;
+                self.overlay = Overlay::None;
+                Ok(())
+            }
+            Command::GoToSlide { slide_index } => {
+                self.go_to_slide(*slide_index as usize)?;
+                self.overlay = Overlay::None;
+                Ok(())
+            }
             Command::SetOverlay { overlay } => {
                 self.overlay = *overlay;
                 Ok(())
@@ -127,6 +158,9 @@ impl Program {
             | Command::UndoRemove
             | Command::NewSet { .. }
             | Command::ActivateSet { .. }
+            | Command::RenameSet { .. }
+            | Command::DeleteSet { .. }
+            | Command::SetEndOfItem { .. }
             | Command::SetScreenProfile { .. }
             | Command::Calibrate { .. }
             | Command::DisplayPower { .. }
@@ -140,6 +174,20 @@ impl Program {
         let mut probe = self.clone();
         probe.next(context).ok()?;
         probe.live.filter(|live| Some(live) != self.live.as_ref())
+    }
+
+    /// What kind of step "next" takes from here, so the remote can announce it.
+    pub fn next_step(&self, context: &Context<'_>) -> NextStep {
+        let Some(live) = &self.live else {
+            let has_items = context.set.is_some_and(|set| !set.items.is_empty());
+            return if has_items { NextStep::Start } else { NextStep::End };
+        };
+        match self.peek_next(context) {
+            None => NextStep::End,
+            Some(next) if next.gap => NextStep::Gap,
+            Some(next) if next.item_id != live.item_id => NextStep::Item,
+            Some(_) => NextStep::Slide,
+        }
     }
 
     /// Tells the program that an item was removed from the set at `index`. If it was the live
@@ -170,18 +218,35 @@ impl Program {
         let Some(live) = self.refreshed_live(context) else {
             return self.show_item_at(context, 0, SlidePick::First);
         };
+        if live.gap {
+            self.live = Some(live);
+            return self.step_item(context, 1);
+        }
         if live.slide_index + 1 < live.deck.slides.len() {
             self.live = Some(Live { slide_index: live.slide_index + 1, ..live });
             return Ok(());
         }
-        self.live = Some(live);
-        self.step_item(context, 1)
+        let gap = context.end_of_item == EndOfItem::Gap && !self.is_pause(context, &live.item_id);
+        self.live = Some(Live { gap, ..live });
+        if gap { Ok(()) } else { self.step_item(context, 1) }
+    }
+
+    /// True if the item is a pause: it is an empty slide already, so no gap follows it.
+    fn is_pause(&self, context: &Context<'_>, item_id: &ItemId) -> bool {
+        context
+            .set
+            .and_then(|set| set.items.iter().find(|item| &item.id == item_id))
+            .is_some_and(|item| matches!(item.kind, ItemKind::Blank { .. }))
     }
 
     fn prev(&mut self, context: &Context<'_>) -> Result<(), Rejection> {
         let Some(live) = self.refreshed_live(context) else {
             return Ok(());
         };
+        if live.gap {
+            self.live = Some(Live { gap: false, ..live });
+            return Ok(());
+        }
         if live.slide_index > 0 {
             self.live = Some(Live { slide_index: live.slide_index - 1, ..live });
             return Ok(());
@@ -239,6 +304,7 @@ impl Program {
             return Err(Rejection::NotFound);
         }
         live.slide_index = slide_index;
+        live.gap = false;
         Ok(())
     }
 
@@ -261,7 +327,7 @@ impl Program {
             SlidePick::Last => last,
             SlidePick::Index(index) => index.min(last),
         };
-        self.live = Some(Live { item_id: item.id.clone(), deck, slide_index });
+        self.live = Some(Live::at(item.id.clone(), deck, slide_index));
         self.removed_at = None;
         Ok(())
     }
@@ -296,7 +362,7 @@ impl Program {
             .iter()
             .position(|slide| &slide.key == current_key)
             .unwrap_or(live.slide_index.min(fresh.slides.len() - 1));
-        Some(Live { item_id: live.item_id, deck: fresh, slide_index })
+        Some(Live { item_id: live.item_id, deck: fresh, slide_index, gap: live.gap })
     }
 }
 
@@ -372,7 +438,10 @@ mod tests {
     // Tests read better with commands passed by value.
     #[allow(clippy::needless_pass_by_value)]
     fn run(program: &mut Program, set: &ServiceSet, command: Command) -> Result<(), Rejection> {
-        program.apply(&command, &Context { set: Some(set), deck_for: &deck_for })
+        program.apply(
+            &command,
+            &Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Continue },
+        )
     }
 
     fn position(program: &Program) -> (String, usize) {
@@ -439,7 +508,7 @@ mod tests {
     #[test]
     fn no_set_means_no_navigation() {
         let mut program = Program::default();
-        let context = Context { set: None, deck_for: &deck_for };
+        let context = Context { set: None, deck_for: &deck_for, end_of_item: EndOfItem::Continue };
         assert_eq!(program.apply(&Command::NextItem, &context), Err(Rejection::NoActiveSet));
     }
 
@@ -451,6 +520,95 @@ mod tests {
         assert_eq!(program.overlay, Overlay::Black);
         run(&mut program, &set, Command::ToggleBlack).unwrap();
         assert_eq!(program.overlay, Overlay::None);
+    }
+
+    fn with_gap(program: &mut Program, set: &ServiceSet, command: &Command) {
+        program
+            .apply(command, &Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Gap })
+            .unwrap();
+    }
+
+    fn gap_context(set: &ServiceSet) -> Context<'_> {
+        Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Gap }
+    }
+
+    #[test]
+    fn a_gap_follows_the_last_slide_before_the_next_item() {
+        let set = set();
+        let mut program = Program::default();
+        with_gap(&mut program, &set, &Command::GoTo { item_id: ItemId::from("i1"), slide_index: 2 });
+        assert_eq!(program.next_step(&gap_context(&set)), NextStep::Gap);
+        with_gap(&mut program, &set, &Command::Next);
+        let live = program.live.as_ref().unwrap();
+        assert!(live.gap && live.item_id.as_str() == "i1" && live.slide_index == 2, "{live:?}");
+        assert_eq!(program.next_step(&gap_context(&set)), NextStep::Item);
+        with_gap(&mut program, &set, &Command::Prev);
+        assert_eq!(position(&program), ("i1".into(), 2), "back to the last slide");
+        assert!(!program.live.as_ref().unwrap().gap);
+        with_gap(&mut program, &set, &Command::Next);
+        with_gap(&mut program, &set, &Command::Next);
+        assert_eq!(position(&program), ("i2".into(), 0));
+        assert!(!program.live.as_ref().unwrap().gap);
+    }
+
+    #[test]
+    fn the_last_item_of_the_set_ends_with_a_gap_and_then_nothing() {
+        let set = set();
+        let mut program = Program::default();
+        with_gap(&mut program, &set, &Command::GoToItemNumber { number: 3 });
+        with_gap(&mut program, &set, &Command::Next);
+        assert!(program.live.as_ref().unwrap().gap);
+        assert_eq!(program.next_step(&gap_context(&set)), NextStep::End);
+        let before = program.clone();
+        with_gap(&mut program, &set, &Command::Next);
+        assert_eq!(program, before);
+    }
+
+    #[test]
+    fn no_gap_after_a_pause_item_and_item_steps_skip_the_gap() {
+        let mut set = set();
+        set.items
+            .insert(1, SetItem { id: ItemId::from("p"), kind: ItemKind::Blank { title: "Przerwa".into() } });
+        let mut program = Program::default();
+        with_gap(&mut program, &set, &Command::GoToItemNumber { number: 2 });
+        assert_eq!(program.next_step(&gap_context(&set)), NextStep::Item, "a pause is empty already");
+        with_gap(&mut program, &set, &Command::Next);
+        assert_eq!(position(&program), ("i2".into(), 0));
+        with_gap(&mut program, &set, &Command::GoTo { item_id: ItemId::from("i1"), slide_index: 2 });
+        with_gap(&mut program, &set, &Command::NextItem);
+        assert_eq!(position(&program), ("p".into(), 0), "the next-item button never stops in a gap");
+    }
+
+    #[test]
+    fn next_step_names_what_comes() {
+        let set = set();
+        let mut program = Program::default();
+        assert_eq!(program.next_step(&gap_context(&set)), NextStep::Start);
+        with_gap(&mut program, &set, &Command::Next);
+        assert_eq!(program.next_step(&gap_context(&set)), NextStep::Slide);
+        let empty = ServiceSet { items: vec![], ..set.clone() };
+        assert_eq!(Program::default().next_step(&gap_context(&empty)), NextStep::End);
+    }
+
+    #[test]
+    fn choosing_what_to_show_lifts_black_and_the_logo_but_steps_do_not() {
+        let set = set();
+        let mut program = Program::default();
+        run(&mut program, &set, Command::Next).unwrap();
+        for jump in [
+            Command::GoToItemNumber { number: 2 },
+            Command::GoTo { item_id: ItemId::from("i1"), slide_index: 1 },
+            Command::GoToSlide { slide_index: 0 },
+        ] {
+            run(&mut program, &set, Command::SetOverlay { overlay: Overlay::Logo }).unwrap();
+            run(&mut program, &set, jump.clone()).unwrap();
+            assert_eq!(program.overlay, Overlay::None, "{jump:?}");
+        }
+        for step in [Command::Next, Command::Prev, Command::NextItem, Command::PrevItem] {
+            run(&mut program, &set, Command::SetOverlay { overlay: Overlay::Black }).unwrap();
+            run(&mut program, &set, step.clone()).unwrap();
+            assert_eq!(program.overlay, Overlay::Black, "{step:?}");
+        }
     }
 
     #[test]
@@ -466,7 +624,7 @@ mod tests {
     #[test]
     fn stale_rule_blocks_other_operators_but_not_the_last_actor() {
         let set = set();
-        let context = Context { set: Some(&set), deck_for: &deck_for };
+        let context = Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue };
         let (alice, bob) = (ClientId::from("alice"), ClientId::from("bob"));
         let mut program = Program::default();
         let first = program.execute(&Command::Next, Rev(0), &alice, Rev(1), &context);
@@ -505,7 +663,12 @@ mod tests {
             song.verses.insert(0, Verse::simple("v0", &["new"]));
             Some(compile_song(&song, &item.id, None, SlideRules::default()))
         };
-        program.apply(&Command::Next, &Context { set: Some(&set), deck_for: &edited }).unwrap();
+        program
+            .apply(
+                &Command::Next,
+                &Context { set: Some(&set), deck_for: &edited, end_of_item: EndOfItem::Continue },
+            )
+            .unwrap();
         let live = program.live.as_ref().unwrap();
         assert_eq!(live.deck.slides[live.slide_index].key.as_str(), "v2#0@0");
     }
@@ -537,7 +700,7 @@ mod tests {
     #[test]
     fn peek_next_does_not_mutate() {
         let set = set();
-        let context = Context { set: Some(&set), deck_for: &deck_for };
+        let context = Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue };
         let mut program = Program::default();
         run(&mut program, &set, Command::GoToItemNumber { number: 1 }).unwrap();
         let before = program.clone();

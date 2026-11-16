@@ -24,6 +24,6 @@ pub use message::{
 pub use pairing::{AdminRequest, DeviceView, PairOutcome, PairRequest, SessionInfo};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
-    DisplayPowerState, LiveSlide, Overlay, RemoteState, ScreenState, SectionJump, SetItemKind, SetItemView,
-    SetSummary, SetView, SongSummary, TextAlign, Theme,
+    DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SectionJump,
+    SetItemKind, SetItemView, SetSummary, SetView, SongSummary, TextAlign, Theme,
 };

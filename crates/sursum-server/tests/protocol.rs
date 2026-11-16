@@ -214,29 +214,53 @@ async fn next_remote_state(socket: &mut Socket) -> sursum_protocol::RemoteState 
 }
 
 #[tokio::test]
-async fn show_now_inserts_after_the_live_item_and_add_song_appends() {
+async fn show_now_goes_to_a_song_already_in_the_set_or_inserts_it_after_the_live_item() {
     let dir = tempfile::tempdir().unwrap();
     let server = start(dir.path(), "boot-1").await;
     let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut observer = connect(&server, Role::Remote, "observer").await;
+    next_remote_state(&mut observer).await;
     let refrain = sursum_protocol::SongId::from("demo-synthetic-refrain");
     command(&mut remote, 1, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
-    let outcome = command(&mut remote, 2, Rev(0), Command::ShowNow { song_id: refrain.clone() }).await;
+    command(&mut remote, 2, Rev(u32::MAX), Command::SetOverlay { overlay: Overlay::Black }).await;
+    let outcome = command(&mut remote, 3, Rev(0), Command::ShowNow { song_id: refrain.clone() }).await;
     assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
-    let outcome = command(&mut remote, 3, Rev(0), Command::AddSong { song_id: refrain }).await;
+    let state = last_remote_state(&mut observer).await;
+    let live = state.program.live.as_ref().unwrap();
+    assert_eq!(live.deck.item_id.as_str(), "demo-item-2", "the song in the set, no duplicate");
+    assert_eq!(state.active_set.as_ref().unwrap().items.len(), 3);
+    assert_eq!(state.program.overlay, Overlay::None, "showing a song lifts black");
+
+    // Not in the set any more: inserted right after the live item.
+    command(&mut remote, 4, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
+    let item_2 = sursum_protocol::ItemId::from("demo-item-2");
+    command(&mut remote, 5, Rev(0), Command::RemoveItem { item_id: item_2 }).await;
+    command(&mut remote, 6, Rev(0), Command::ShowNow { song_id: refrain.clone() }).await;
+    let outcome = command(&mut remote, 7, Rev(0), Command::AddSong { song_id: refrain }).await;
     assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
     let missing = Command::ShowNow { song_id: sursum_protocol::SongId::from("no-such-song") };
-    assert!(matches!(command(&mut remote, 4, Rev(0), missing).await, CmdOutcome::Rejected { .. }));
+    assert!(matches!(command(&mut remote, 8, Rev(0), missing).await, CmdOutcome::Rejected { .. }));
 
-    let mut observer = connect(&server, Role::Remote, "observer").await;
-    let state = next_remote_state(&mut observer).await;
+    let state = last_remote_state(&mut observer).await;
     let items: Vec<&str> =
         state.active_set.as_ref().unwrap().items.iter().map(|item| item.item_id.as_str()).collect();
-    assert_eq!(items.len(), 5);
-    assert_eq!((items[0], items[2], items[3]), ("demo-item-1", "demo-item-2", "demo-item-3"));
-    assert!(items[1].starts_with("item-") && items[4].starts_with("item-"));
+    assert_eq!(items.len(), 4);
+    assert_eq!((items[0], items[2]), ("demo-item-1", "demo-item-3"));
+    assert!(items[1].starts_with("item-") && items[3].starts_with("item-"));
     let live = state.program.live.unwrap();
     assert_eq!((live.deck.item_id.as_str(), live.slide_index), (items[1], 0));
+    let view = &state.active_set.as_ref().unwrap().items[1];
+    assert_eq!(view.song_id.as_ref().map(|id| id.as_str()), Some("demo-synthetic-refrain"));
     server.stop().await.unwrap();
+}
+
+/// The newest remote state that arrived (waits for at least one).
+async fn last_remote_state(socket: &mut Socket) -> sursum_protocol::RemoteState {
+    let mut state = next_remote_state(socket).await;
+    while let Ok(next) = tokio::time::timeout(Duration::from_millis(200), next_remote_state(socket)).await {
+        state = next;
+    }
+    state
 }
 
 async fn http_post(server: &RunningServer, path: &str, body: &str) -> String {
@@ -405,7 +429,8 @@ async fn set_edits_persist_never_change_the_screen_and_removal_can_be_undone() {
     let state = next_remote_state(&mut remote).await;
     assert_eq!(state.sets.len(), 2);
     assert_eq!(state.active_set.as_ref().unwrap().name, "Nowy");
-    let first = state.sets[0].set_id.clone();
+    assert_eq!(state.sets[0].name, "Nowy", "newest first");
+    let first = state.sets[1].set_id.clone();
     command(&mut remote, 2, Rev(0), Command::ActivateSet { set_id: first }).await;
     assert_eq!(next_remote_state(&mut remote).await.active_set.unwrap().items.len(), 4);
     server.stop().await.unwrap();
@@ -998,5 +1023,82 @@ async fn a_deleted_song_leaves_search_but_not_the_screen() {
     // The screen keeps the frozen deck that was live (ADR 0005).
     let state = next_screen_state(&mut screen).await;
     assert_eq!(state.live.unwrap().deck.deck_id, shown.deck.deck_id);
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_gap_follows_each_item_unless_turned_off_and_survives_a_restart() {
+    use sursum_protocol::{EndOfItem, NextStep};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut observer = connect(&server, Role::Remote, "observer").await;
+    command(&mut remote, 1, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
+    let state = last_remote_state(&mut observer).await;
+    let slides = state.program.live.as_ref().unwrap().deck.slides.len() as u32;
+    command(&mut remote, 2, Rev(u32::MAX), Command::GoToSlide { slide_index: slides - 1 }).await;
+    let state = last_remote_state(&mut observer).await;
+    assert_eq!(state.next_step, NextStep::Gap);
+    assert!(state.next.as_ref().is_some_and(|next| next.gap), "the preview shows the gap");
+
+    command(&mut remote, 3, Rev(u32::MAX), Command::Next).await;
+    let state = last_remote_state(&mut observer).await;
+    let live = state.program.live.as_ref().unwrap();
+    assert!(live.gap && live.deck.item_id.as_str() == "demo-item-1", "{live:?}");
+    assert_eq!(state.next_step, NextStep::Item);
+    assert_eq!(state.program.overlay, Overlay::None, "the gap is content, not black");
+    drop((remote, observer));
+    server.stop().await.unwrap();
+
+    // The gap comes back after a restart; the setting is stored.
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let state = next_remote_state(&mut remote).await;
+    assert!(state.program.live.as_ref().unwrap().gap);
+    assert_eq!(state.end_of_item, EndOfItem::Gap);
+    command(&mut remote, 1, Rev(u32::MAX), Command::SetEndOfItem { mode: EndOfItem::Continue }).await;
+    command(&mut remote, 2, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
+    command(&mut remote, 3, Rev(u32::MAX), Command::GoToSlide { slide_index: slides - 1 }).await;
+    let state = last_remote_state(&mut remote).await;
+    assert_eq!((state.end_of_item, state.next_step), (EndOfItem::Continue, NextStep::Item));
+    drop(remote);
+    server.stop().await.unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    assert_eq!(next_remote_state(&mut remote).await.end_of_item, EndOfItem::Continue);
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn sets_can_be_renamed_and_deleted_but_not_while_on_screen() {
+    use sursum_protocol::ErrorCode;
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut observer = connect(&server, Role::Remote, "observer").await;
+    let demo = next_remote_state(&mut observer).await.active_set.unwrap().set_id;
+    command(&mut remote, 1, Rev(u32::MAX), Command::GoToItemNumber { number: 1 }).await;
+    let rename = Command::RenameSet { set_id: demo.clone(), name: "Niedziela".into() };
+    assert!(matches!(command(&mut remote, 2, Rev(0), rename).await, CmdOutcome::Applied { .. }));
+    let outcome = command(&mut remote, 3, Rev(0), Command::DeleteSet { set_id: demo.clone() }).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::SetOnScreen });
+    command(&mut remote, 4, Rev(0), Command::NewSet { name: "Stary".into() }).await;
+    let old = last_remote_state(&mut observer).await.active_set.unwrap().set_id;
+    command(&mut remote, 5, Rev(0), Command::NewSet { name: "Następna".into() }).await;
+    let outcome = command(&mut remote, 6, Rev(0), Command::DeleteSet { set_id: old }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    let outcome = command(&mut remote, 7, Rev(0), Command::DeleteSet { set_id: "nope".into() }).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::NotFound });
+    let state = last_remote_state(&mut observer).await;
+    let names: Vec<&str> = state.sets.iter().map(|set| set.name.as_str()).collect();
+    assert_eq!(names, ["Następna", "Niedziela"], "newest first, the deleted one gone");
+    drop((remote, observer));
+    server.stop().await.unwrap();
+
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let state = next_remote_state(&mut remote).await;
+    let names: Vec<&str> = state.sets.iter().map(|set| set.name.as_str()).collect();
+    assert_eq!(names, ["Następna", "Niedziela"], "stored");
     server.stop().await.unwrap();
 }
