@@ -5,6 +5,7 @@ All tests are Rust; no Node or Python is needed.
 | Command | Runs |
 |---|---|
 | `just test` | unit + integration tests (native), incl. pure frontend logic (`fit_font_size`, backoff, labels) |
+| `just test-wasm` | `wasm-bindgen-test` in Chromium (via the chromedriver container): DOM measuring of `fit_deck` — chosen size fits and is the largest, longer lines/narrower areas shrink, one size per deck, independent of stage scaling |
 | `just e2e` | builds the web apps and an `e2e-hooks` server, then WebDriver tests: all on Chromium, then on WPE WebKit |
 | `just lint` | rustfmt, leptosfmt, clippy `-D warnings` (native and `wasm32-unknown-unknown`), SPDX check, cargo-deny |
 | `just screenshots [dir]` | PNG screenshots of the screen and the remote (needs `just browsers`) |

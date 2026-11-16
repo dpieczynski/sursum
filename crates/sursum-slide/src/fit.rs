@@ -150,6 +150,7 @@ mod tests {
         assert_eq!(fit_font_size(40, 20, |_| true), Some(40));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     proptest::proptest! {
         #[test]
         fn matches_a_linear_scan(min in 1u32..100, span in 0u32..200, limit in 0u32..400) {

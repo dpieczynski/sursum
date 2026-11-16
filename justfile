@@ -46,6 +46,11 @@ browsers:
 browsers-stop:
     -podman stop sursum-chromedriver sursum-wpedriver
 
+# Browser tests of the font fitting in the shared drawing crate (needs `just browsers`).
+test-wasm:
+    CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CHROMEDRIVER_REMOTE=http://127.0.0.1:9515 \
+        cargo test -p sursum-slide --target wasm32-unknown-unknown --test dom
+
 # End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015).
 e2e: build-web
     cargo build -p sursum-server --features e2e-hooks

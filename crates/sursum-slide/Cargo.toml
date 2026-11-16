@@ -24,8 +24,11 @@ web-sys = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-proptest.workspace = true
 wasm-bindgen-test.workspace = true
+
+# proptest needs OS randomness, which wasm32-unknown-unknown lacks; the DOM tests do not use it.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

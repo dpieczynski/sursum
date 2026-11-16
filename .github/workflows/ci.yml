@@ -41,6 +41,7 @@ jobs:
           tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130
       - run: just browsers-image
       - run: just browsers
+      - run: just test-wasm
       - run: just e2e
       - if: always()
         run: just browsers-stop
