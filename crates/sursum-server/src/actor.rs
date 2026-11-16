@@ -86,6 +86,24 @@ impl StateHandle {
         stored.await.unwrap_or(false)
     }
 
+    /// The whole library as a `.sursum` file.
+    pub async fn export_library(&self) -> Option<Vec<u8>> {
+        let (reply, bytes) = oneshot::channel();
+        self.requests.send(Request::Export { reply }).await.ok()?;
+        bytes.await.ok().flatten()
+    }
+
+    /// Merges a `.sursum` file (or only reports what would happen, with `dry_run`).
+    pub async fn merge_library(
+        &self,
+        songs: Vec<crate::library::BundleSong>,
+        dry_run: bool,
+    ) -> Option<sursum_protocol::MergeReport> {
+        let (reply, report) = oneshot::channel();
+        self.requests.send(Request::Merge { songs, dry_run, reply }).await.ok()?;
+        report.await.ok().flatten()
+    }
+
     /// Saves an edited or new song (optimistic locking on the revision).
     pub async fn save_song(&self, draft: SongDraft) -> SaveOutcome {
         let (reply, outcome) = oneshot::channel();
@@ -116,6 +134,14 @@ enum Request {
     SaveSong {
         draft: SongDraft,
         reply: oneshot::Sender<SaveOutcome>,
+    },
+    Export {
+        reply: oneshot::Sender<Option<Vec<u8>>>,
+    },
+    Merge {
+        songs: Vec<crate::library::BundleSong>,
+        dry_run: bool,
+        reply: oneshot::Sender<Option<sursum_protocol::MergeReport>>,
     },
     AddDevice {
         name: String,
@@ -187,6 +213,21 @@ pub fn spawn(
                     }
                     Request::Draft { song_id, reply } => {
                         let _ = reply.send(state.draft(&song_id));
+                    }
+                    Request::Export { reply } => {
+                        let bytes = crate::library::export(&state.database);
+                        if let Err(error) = &bytes {
+                            tracing::error!(?error, "could not export the library");
+                        }
+                        let _ = reply.send(bytes.ok());
+                    }
+                    Request::Merge { songs, dry_run, reply } => {
+                        let report = state.merge(&songs, dry_run);
+                        if !dry_run {
+                            screen_tx.send_replace(Arc::new(state.screen_state()));
+                            remote_tx.send_replace(Arc::new(state.remote_state()));
+                        }
+                        let _ = reply.send(report);
                     }
                     Request::AddDevice { name, token_hash, reply } => {
                         let id = format!("device-{}", uuid::Uuid::new_v4());
@@ -369,6 +410,37 @@ impl AppState {
         }
     }
 
+    /// Merges a library file after backing up the database, then reloads the library.
+    fn merge(
+        &mut self,
+        songs: &[crate::library::BundleSong],
+        dry_run: bool,
+    ) -> Option<sursum_protocol::MergeReport> {
+        if !dry_run && let Err(error) = self.database.backup(&self.data_dir, "before-merge") {
+            tracing::error!(?error, "could not back up before merging");
+        }
+        let report = crate::library::merge(&mut self.database, songs, dry_run);
+        if let Err(error) = &report {
+            tracing::error!(?error, "merging failed");
+        }
+        if !dry_run {
+            self.reload_library();
+        }
+        report.ok()
+    }
+
+    /// Re-reads all songs from the database and rebuilds the search index.
+    fn reload_library(&mut self) {
+        match self.database.load_songs() {
+            Ok(songs) => {
+                self.index = SearchIndex::build(&songs);
+                self.songs = songs.into_iter().map(|song| (song.id.clone(), song)).collect();
+            }
+            Err(error) => tracing::error!(?error, "could not reload the song library"),
+        }
+        self.rev = self.rev.next();
+    }
+
     /// Imports songs after backing up the database, then reloads the library and the index.
     fn import(&mut self, library: &sursum_formats::opensong::LibraryImport) -> sursum_protocol::ImportReport {
         if let Err(error) = self.database.backup(&self.data_dir, "before-import") {
@@ -380,14 +452,7 @@ impl AppState {
                 sursum_protocol::ImportReport { problems: vec![error.to_string()], ..Default::default() }
             }
         };
-        match self.database.load_songs() {
-            Ok(songs) => {
-                self.index = SearchIndex::build(&songs);
-                self.songs = songs.into_iter().map(|song| (song.id.clone(), song)).collect();
-            }
-            Err(error) => tracing::error!(?error, "could not reload the song library"),
-        }
-        self.rev = self.rev.next();
+        self.reload_library();
         report
     }
 

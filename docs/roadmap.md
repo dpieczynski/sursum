@@ -68,7 +68,7 @@ without a mouse.
 - [x] Multi-remote `Stale` rule (M1)
 - [x] PIN pairing: `sursum-server set-pin`, salted hash, rate-limited `/api/pair` with doubling lockout, `HttpOnly; SameSite=Strict` device cookie (only its hash stored), protected `/ws/remote` and `/api/*`, pairing screen in the remote; screen stays open
 - [ ] Roles (operator vs admin) and the device list with revocation
-- [ ] `.sursum` export/import with merge and dry-run
+- [x] `.sursum` library file: export (`GET /api/library/export`, ZIP with `manifest.json` + `songs.jsonl` incl. revision history), merge with mandatory dry run in the remote; fast-forward by ancestor hashes, newer-local kept, conflicts stored as a copy, backup before merging (sets and soft deletions not yet carried)
 - [ ] Screen calibration panel (grid, drag exclusion zone on the preview)
 
 **Done when:** WebDriver tests prove set edits never change the screen; simultaneous "next" from two

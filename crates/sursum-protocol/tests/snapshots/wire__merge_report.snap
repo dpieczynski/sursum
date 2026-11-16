@@ -1,0 +1,13 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: report
+---
+{
+  "added": 2,
+  "updated": 1,
+  "unchanged": 40,
+  "kept_local": 1,
+  "conflicts": [
+    "Pieśń zmieniona w obu kościołach"
+  ]
+}

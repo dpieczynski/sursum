@@ -94,3 +94,15 @@ fn messages_round_trip() {
     let json = serde_json::to_string(&message).unwrap();
     assert_eq!(serde_json::from_str::<ServerMsg>(&json).unwrap(), message);
 }
+
+#[test]
+fn merge_report() {
+    let report = sursum_protocol::MergeReport {
+        added: 2,
+        updated: 1,
+        unchanged: 40,
+        kept_local: 1,
+        conflicts: vec!["Pieśń zmieniona w obu kościołach".into()],
+    };
+    insta::assert_json_snapshot!(report);
+}

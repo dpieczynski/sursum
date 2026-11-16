@@ -459,3 +459,60 @@ async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() 
     let _screen = connect(&server, Role::Screen, "screen").await;
     server.stop().await.unwrap();
 }
+
+async fn http_get_bytes(server: &RunningServer, path: &str) -> Vec<u8> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = TcpStream::connect(server.addr).await.unwrap();
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).await.unwrap();
+    let body_at = response.windows(4).position(|window| window == b"\r\n\r\n").unwrap() + 4;
+    response.split_off(body_at)
+}
+
+#[tokio::test]
+async fn library_file_moves_new_songs_to_another_device_after_a_dry_run() {
+    use sursum_protocol::{MergeReport, SaveOutcome, SongDraft};
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let tulce = start(dir_a.path(), "boot-1").await;
+    let gowarzewo = start(dir_b.path(), "boot-1").await;
+    let draft = SongDraft {
+        title: "Syntetyczna pieśń do scalenia".into(),
+        lyrics: "[V1]\n Tylko w Tulcach".into(),
+        ..SongDraft::default()
+    };
+    let saved: SaveOutcome = serde_json::from_str(
+        &http_post(&tulce, "/api/songs/save", &serde_json::to_string(&draft).unwrap()).await,
+    )
+    .unwrap();
+    assert!(matches!(saved, SaveOutcome::Saved { .. }), "{saved:?}");
+
+    let bundle = http_get_bytes(&tulce, "/api/library/export").await;
+    assert!(bundle.starts_with(b"PK"), "a ZIP file");
+
+    let preview: MergeReport =
+        serde_json::from_str(&http_post_bytes(&gowarzewo, "/api/library/merge?dry_run=true", &bundle).await)
+            .unwrap();
+    assert_eq!(preview.added, 1, "{preview:?}");
+    assert!(preview.conflicts.is_empty(), "{preview:?}");
+    let search = "/api/songs?q=do%20scalenia";
+    let found: Vec<sursum_protocol::SongSummary> =
+        serde_json::from_str(&http_get(&gowarzewo, search).await).unwrap();
+    assert!(found.is_empty(), "a dry run writes nothing");
+
+    let merged: MergeReport =
+        serde_json::from_str(&http_post_bytes(&gowarzewo, "/api/library/merge", &bundle).await).unwrap();
+    assert_eq!(merged, preview);
+    let found: Vec<sursum_protocol::SongSummary> =
+        serde_json::from_str(&http_get(&gowarzewo, search).await).unwrap();
+    assert_eq!(found[0].title, "Syntetyczna pieśń do scalenia");
+
+    let again: MergeReport =
+        serde_json::from_str(&http_post_bytes(&gowarzewo, "/api/library/merge", &bundle).await).unwrap();
+    assert_eq!((again.added, again.updated), (0, 0), "merging twice changes nothing: {again:?}");
+    let rejected = http_post_bytes(&gowarzewo, "/api/library/merge", b"not a zip").await;
+    assert!(serde_json::from_str::<MergeReport>(&rejected).is_err());
+    tulce.stop().await.unwrap();
+    gowarzewo.stop().await.unwrap();
+}

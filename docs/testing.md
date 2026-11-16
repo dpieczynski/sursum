@@ -26,6 +26,12 @@ starts its own server on a random port with a temporary data directory; the serv
 kept in that directory and printed if it fails to start. WPEWebDriver allows one session at a
 time, so tests always close their session (`with_browser`) and run with `--test-threads=1`.
 
+**Build ids must match.** `just` exports `SURSUM_BUILD_ID` (`git describe --dirty`) for the web
+apps; a server built with plain `cargo build` has a different id, and the pages then reload in a
+loop (by design: a client never talks to a server of another build). Build both through `just`,
+or export the same `SURSUM_BUILD_ID` yourself. If chromedriver starts answering "Timed out
+receiving message from renderer", restart its container (`just browsers-stop && just browsers`).
+
 ## Layers
 
 - **Rust unit tests** (`sursum-protocol`, `sursum-core`, `sursum-formats`): OpenSong parser edge

@@ -7,6 +7,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod api;
+mod bundle;
 mod editor;
 mod hold;
 mod import;
@@ -217,6 +218,7 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
             <div class="library-tools">
                 <NewSongButton />
                 <import::ImportButton />
+                <bundle::LibraryFile />
             </div>
             <Show when=searching fallback=set_list>
                 <search::SearchResults query commands />

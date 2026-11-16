@@ -328,6 +328,28 @@ impl Database {
         Ok(())
     }
 
+    /// Every stored song with its content hash and the hashes of all its earlier revisions
+    /// (for merging libraries between devices).
+    pub fn songs_with_history(&self) -> anyhow::Result<Vec<(Song, String, Vec<String>)>> {
+        let mut songs = self
+            .connection
+            .prepare("SELECT id, body_json, content_hash FROM songs WHERE deleted_at IS NULL ORDER BY id")?;
+        let mut history = self
+            .connection
+            .prepare("SELECT content_hash FROM song_history WHERE song_id = ?1 ORDER BY revision")?;
+        let rows: Vec<(String, String, String)> = songs
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        rows.into_iter()
+            .map(|(id, body, hash)| {
+                let song: Song = serde_json::from_str(&body).context("decoding a stored song")?;
+                let hashes =
+                    history.query_map([&id], |row| row.get(0))?.collect::<Result<Vec<String>, _>>()?;
+                Ok((song, hash, hashes))
+            })
+            .collect()
+    }
+
     /// The current revision of a song, if it exists.
     pub fn song_revision(&self, song_id: &str) -> anyhow::Result<Option<i64>> {
         let revision = self

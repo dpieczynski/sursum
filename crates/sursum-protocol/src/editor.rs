@@ -41,6 +41,18 @@ pub struct ImportReport {
     pub problems: Vec<String>,
 }
 
+/// What merging a `.sursum` library file does (or would do, in a dry run).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergeReport {
+    pub added: u32,
+    pub updated: u32,
+    pub unchanged: u32,
+    /// Songs where this device already has a newer version.
+    pub kept_local: u32,
+    /// Titles of songs changed on both sides; the incoming version is stored as a copy.
+    pub conflicts: Vec<String>,
+}
+
 /// Result of saving a draft.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]

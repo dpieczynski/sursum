@@ -44,6 +44,14 @@ pub enum Msg {
     ImportOpenSong,
     Importing,
     ImportFailed,
+    ExportLibrary,
+    MergeLibrary,
+    MergeChecking,
+    MergeWouldDo,
+    MergeConfirm,
+    Merging,
+    MergeDone,
+    MergeFailed,
     EditSet,
     DoneEditing,
     Remove,
@@ -121,6 +129,14 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Pair => "Połącz",
         Msg::WrongPin => "Błędny PIN",
         Msg::ImportFailed => "Import nie powiódł się – czy to plik ZIP z folderem OpenSong?",
+        Msg::ExportLibrary => "Eksport bazy",
+        Msg::MergeLibrary => "Scal bazę z pliku",
+        Msg::MergeChecking => "Sprawdzanie pliku…",
+        Msg::MergeWouldDo => "Po scaleniu:",
+        Msg::MergeConfirm => "Scal",
+        Msg::Merging => "Scalanie…",
+        Msg::MergeDone => "Scalono:",
+        Msg::MergeFailed => "Scalanie nie powiodło się – czy to plik .sursum?",
     }
 }
 
@@ -129,6 +145,27 @@ pub fn import_summary(inserted: u32, updated: u32, unchanged: u32, failed: u32, 
     format!(
         "Zaimportowano: {inserted} nowych, {updated} zmienionych, {unchanged} bez zmian, {failed} błędów, {problems} uwag"
     )
+}
+
+/// One-line merge report; conflicting titles are listed because they need a human decision.
+pub fn merge_summary(
+    added: u32,
+    updated: u32,
+    unchanged: u32,
+    kept_local: u32,
+    conflicts: &[String],
+) -> String {
+    let mut text = format!(
+        "{added} nowych, {updated} zaktualizowanych, {unchanged} bez zmian, {kept_local} nowszych tutaj"
+    );
+    if !conflicts.is_empty() {
+        text.push_str(&format!(
+            ", {} konfliktów (zapisane jako kopie): {}",
+            conflicts.len(),
+            conflicts.join(", ")
+        ));
+    }
+    text
 }
 
 /// "Za dużo prób – spróbuj ponownie za 30 s".

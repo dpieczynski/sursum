@@ -14,6 +14,7 @@ pub mod demo;
 pub mod editor;
 pub mod http;
 pub mod import;
+pub mod library;
 pub mod licenses;
 pub mod platform;
 pub mod sets;

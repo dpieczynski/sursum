@@ -66,6 +66,11 @@ pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Route
             axum::routing::post(import_opensong)
                 .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
         )
+        .route("/api/library/export", get(export_library))
+        .route(
+            "/api/library/merge",
+            axum::routing::post(merge_library).layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+        )
         .route_layer(middleware::from_fn_with_state(app.clone(), require_pairing));
     Router::new()
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
@@ -170,6 +175,47 @@ async fn import_opensong(
         Ok(Ok(library)) => axum::Json(app.state.import(library).await).into_response(),
         Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /api/library/export`: the whole library as a `.sursum` file (also a backup).
+async fn export_library(State(app): State<App>) -> Response {
+    match app.state.export_library().await {
+        Some(bytes) => (
+            [
+                (header::CONTENT_TYPE, HeaderValue::from_static("application/zip")),
+                (
+                    header::CONTENT_DISPOSITION,
+                    HeaderValue::from_static("attachment; filename=\"biblioteka.sursum\""),
+                ),
+            ],
+            bytes,
+        )
+            .into_response(),
+        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct MergeQuery {
+    #[serde(default)]
+    dry_run: bool,
+}
+
+/// `POST /api/library/merge?dry_run=true`: merges a `.sursum` file (or reports what would happen).
+async fn merge_library(
+    State(app): State<App>,
+    Query(query): Query<MergeQuery>,
+    body: axum::body::Bytes,
+) -> Response {
+    let songs = match tokio::task::spawn_blocking(move || crate::library::read_bundle(&body)).await {
+        Ok(Ok(songs)) => songs,
+        Ok(Err(error)) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    match app.state.merge_library(songs, query.dry_run).await {
+        Some(report) => axum::Json(report).into_response(),
+        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
