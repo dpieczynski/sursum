@@ -14,7 +14,7 @@ mod strip;
 pub use now::Now;
 pub use pad::Pad;
 pub use screen_sheet::ScreenSheet;
-pub use search_sheet::SearchSheet;
+pub use search_sheet::{SearchSheet, search_results};
 pub use set::LiveSet;
 pub use slides::Slides;
 pub use strip::LiveStrip;

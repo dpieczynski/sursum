@@ -1,0 +1,172 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* The Zestaw view: header, add bar, editable items, search results, picker and song card. */
+
+.sets-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+.sets-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.sets-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-title);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sets-header-tools {
+  display: flex;
+  gap: 8px;
+}
+.add-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.add-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edit-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 4px 0 4px 8px;
+  border-left: 6px solid transparent;
+  border-bottom: 1px solid #262626;
+}
+.edit-row.live {
+  border-left-color: var(--live);
+}
+.edit-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 19px;
+  text-align: left;
+}
+.edit-row .btn--sm {
+  min-width: 48px;
+}
+.undo-remove {
+  align-self: flex-start;
+}
+
+.sets-view .search-result .result-text {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 0;
+}
+.sets-view .result-action {
+  min-height: var(--tap-sm);
+}
+
+/* Set picker */
+.picker-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #262626;
+}
+.picker-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  min-height: 60px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 19px;
+  text-align: left;
+}
+.picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.picker-count {
+  color: var(--muted);
+  font-size: 14px;
+}
+.picker-row.chosen .picker-name {
+  font-weight: 800;
+}
+
+/* Song card */
+.card-title {
+  margin: 0;
+  font-size: var(--font-title);
+}
+.card-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card-slide {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+.card-lines {
+  margin: 4px 0 0;
+  white-space: pre-line;
+  user-select: text;
+}
+
+@media (max-width: 599px) {
+  .sets-header {
+    flex-wrap: nowrap;
+  }
+  .sets-header-tools .btn {
+    padding: 0 10px;
+    font-size: 14px;
+  }
+  .add-buttons {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .add-buttons .btn {
+    flex: none;
+  }
+  .edit-row .hold {
+    padding: 0 8px;
+  }
+  .edit-title {
+    font-size: 17px;
+  }
+}

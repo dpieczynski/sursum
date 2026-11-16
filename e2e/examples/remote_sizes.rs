@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Screenshots of the remote on a phone, an upright tablet and a landscape tablet, as an operator
-//! and in admin mode, while a song is live: `just remote-sizes [dir]` (needs `just browsers`).
+//! and in admin mode, while a song is live, in every tab: `just remote-sizes [dir]` (needs
+//! `just browsers`).
 //! Used to compare layouts before and after a change.
 
 use std::path::PathBuf;
@@ -33,8 +34,16 @@ async fn main() -> anyhow::Result<()> {
         pair(&page).await?;
         tokio::time::sleep(Duration::from_millis(800)).await;
         page.screenshot(&output.join(format!("{name}-operator.png"))).await?;
+        for tab in ["zestaw", "ustawienia"] {
+            sursum_e2e::open_tab(&page, tab).await?;
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            page.screenshot(&output.join(format!("{name}-{tab}-operator.png"))).await?;
+        }
         unlock_admin(&page).await?;
         tokio::time::sleep(Duration::from_millis(800)).await;
+        page.screenshot(&output.join(format!("{name}-ustawienia-admin.png"))).await?;
+        sursum_e2e::open_tab(&page, "msza").await?;
+        tokio::time::sleep(Duration::from_millis(500)).await;
         page.screenshot(&output.join(format!("{name}-admin.png"))).await?;
         page.quit().await?;
     }

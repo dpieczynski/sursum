@@ -52,7 +52,7 @@ fn UploadPicture(
 #[component]
 pub fn AddPictureButton(commands: Commands) -> impl IntoView {
     let add = move |asset_id, title| commands.send(Command::AddImage { title, asset_id });
-    view! { <UploadPicture label=Msg::Picture class="set-tool" on_uploaded=add /> }
+    view! { <UploadPicture label=Msg::Picture class="btn btn--sm" on_uploaded=add /> }
 }
 
 /// Sets the parish logo shown by the LOGO button (admin mode).

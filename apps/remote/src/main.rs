@@ -24,7 +24,7 @@ mod power;
 mod prefs;
 mod scroll;
 mod search;
-mod set_list;
+mod sets;
 mod shell;
 mod ui;
 
@@ -156,7 +156,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     let content = move || match (editing.get(), current.0.get()) {
         (Some(target), _) => view! { <editor::Editor target editing state commands /> }.into_any(),
         (None, View::Live) => view! { <live::LiveSet state commands /> }.into_any(),
-        (None, View::Set) => view! { <SetViewForNow state commands /> }.into_any(),
+        (None, View::Set) => view! { <sets::SetsView state commands /> }.into_any(),
         (None, View::Settings) => view! { <SettingsViewForNow /> }.into_any(),
     };
     let view_attr = move || match current.0.get() {
@@ -195,25 +195,6 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         <ui::Toast toasts send=move |command| commands.send(command) />
         {search_sheet}
         {screen_sheet}
-    }
-}
-
-/// The Zestaw view until it is rebuilt: search, the library tools and the set panel.
-#[component]
-fn SetViewForNow(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let query = RwSignal::new(String::new());
-    let searching = move || !query.with(|query| query.trim().is_empty());
-    let set_list = move || view! { <set_list::SetPanel state commands /> };
-    view! {
-        <section class="library">
-            <search::SearchBox query />
-            <div class="library-tools">
-                <NewSongButton />
-            </div>
-            <Show when=searching fallback=set_list>
-                <search::SearchResults query commands />
-            </Show>
-        </section>
     }
 }
 
@@ -263,17 +244,6 @@ fn SettingsViewForNow() -> impl IntoView {
                 <admin::AdminTools />
             </div>
         </section>
-    }
-}
-
-/// Opens the editor for a new song.
-#[component]
-fn NewSongButton() -> impl IntoView {
-    let editing = expect_context::<RwSignal<Option<editor::EditorTarget>>>();
-    view! {
-        <button class="new-song btn" on:click=move |_| editing.set(Some(editor::EditorTarget::New))>
-            {pl(Msg::NewSong)}
-        </button>
     }
 }
 

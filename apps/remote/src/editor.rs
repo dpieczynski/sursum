@@ -16,7 +16,10 @@ use crate::messages::{Msg, pl};
 /// Which song the editor works on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditorTarget {
-    New,
+    /// A new song, with the title typed into the search if there was one.
+    New {
+        title: String,
+    },
     Existing(SongId),
 }
 
@@ -33,7 +36,12 @@ pub fn Editor(
     state: RwSignal<Option<RemoteState>>,
     commands: Commands,
 ) -> impl IntoView {
-    let draft = RwSignal::new(SongDraft { lyrics: NEW_SONG_TEMPLATE.to_owned(), ..SongDraft::default() });
+    let title = match &target {
+        EditorTarget::New { title } => title.clone(),
+        EditorTarget::Existing(_) => String::new(),
+    };
+    let draft =
+        RwSignal::new(SongDraft { title, lyrics: NEW_SONG_TEMPLATE.to_owned(), ..SongDraft::default() });
     let status = RwSignal::new(None::<String>);
     if let EditorTarget::Existing(song_id) = target {
         leptos::task::spawn_local(async move {

@@ -156,7 +156,7 @@ async fn new_song_typed_in_the_editor_goes_on_screen() -> anyhow::Result<()> {
             remote.goto(server.url("/remote/")).await?;
             remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
             open_tab(remote, "zestaw").await?;
-            let new_song = remote.query(By::Css(".new-song")).first().await?;
+            let new_song = remote.query(By::Css("[data-testid=new-song]")).first().await?;
             new_song.wait_until().clickable().await?;
             new_song.click().await?;
             let inputs = remote.find_all(By::Css(".editor-form input")).await?;
@@ -216,29 +216,42 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
         );
         with_engine(Browser::Chromium, 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
-            let rows =
-                || async { remote.find_all(By::Css(".set-item")).await.map(|rows| rows.len()).unwrap_or(0) };
-            wait_until(Duration::from_secs(10), || async { rows().await == 3 }).await?;
+            let rows = || async {
+                remote
+                    .find_all(By::Css("[data-testid=set-items] .edit-row"))
+                    .await
+                    .map(|rows| rows.len())
+                    .unwrap_or(0)
+            };
+            remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
             open_tab(remote, "zestaw").await?;
-            remote.find(By::XPath("//button[text()='Edytuj zestaw']")).await?.click().await?;
+            wait_until(Duration::from_secs(10), || async { rows().await == 3 }).await?;
+            // Tapping an item here never shows it.
+            remote
+                .find(By::Css("[data-testid=set-items] .edit-row[data-number='3'] .edit-title"))
+                .await?
+                .click()
+                .await?;
             // Move the last item up.
-            let up_buttons = remote.find_all(By::XPath("//button[text()='↑']")).await?;
+            let up_buttons = remote.find_all(By::Css("[data-testid=set-items] .move-up")).await?;
             up_buttons[2].click().await?;
             // Wait for the new snapshot to re-render the list before touching it again.
             tokio::time::sleep(Duration::from_millis(500)).await;
             // A quick tap on "remove" does nothing…
-            let remove = remote.find_all(By::Css(".set-item .hold")).await?;
+            let remove = remote.find_all(By::Css("[data-testid=remove-item]")).await?;
             remove[1].click().await?;
             tokio::time::sleep(Duration::from_millis(500)).await;
             anyhow::ensure!(rows().await == 3, "a tap must not remove an item");
             // …holding it removes the item (here: the live one).
-            let live_row = remote.find(By::Css(".set-item.live .hold")).await?;
+            let live_row = remote
+                .find(By::Css("[data-testid=set-items] .edit-row.live [data-testid=remove-item]"))
+                .await?;
             remote.action_chain().click_and_hold_element(&live_row).perform().await?;
             tokio::time::sleep(Duration::from_millis(1000)).await;
             remote.action_chain().release().perform().await?;
             wait_until(Duration::from_secs(5), || async { rows().await == 2 }).await?;
             // Undo brings it back.
-            remote.find(By::Css(".set-tool.undo")).await?.click().await?;
+            remote.find(By::Css("[data-testid=undo-remove]")).await?.click().await?;
             wait_until(Duration::from_secs(5), || async { rows().await == 3 }).await?;
             Ok(())
         })

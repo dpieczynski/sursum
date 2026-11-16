@@ -6,6 +6,22 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Msg {
     TabLive,
+    NoSetHint,
+    ChangeSet,
+    Rename,
+    SwitchSetHint,
+    Chosen,
+    Delete,
+    SetName,
+    SetEmptyHint,
+    MoveUp,
+    MoveDown,
+    CloseSearch,
+    InSet,
+    AddShort,
+    SongCard,
+    ShowNowOnScreen,
+    AddToSetLong,
     ShortText,
     ShortPicture,
     ShortGap,
@@ -68,7 +84,6 @@ pub enum Msg {
     About,
     SearchPlaceholder,
     NoResults,
-    ShowNow,
     Add,
     NewSong,
     Edit,
@@ -157,12 +172,9 @@ pub enum Msg {
     ShowPin,
     HidePin,
     NotSent,
-    EditSet,
-    DoneEditing,
     Remove,
     Undo,
     NewSet,
-    NewSetPrompt,
     Announcement,
     AnnouncementText,
     Cancel,
@@ -185,6 +197,24 @@ pub enum Msg {
 pub fn pl(msg: Msg) -> &'static str {
     match msg {
         Msg::TabLive => "Msza",
+        Msg::NoSetHint => "Nie ma jeszcze zestawu. Utwórz go przyciskiem „Zmień zestaw” → „Nowy zestaw”.",
+        Msg::ChangeSet => "Zmień zestaw",
+        Msg::Rename => "Zmień nazwę",
+        Msg::SwitchSetHint => "Ekran się nie zmieni, ale „Dalej” przejdzie do pozycji nowego zestawu.",
+        Msg::Chosen => "wybrany",
+        Msg::Delete => "Usuń",
+        Msg::SetName => "Nazwa zestawu",
+        Msg::SetEmptyHint => {
+            "Zestaw jest pusty. Wyszukaj pieśń powyżej albo dodaj ogłoszenie, obraz lub przerwę."
+        }
+        Msg::MoveUp => "Przesuń w górę",
+        Msg::MoveDown => "Przesuń w dół",
+        Msg::CloseSearch => "Zamknij",
+        Msg::InSet => "w zestawie",
+        Msg::AddShort => "+ Dodaj",
+        Msg::SongCard => "Pieśń",
+        Msg::ShowNowOnScreen => "Pokaż teraz na ekranie",
+        Msg::AddToSetLong => "Dodaj do zestawu",
         Msg::ShortText => "Tekst",
         Msg::ShortPicture => "Obraz",
         Msg::ShortGap => "Przerwa",
@@ -247,7 +277,6 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::About => "Licencje",
         Msg::SearchPlaceholder => "Szukaj: numer, tytuł lub fragment tekstu",
         Msg::NoResults => "Brak wyników",
-        Msg::ShowNow => "Pokaż",
         Msg::Add => "Dodaj",
         Msg::NewSong => "Nowa pieśń",
         Msg::Edit => "Edytuj",
@@ -270,12 +299,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::LoadFailed => "Nie udało się wczytać pieśni",
         Msg::ImportOpenSong => "Import z OpenSong (ZIP)",
         Msg::Importing => "Importowanie…",
-        Msg::EditSet => "Edytuj zestaw",
-        Msg::DoneEditing => "Gotowe",
         Msg::Remove => "Usuń",
         Msg::Undo => "Cofnij usunięcie",
         Msg::NewSet => "Nowy zestaw",
-        Msg::NewSetPrompt => "Nazwa nowego zestawu",
         Msg::Announcement => "Ogłoszenie",
         Msg::AnnouncementText => "Treść (pusta linia zaczyna nowy slajd)",
         Msg::Cancel => "Anuluj",
@@ -416,6 +442,15 @@ pub fn merge_summary(report: &sursum_protocol::MergeReport) -> String {
         ));
     }
     text
+}
+
+/// "Nowa pieśń: „Barka”" (from a search without results).
+pub fn new_song_named(title: &str) -> String {
+    if title.is_empty() {
+        pl(Msg::NewSong).to_owned()
+    } else {
+        format!("{}: „{title}”", pl(Msg::NewSong))
+    }
 }
 
 /// "Usunięto: Barka" (with an undo button in the toast).

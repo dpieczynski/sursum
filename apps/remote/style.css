@@ -2,114 +2,6 @@
 /* Styles of the parts not yet moved to their own files (Zestaw and Ustawienia views, editor,
    pairing, calibration). */
 
-.search {
-  display: flex;
-  gap: var(--gap);
-}
-.library-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap);
-}
-.import-button {
-  border: none;
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  min-height: 52px;
-  padding: 0 18px;
-  border-radius: 10px;
-  background: var(--panel);
-  font-size: 18px;
-  font-weight: 700;
-}
-a.import-button {
-  color: var(--text);
-  text-decoration: none;
-}
-.import-button input {
-  display: none;
-}
-.import-status {
-  color: #facc15;
-}
-.search-input {
-  flex: 1;
-  min-height: 52px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid #444;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 20px;
-}
-.search-clear {
-  width: 52px;
-  border: none;
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 26px;
-}
-.search-result .result-text {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-.result-title {
-  font-weight: 700;
-}
-.result-line {
-  color: var(--muted);
-  font-size: 15px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.result-action {
-  min-width: 84px;
-  min-height: 48px;
-  border: none;
-  border-radius: 8px;
-  background: #333;
-  color: var(--text);
-  font-size: 17px;
-  font-weight: 700;
-}
-.result-action.show {
-  background: var(--accent);
-}
-.search-empty {
-  padding: 12px;
-  color: var(--muted);
-}
-.set-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  min-height: 0;
-  overflow-y: auto;
-}
-.set-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 0 12px;
-  border-bottom: 1px solid #2a2a2a;
-  font-size: 19px;
-}
-.set-item .number {
-  width: 36px;
-  font-weight: 700;
-  color: var(--muted);
-}
-.set-item.live {
-  background: #3f1d1d;
-}
-
 /* Song editor: form on the left, slide previews on the right (stacked on narrow screens). */
 .editor {
   display: grid;
@@ -177,8 +69,7 @@ a.import-button {
   gap: var(--gap);
 }
 .editor-buttons button,
-.calibration-header button,
-.new-song {
+.calibration-header button {
   min-height: 52px;
   padding: 0 18px;
   border: none;
@@ -207,78 +98,6 @@ a.import-button {
   border: 1px solid #333;
 }
 
-/* Set panel: selector, tools, rows with edit controls, hold-to-confirm. */
-.set-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap);
-}
-.set-select {
-  min-height: 48px;
-  max-width: 40%;
-  border-radius: 8px;
-  border: 1px solid #444;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 18px;
-}
-.set-tool {
-  min-height: 48px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 700;
-}
-label.set-tool {
-  display: inline-flex;
-  align-items: center;
-}
-.set-tool.undo {
-  background: #a16207;
-}
-.set-title {
-  flex: 1;
-}
-.row-controls {
-  display: flex;
-  gap: 8px;
-}
-.row-button {
-  position: relative;
-  min-width: 52px;
-  min-height: 48px;
-  border: none;
-  border-radius: 8px;
-  background: #333;
-  color: var(--text);
-  font-size: 18px;
-  overflow: hidden;
-}
-.row-button:disabled {
-  opacity: 0.3;
-}
-.row-button.hold {
-  background: #7f1d1d;
-  font-size: 15px;
-  padding: 0 12px;
-}
-.row-button.hold::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 4px;
-  width: 0;
-  background: #fff;
-}
-.row-button.hold.holding::after {
-  width: 100%;
-  transition: width var(--hold-ms) linear;
-}
 .dialog {
   display: flex;
   flex-direction: column;
@@ -513,7 +332,3 @@ label.set-tool {
   color: var(--muted);
 }
 
-.set-kind {
-  color: var(--muted);
-  font-size: 14px;
-}
