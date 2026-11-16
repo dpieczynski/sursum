@@ -44,3 +44,26 @@ jobs:
       - run: just e2e
       - if: always()
         run: just browsers-stop
+
+  cross:
+    name: Cross-compile (Raspberry Pi, Windows)
+    runs-on: ubuntu-24.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
+      - run: just cross-pi
+      - run: just cross-win
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sursum-server-${{ github.sha }}
+          path: |
+            target/aarch64-unknown-linux-gnu/release/sursum-server
+            target/x86_64-pc-windows-gnu/release/sursum-server.exe

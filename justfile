@@ -61,6 +61,7 @@ screenshots dir="screenshots": build-web
 licenses:
     cargo about generate --fail -m crates/sursum-server/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs
     cargo about generate --fail -m apps/remote/Cargo.toml -o crates/sursum-server/assets/licenses-web.html about.hbs
+    sed -i 's/\r$//' crates/sursum-server/assets/licenses-*.html
 
 # Fail if the committed license notices are out of date.
 licenses-check: licenses

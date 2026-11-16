@@ -15,10 +15,11 @@ milestone. ⚠ = assumption to verify in a spike before relying on it.
 - [x] rust-embed serving both `apps/*/dist`; `allow_missing` verified (server compiles without a frontend build; `/screen/` then serves a black page)
 - [x] Bundled OFL fonts in `assets/fonts/` with `LICENSES.md` (Lato 400/700, latin + latin-ext)
 - [x] `justfile`, SPDX check script, `deny.toml` (licenses, bans, sources, advisories pass)
-- [ ] Third-party license page (`cargo about` + fonts) at `/licenses`
+- [x] Third-party license page (`cargo about` + fonts) at `/licenses`, linked from the remote
 - [x] First WebDriver tests (thirtyfour 0.38 + chromedriver in the container)
 - [x] Same tests on WPE WebKit: capability `wpe:browserOptions { binary: "cog", args: ["--automation", "--platform=headless", "--bg-color=black"] }` verified; WPE needs Mesa (`libgles2`, `libegl1`, `libgl1-mesa-dri`) or its renderer crashes
-- [x] GitHub Actions CI written, not yet run on GitHub (cross builds and wasm-bindgen-test still missing) (fmt, leptosfmt, clippy native + wasm32, nextest, wasm-bindgen-test, trunk build + WASM size check, WebDriver e2e (Chromium; screen subset also on WPE, blocking), cargo-deny, cross builds)
+- [x] Cross-compilation verified locally with zig 0.17.1 + cargo-zigbuild 0.24.1: `aarch64-unknown-linux-gnu.2.36` and `x86_64-pc-windows-gnu` (both 11 MB with the apps embedded)
+- [x] GitHub Actions CI written, not yet run on GitHub (wasm-bindgen-test still missing) (fmt, leptosfmt, clippy native + wasm32, nextest, wasm-bindgen-test, trunk build + WASM size check, WebDriver e2e (Chromium; screen subset also on WPE, blocking), cargo-deny, cross builds)
 
 **Done when:** `just dev` gives auto-reload for both apps with a working WS echo using
 `sursum-protocol` types; `just build` produces one binary serving both apps; the first WebDriver
