@@ -38,8 +38,11 @@ operator position. Operators need to switch the display on and to standby from t
   (every 5 s while warming up or cooling down) and reports only changes to the state actor.
 - Configuration: `[display_power] backend = "pjlink"`, `host = "address[:port]"`, optional
   `password` in `config.toml` (device only).
-- The backends are an enum, not a trait object: with one real backend so far, tests use a fake
-  PJLink projector over TCP, which exercises the real code. CEC becomes a second variant after
-  the hardware spike (M4); `cec_linux` and the CEC frames are still unverified ⚠.
+- The backends implement the `DisplayPower` trait (`NoDisplay`, `PjLinkDisplay`; a
+  `FakeDisplay` in unit tests drives the polling task). Its methods return `impl Future + Send`
+  and the task is generic over the backend, so there are no trait objects and no `async-trait`
+  crate. Integration tests also run the real PJLink client against a fake projector over TCP.
+  CEC becomes a third implementation after the hardware spike (M4); `cec_linux` and the CEC
+  frames are still unverified ⚠.
 - Standby uses a 1.5 s hold in the remote and warns while a slide is on screen; "on" is
   disabled while a projector cools down.
