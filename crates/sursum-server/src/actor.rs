@@ -241,6 +241,7 @@ pub fn spawn(
     std::thread::Builder::new()
         .name("state-actor".to_owned())
         .spawn(move || {
+            let _exit_on_panic = ExitIfActorPanics;
             while let Some(request) = inbox.blocking_recv() {
                 match request {
                     Request::Command { actor, base_rev, command, reply } => {
@@ -322,6 +323,20 @@ pub fn spawn(
         .context("starting the state actor thread")?;
 
     Ok(StateHandle { requests, screen: screen_rx, remote: remote_rx })
+}
+
+/// Ends the process if the state actor panics. Without its actor the server would keep running
+/// but answer nothing; exiting lets the service manager restart it, and the screen gets its slide
+/// back (same boot: full restore, ADR 0003).
+struct ExitIfActorPanics;
+
+impl Drop for ExitIfActorPanics {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            tracing::error!("the state actor panicked; exiting so the server is restarted");
+            std::process::exit(70);
+        }
+    }
 }
 
 /// Everything the server knows, owned by the actor thread.

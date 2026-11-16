@@ -131,7 +131,7 @@ impl Server {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut stream = tokio::net::TcpStream::connect(self.addr).await?;
         let head = format!(
-            "POST /api/assets HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            "POST /api/assets HTTP/1.1\r\nHost: localhost\r\nX-Sursum-Upload: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             bytes.len()
         );
         stream.write_all(head.as_bytes()).await?;

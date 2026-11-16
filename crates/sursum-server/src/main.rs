@@ -43,7 +43,7 @@ struct Args {
 #[derive(Debug, Subcommand)]
 enum Task {
     /// Import (or update) songs from an OpenSong `Songs` folder, then exit.
-    /// Set the PIN that remotes must enter to pair (4-12 digits), then exit.
+    /// Set the PIN that remotes must enter to pair (6-12 digits), then exit.
     SetPin {
         /// The new PIN.
         pin: String,
@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     if let Some(Task::SetPin { pin }) = &args.command {
-        anyhow::ensure!(sursum_server::auth::valid_pin(pin), "the PIN must be 4 to 12 digits");
+        anyhow::ensure!(sursum_server::auth::valid_pin(pin), "the PIN must be 6 to 12 digits");
         let database = sursum_server::db::Database::open(&args.data_dir)?;
         database.set_setting(sursum_server::auth::PIN_SETTING, &sursum_server::auth::PinHash::new(pin)?)?;
         println!("PIN set. Remotes must now pair with it; restart the server if it is running.");

@@ -451,6 +451,11 @@ fn restore_newest_backup(data_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The content hash the database stores for a song (to check hashes from other devices).
+pub fn song_content_hash(song: &Song) -> anyhow::Result<String> {
+    Ok(content_hash(&serde_json::to_string(song)?))
+}
+
 /// SHA-256 of a song's JSON, used to detect real changes.
 fn content_hash(body: &str) -> String {
     Sha256::digest(body.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()

@@ -24,10 +24,14 @@ pub async fn post_json<B: Serialize, T: DeserializeOwned>(url: &str, body: &B) -
     decode(JsFuture::from(promise).await.ok()?).await
 }
 
-/// `POST url` with a file (e.g. a ZIP upload) as the body.
+/// `POST url` with a file (e.g. a ZIP upload) as the body. The custom header marks the request as
+/// coming from the remote itself (the server refuses uploads without it, see `UPLOAD_HEADER`).
 pub async fn post_file<T: DeserializeOwned>(url: &str, file: &web_sys::File) -> Option<T> {
+    let headers = web_sys::Headers::new().ok()?;
+    headers.set("X-Sursum-Upload", "1").ok()?;
     let init = web_sys::RequestInit::new();
     init.set_method("POST");
+    init.set_headers(&headers);
     init.set_body(file);
     let promise = web_sys::window()?.fetch_with_str_and_init(url, &init);
     decode(JsFuture::from(promise).await.ok()?).await

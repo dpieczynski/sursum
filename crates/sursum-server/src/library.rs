@@ -8,7 +8,7 @@
 //! - if both changed independently, the incoming version is stored as a separate copy.
 
 use std::collections::HashMap;
-use std::io::{Read as _, Write as _};
+use std::io::Write as _;
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
@@ -53,15 +53,31 @@ pub fn export(database: &Database) -> anyhow::Result<Vec<u8>> {
 }
 
 /// Reads the songs of a `.sursum` file.
+///
+/// Nothing in the file is trusted: sizes are capped (see [`crate::limits`]), every song's content
+/// hash is computed again here, and history entries that are not SHA-256 hex are dropped.
 pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<BundleSong>> {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).context("not a .sursum file")?;
-    let mut manifest = String::new();
-    archive.by_name("manifest.json").context("no manifest")?.read_to_string(&mut manifest)?;
-    let manifest: Manifest = serde_json::from_str(&manifest)?;
+    let mut budget = crate::limits::Budget::default();
+    let manifest = budget.read(archive.by_name("manifest.json").context("no manifest")?, "manifest.json")?;
+    let manifest: Manifest = serde_json::from_slice(&manifest)?;
     anyhow::ensure!(manifest.format == FORMAT_VERSION, "unsupported bundle format {}", manifest.format);
-    let mut lines = String::new();
-    archive.by_name("songs.jsonl").context("no songs")?.read_to_string(&mut lines)?;
-    lines.lines().filter(|line| !line.trim().is_empty()).map(|line| Ok(serde_json::from_str(line)?)).collect()
+    let lines = budget.read(archive.by_name("songs.jsonl").context("no songs")?, "songs.jsonl")?;
+    let lines = std::str::from_utf8(&lines).context("songs.jsonl is not UTF-8")?;
+    lines
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let mut song: BundleSong = serde_json::from_str(line)?;
+            song.content_hash = crate::db::song_content_hash(&song.song)?;
+            song.history.retain(|hash| is_sha256_hex(hash));
+            Ok(song)
+        })
+        .collect()
+}
+
+fn is_sha256_hex(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 /// What to do with one incoming song.
@@ -137,7 +153,8 @@ pub fn merge(database: &mut Database, incoming: &[BundleSong], dry_run: bool) ->
 /// The incoming side of a conflict, stored next to the local song under its own id.
 fn conflict_copy(song: &Song, content_hash: &str) -> Song {
     let mut copy = song.clone();
-    copy.id = SongId(format!("{}-copy-{}", song.id, &content_hash[..8.min(content_hash.len())]));
+    let short: String = content_hash.chars().take(8).collect();
+    copy.id = SongId(format!("{}-copy-{short}", song.id));
     if let Some(title) = copy.titles.first_mut() {
         title.push_str(" (kopia ze scalenia)");
     }
@@ -213,5 +230,55 @@ mod tests {
     #[test]
     fn other_files_are_rejected() {
         assert!(read_bundle(b"nope").is_err());
+    }
+
+    /// A ZIP with the given entries (name, content written `repeat` times).
+    fn zip_of(entries: &[(&str, &[u8], usize)]) -> Vec<u8> {
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        let mut zip = zip::ZipWriter::new(&mut buffer);
+        let options =
+            zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, content, repeat) in entries {
+            zip.start_file(*name, options).unwrap();
+            for _ in 0..*repeat {
+                zip.write_all(content).unwrap();
+            }
+        }
+        zip.finish().unwrap();
+        buffer.into_inner()
+    }
+
+    #[test]
+    fn hashes_from_the_file_are_not_trusted() {
+        // A hand-made line with a non-hex "hash" and history (it once crashed the state actor).
+        let mut line = serde_json::to_value(BundleSong {
+            song: song("a", "z pliku"),
+            content_hash: String::new(),
+            history: vec![],
+        })
+        .unwrap();
+        line["content_hash"] = "aąąąąąąąą".into();
+        line["history"] = serde_json::json!(["nie-hash", "ą"]);
+        let manifest = br#"{"format":1,"songs":1}"#;
+        let jsonl = format!("{line}\n");
+        let bytes = zip_of(&[("manifest.json", manifest, 1), ("songs.jsonl", jsonl.as_bytes(), 1)]);
+        let bundle = read_bundle(&bytes).unwrap();
+        assert_eq!(bundle[0].content_hash, crate::db::song_content_hash(&bundle[0].song).unwrap());
+        assert!(bundle[0].history.is_empty());
+
+        let mut database = Database::in_memory().unwrap();
+        database.upsert_song(&song("a", "lokalnie"), "editor").unwrap();
+        let report = merge(&mut database, &bundle, true).unwrap();
+        assert_eq!(report.conflicts.len(), 1, "a conflict, not a crash");
+    }
+
+    #[test]
+    fn a_zip_bomb_is_refused_without_unpacking_it() {
+        let manifest = br#"{"format":1,"songs":1}"#;
+        let zeros = vec![b' '; 1024 * 1024];
+        let bytes = zip_of(&[("manifest.json", manifest, 1), ("songs.jsonl", &zeros, 70)]);
+        assert!(bytes.len() < 1024 * 1024, "small on the wire");
+        let error = read_bundle(&bytes).unwrap_err().to_string();
+        assert!(error.contains("larger than"), "{error}");
     }
 }

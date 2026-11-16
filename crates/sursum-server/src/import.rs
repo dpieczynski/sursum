@@ -4,7 +4,6 @@
 //! importing the same set file again replaces that set.
 
 use std::collections::HashMap;
-use std::io::Read as _;
 use std::path::Path;
 
 use anyhow::Context as _;
@@ -40,6 +39,8 @@ pub fn import_opensong(
 /// folder in the archive (so zipping `OpenSong/`, `Songs/` or the songs themselves all work).
 pub fn read_zip(bytes: &[u8], songbook: &str) -> anyhow::Result<LibraryImport> {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).context("not a ZIP file")?;
+    anyhow::ensure!(archive.len() <= crate::limits::ARCHIVE_ENTRIES, "the ZIP has too many files");
+    let mut budget = crate::limits::Budget::default();
     let mut import = LibraryImport::default();
     let mut files = Vec::new();
     for index in 0..archive.len() {
@@ -53,8 +54,7 @@ pub fn read_zip(bytes: &[u8], songbook: &str) -> anyhow::Result<LibraryImport> {
             (None, Some(file_name)) => FileKind::Set(file_name),
             (None, None) => continue,
         };
-        let mut content = Vec::new();
-        entry.read_to_end(&mut content)?;
+        let content = budget.read(&mut entry, &name)?;
         files.push((kind, content));
     }
     files.sort();

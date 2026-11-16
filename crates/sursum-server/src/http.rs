@@ -42,6 +42,7 @@ struct App {
     data_dir: Arc<std::path::PathBuf>,
     access: Arc<Access>,
     allowed_origins: Arc<Vec<String>>,
+    allowed_hosts: Arc<Vec<String>>,
     power: crate::display_power::PowerHandle,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
@@ -60,6 +61,7 @@ pub fn router(
         data_dir: Arc::new(config.data_dir.clone()),
         access,
         allowed_origins: Arc::new(config.allowed_origins.clone()),
+        allowed_hosts: Arc::new(config.allowed_hosts.clone()),
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
     };
@@ -68,11 +70,14 @@ pub fn router(
         .route(
             "/api/import/opensong",
             axum::routing::post(import_opensong)
-                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES))
+                .layer(middleware::from_fn(require_upload_header)),
         )
         .route(
             "/api/library/merge",
-            axum::routing::post(merge_library).layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+            axum::routing::post(merge_library)
+                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES))
+                .layer(middleware::from_fn(require_upload_header)),
         )
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
@@ -88,7 +93,8 @@ pub fn router(
         .route(
             "/api/assets",
             axum::routing::post(upload_asset)
-                .layer(axum::extract::DefaultBodyLimit::max(crate::assets::MAX_ASSET_BYTES + 1)),
+                .layer(axum::extract::DefaultBodyLimit::max(crate::assets::MAX_ASSET_BYTES + 1))
+                .layer(middleware::from_fn(require_upload_header)),
         )
         .route("/api/admin", axum::routing::post(unlock_admin).delete(lock_admin))
         .merge(admin)
@@ -108,6 +114,7 @@ pub fn router(
         .route("/remote/", get(remote_index))
         .route("/remote/{*path}", get(remote_asset))
         .merge(protected)
+        .layer(middleware::from_fn_with_state(app.clone(), known_host))
         .layer(middleware::from_fn_with_state(app.clone(), local_network_only))
         .with_state(app)
 }
@@ -288,6 +295,9 @@ async fn upload_asset(State(app): State<App>, body: axum::body::Bytes) -> Respon
         Ok(Err(error @ crate::assets::AssetError::TooLarge)) => {
             (StatusCode::PAYLOAD_TOO_LARGE, error.to_string()).into_response()
         }
+        Ok(Err(error @ crate::assets::AssetError::Full)) => {
+            (StatusCode::INSUFFICIENT_STORAGE, error.to_string()).into_response()
+        }
         Ok(Err(error)) => {
             tracing::error!(%error, "could not store an uploaded picture");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -432,6 +442,46 @@ fn html_response(body: &'static str) -> Response {
 }
 
 /// Rejects clients outside loopback and private networks (unless configured otherwise).
+/// The header the remote sends with file uploads. Pages on other sites cannot add a custom header
+/// without a CORS preflight, which this server never grants, so they cannot post files here even
+/// while no PIN is set (raw bodies would otherwise pass as "simple" cross-site requests).
+pub const UPLOAD_HEADER: &str = "x-sursum-upload";
+
+async fn require_upload_header(request: Request, next: Next) -> Response {
+    if request.headers().contains_key(UPLOAD_HEADER) {
+        next.run(request).await
+    } else {
+        StatusCode::FORBIDDEN.into_response()
+    }
+}
+
+/// Answers only to host names this device can have: IP addresses, `localhost`, `*.local` (mDNS)
+/// and configured names. A page on the internet that re-points its own name to the device (DNS
+/// rebinding) arrives with its own name in `Host` and is refused.
+async fn known_host(State(app): State<App>, request: Request, next: Next) -> Response {
+    let host = request.headers().get(header::HOST).and_then(|value| value.to_str().ok());
+    if host.is_none_or(|host| host_allowed(host, &app.allowed_hosts)) {
+        next.run(request).await
+    } else {
+        tracing::warn!(?host, "refused a request for an unknown host name");
+        StatusCode::MISDIRECTED_REQUEST.into_response()
+    }
+}
+
+fn host_allowed(host: &str, allowed: &[String]) -> bool {
+    let name = match host.strip_prefix('[') {
+        Some(rest) => rest.split(']').next().unwrap_or_default(),
+        None => host.rsplit_once(':').map_or(host, |(name, port)| {
+            if port.bytes().all(|byte| byte.is_ascii_digit()) { name } else { host }
+        }),
+    };
+    let name = name.trim_end_matches('.').to_ascii_lowercase();
+    name.parse::<IpAddr>().is_ok()
+        || name == "localhost"
+        || name.ends_with(".local")
+        || allowed.iter().any(|allowed| allowed.eq_ignore_ascii_case(&name))
+}
+
 async fn local_network_only(
     State(app): State<App>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -478,6 +528,27 @@ mod tests {
         }
         for ip in ["8.8.8.8", "2001:4860:4860::8888", "::ffff:8.8.8.8"] {
             assert!(!is_local(ip.parse().unwrap()), "{ip} should not be local");
+        }
+    }
+
+    #[test]
+    fn only_names_of_this_device_are_answered() {
+        let allowed = vec!["sursum.parafia.lan".to_owned()];
+        for host in [
+            "192.168.1.50",
+            "192.168.1.50:8080",
+            "[fd00::5]:8080",
+            "localhost:8080",
+            "sursum.local",
+            "SURSUM.LOCAL.",
+            "sursum.parafia.lan:80",
+        ] {
+            assert!(host_allowed(host, &allowed), "{host} should be allowed");
+        }
+        for host in
+            ["evil.example.com", "evil.example.com:8080", "192.168.1.50.evil.com", "localhost.evil.com"]
+        {
+            assert!(!host_allowed(host, &allowed), "{host} should be refused");
         }
     }
 }

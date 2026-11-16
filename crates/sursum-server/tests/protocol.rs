@@ -310,7 +310,7 @@ async fn http_post_bytes(server: &RunningServer, path: &str, body: &[u8]) -> Str
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut stream = TcpStream::connect(server.addr).await.unwrap();
     let head = format!(
-        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/zip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/zip\r\nX-Sursum-Upload: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(head.as_bytes()).await.unwrap();
@@ -854,5 +854,29 @@ async fn the_parish_logo_is_stored_and_reaches_the_screen_after_a_restart() {
     let mut screen = connect(&server, Role::Screen, "screen").await;
     let state = next_screen_state(&mut screen).await;
     assert_eq!(state.logo, Some(id));
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn foreign_pages_cannot_upload_and_foreign_host_names_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    // A plain cross-site POST (no custom header, no preflight possible) is refused even without a PIN.
+    let body = b"\x89PNG\r\n\x1a\nx";
+    let request = format!(
+        "POST /api/assets HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let mut raw = request.into_bytes();
+    raw.extend_from_slice(body);
+    let response = http_raw(&server, &String::from_utf8_lossy(&raw)).await;
+    assert!(response.starts_with("HTTP/1.1 403"), "{response}");
+    // DNS rebinding: an attacker's name pointing at the device.
+    let rebound = http_raw(
+        &server,
+        "GET /api/library/export HTTP/1.1\r\nHost: evil.example.com\r\nConnection: close\r\n\r\n",
+    )
+    .await;
+    assert!(rebound.starts_with("HTTP/1.1 421"), "{rebound}");
     server.stop().await.unwrap();
 }

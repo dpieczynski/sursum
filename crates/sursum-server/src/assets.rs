@@ -14,6 +14,9 @@ use sursum_protocol::AssetId;
 
 /// Largest accepted picture. Posters are photos or exported slides; this is plenty for 1080p.
 pub const MAX_ASSET_BYTES: usize = 25 * 1024 * 1024;
+/// Most space all pictures together may take, so uploads can never fill the data partition (a
+/// full disk would stop the database from saving the program position).
+pub const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 const FOLDER: &str = "assets";
 
@@ -24,6 +27,8 @@ pub enum AssetError {
     UnsupportedType,
     #[error("the picture is larger than {} MB", MAX_ASSET_BYTES / 1024 / 1024)]
     TooLarge,
+    #[error("no room for more pictures ({} GB in use)", MAX_TOTAL_BYTES / 1024 / 1024 / 1024)]
+    Full,
     #[error("could not store the picture: {0}")]
     Storage(String),
 }
@@ -76,9 +81,14 @@ impl Kind {
     }
 }
 
-/// Stores a picture (written to a temporary file, synced, then renamed, so a power cut never
-/// leaves half a file under a valid id) and returns its id.
+/// Stores a picture and returns its id. It is written to a temporary file of its own (two
+/// uploads of the same picture at once must not truncate each other's file), synced, renamed, and
+/// the folder is synced, so a power cut never leaves half a file under a valid id.
 pub fn store(data_dir: &Path, bytes: &[u8]) -> Result<AssetId, AssetError> {
+    store_within(data_dir, bytes, MAX_TOTAL_BYTES)
+}
+
+fn store_within(data_dir: &Path, bytes: &[u8], quota: u64) -> Result<AssetId, AssetError> {
     if bytes.len() > MAX_ASSET_BYTES {
         return Err(AssetError::TooLarge);
     }
@@ -92,12 +102,31 @@ pub fn store(data_dir: &Path, bytes: &[u8]) -> Result<AssetId, AssetError> {
     }
     let storage = |error: std::io::Error| AssetError::Storage(error.to_string());
     std::fs::create_dir_all(&folder).map_err(storage)?;
-    let temporary = folder.join(format!(".{}.part", id.as_str()));
-    let mut file = std::fs::File::create(&temporary).map_err(storage)?;
-    file.write_all(bytes).map_err(storage)?;
-    file.sync_all().map_err(storage)?;
-    std::fs::rename(&temporary, &path).map_err(storage)?;
+    if used_bytes(&folder).map_err(storage)? + bytes.len() as u64 > quota {
+        return Err(AssetError::Full);
+    }
+    let temporary = folder.join(format!(".{}.{}.part", id.as_str(), uuid::Uuid::new_v4()));
+    let written = (|| {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, &path)?;
+        std::fs::File::open(&folder)?.sync_all()
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    written.map_err(storage)?;
     Ok(id)
+}
+
+/// Bytes taken by stored pictures (and leftovers of interrupted uploads).
+fn used_bytes(folder: &Path) -> std::io::Result<u64> {
+    let mut total = 0;
+    for entry in std::fs::read_dir(folder)? {
+        total += entry?.metadata()?.len();
+    }
+    Ok(total)
 }
 
 /// The file and content type of a stored picture; `None` for ids that are not well-formed (so a
@@ -140,6 +169,7 @@ mod tests {
         assert!(locate(dir.path(), "../sursum.db").is_none());
         assert!(locate(dir.path(), &format!("{}.png", "a".repeat(64))).is_none(), "not stored");
         assert!(locate(dir.path(), &format!("{}.exe", "a".repeat(64))).is_none());
+        assert_eq!(store_within(dir.path(), b"\x89PNG\r\n\x1a\nanother", 10), Err(AssetError::Full));
         let webp = b"RIFF\x10\x00\x00\x00WEBPVP8 ";
         assert!(store(dir.path(), webp).unwrap().as_str().ends_with(".webp"));
         assert!(store(dir.path(), &[0xff, 0xd8, 0xff, 0xe0]).unwrap().as_str().ends_with(".jpg"));

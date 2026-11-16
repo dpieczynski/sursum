@@ -31,6 +31,11 @@ const FREE_ATTEMPTS: u32 = 5;
 /// First lockout; it doubles with every further wrong attempt (capped).
 const FIRST_LOCKOUT: Duration = Duration::from_secs(30);
 const MAX_LOCKOUT: Duration = Duration::from_secs(15 * 60);
+/// Wrong attempts allowed from all addresses together within [`GLOBAL_WINDOW`]; beyond that every
+/// PIN entry waits. Per-address limits alone are weak: a Wi-Fi guest can change address at will.
+/// Paired remotes are not affected (they do not enter the PIN to work).
+const GLOBAL_FAILURES: usize = 30;
+const GLOBAL_WINDOW: Duration = Duration::from_secs(10 * 60);
 /// How long admin mode stays unlocked after entering the PIN.
 pub const ADMIN_SESSION: Duration = Duration::from_secs(15 * 60);
 
@@ -55,9 +60,10 @@ impl PinHash {
     }
 }
 
-/// A PIN must be 4 to 12 digits (easy on a tablet keypad).
+/// A PIN must be 6 to 12 digits: still easy on a tablet keypad, but a million combinations, so
+/// guessing it within the rate limits takes months rather than an evening.
 pub fn valid_pin(pin: &str) -> bool {
-    (4..=12).contains(&pin.len()) && pin.chars().all(|c| c.is_ascii_digit())
+    (6..=12).contains(&pin.len()) && pin.chars().all(|c| c.is_ascii_digit())
 }
 
 /// A new device token (64 hex characters) and the hash to store.
@@ -95,6 +101,8 @@ pub struct Access {
     /// Token hash → end of its admin session.
     admin_until: Mutex<HashMap<String, Instant>>,
     attempts: Mutex<HashMap<IpAddr, Attempts>>,
+    /// Times of recent wrong attempts from any address, for [`GLOBAL_FAILURES`].
+    recent_failures: Mutex<std::collections::VecDeque<Instant>>,
     /// Bumped on every revocation so open sessions re-check their device.
     revocations: watch::Sender<u64>,
 }
@@ -121,6 +129,7 @@ impl Access {
             tokens: RwLock::new(token_hashes.into_iter().collect()),
             admin_until: Mutex::new(HashMap::new()),
             attempts: Mutex::new(HashMap::new()),
+            recent_failures: Mutex::new(std::collections::VecDeque::new()),
             revocations: watch::Sender::new(0),
         }
     }
@@ -176,6 +185,15 @@ impl Access {
 
     /// Checks a PIN attempt from `address`, counting failures for the lockout.
     pub fn check_pin(&self, address: IpAddr, pin: &str, now: Instant) -> PinCheck {
+        let mut recent = self.recent_failures.lock().expect("not poisoned");
+        while recent.front().is_some_and(|time| now.saturating_duration_since(*time) >= GLOBAL_WINDOW) {
+            recent.pop_front();
+        }
+        if recent.len() >= GLOBAL_FAILURES
+            && let Some(oldest) = recent.front()
+        {
+            return PinCheck::Locked(GLOBAL_WINDOW.saturating_sub(now.saturating_duration_since(*oldest)));
+        }
         let mut attempts = self.attempts.lock().expect("not poisoned");
         let entry = attempts.entry(address).or_insert(Attempts { failures: 0, locked_until: None });
         if let Some(until) = entry.locked_until.filter(|until| *until > now) {
@@ -188,6 +206,7 @@ impl Access {
             return PinCheck::Correct;
         }
         entry.failures += 1;
+        recent.push_back(now);
         if entry.failures >= FREE_ATTEMPTS {
             let doublings = (entry.failures - FREE_ATTEMPTS).min(10);
             let lockout = (FIRST_LOCKOUT * 2_u32.pow(doublings)).min(MAX_LOCKOUT);
@@ -244,7 +263,7 @@ mod tests {
 
     #[test]
     fn pins_are_digits_and_hashes_match() {
-        assert!(valid_pin("1234") && !valid_pin("12a4") && !valid_pin("123"));
+        assert!(valid_pin("123456") && !valid_pin("12a456") && !valid_pin("1234"));
         let stored = PinHash::new("2468").unwrap();
         assert!(stored.matches("2468") && stored.matches(" 2468 ") && !stored.matches("2469"));
         assert_ne!(PinHash::new("2468").unwrap().salt, stored.salt, "salts are random");
@@ -263,6 +282,23 @@ mod tests {
         access.add_token(hash);
         assert!(access.allows(&headers(&format!("other=1; {COOKIE}={token}"))));
         assert!(!access.allows(&headers(&format!("{COOKIE}=forged"))));
+    }
+
+    #[test]
+    fn changing_addresses_does_not_escape_the_global_limit() {
+        let access = Access::new(Some(PinHash::new("246813").unwrap()), vec![]);
+        let now = Instant::now();
+        for host in 1..=GLOBAL_FAILURES {
+            let address = IpAddr::from([192, 168, 1, u8::try_from(host).unwrap()]);
+            assert_eq!(access.check_pin(address, "000000", now), PinCheck::Wrong);
+        }
+        let fresh: IpAddr = "192.168.1.200".parse().unwrap();
+        assert!(
+            matches!(access.check_pin(fresh, "246813", now), PinCheck::Locked(_)),
+            "even the right PIN waits"
+        );
+        let later = now + GLOBAL_WINDOW;
+        assert_eq!(access.check_pin(fresh, "246813", later), PinCheck::Correct);
     }
 
     #[test]

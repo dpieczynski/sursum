@@ -25,3 +25,19 @@ fixed per device would make a forgotten tablet a permanent admin key.
 One secret (the PIN) to remember; no separate admin password. Whoever knows the PIN can unlock
 admin mode on any paired tablet, which matches how parishes share the PIN anyway. A second,
 separate admin PIN can be added later as a setting without changing the protocol.
+
+## Amendment (2026-11-16): hardening after an independent review
+- PINs are 6–12 digits; besides the per-address lockout, 30 wrong attempts from all addresses
+  within 10 minutes make every PIN entry wait (a guest can change addresses at will).
+- The server answers only to IP addresses, `localhost`, `*.local` and `allowed_hosts` from
+  `config.toml` (DNS rebinding); file uploads need the `X-Sursum-Upload` header, which cross-site
+  pages cannot send without a CORS preflight — this matters while no PIN is set.
+- Uploaded archives are read through hard size caps (64 MB per entry, 256 MB per upload,
+  50 000 entries); hashes in `.sursum` files are recomputed, never trusted; pictures are capped at
+  2 GB in total and written atomically even when the same picture is uploaded twice at once.
+- If the state actor ever panics, the process exits so the service manager restarts it (the
+  screen keeps its slide and is restored within the same boot).
+- Known and accepted for now: without a PIN anyone on the LAN is admin (first setup);
+  a hand-edited `.sursum` history can fast-forward over a local edit (the old version stays in
+  `song_history`); a large merge runs on the state actor and briefly delays navigation, so merge
+  outside services.

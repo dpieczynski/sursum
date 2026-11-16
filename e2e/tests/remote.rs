@@ -239,7 +239,7 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> anyhow::Result<()> {
-    let server = Server::start_with_pin("2468").await?;
+    let server = Server::start_with_pin("246813").await?;
     with_engine(Browser::Chromium, 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         let pin = remote.query(By::Css(".pairing .pin")).first().await?;
@@ -251,7 +251,7 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         })
         .await?;
         let pin = remote.find(By::Css(".pairing .pin")).await?;
-        pin.send_keys("2468").await?;
+        pin.send_keys("246813").await?;
         remote.find(By::Css(".pairing button")).await?.click().await?;
         // After pairing the page reloads into the remote, which connects.
         wait_until(Duration::from_secs(10), || async {
@@ -264,7 +264,7 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         remote.find(By::XPath("//button[text()='Tryb administratora']")).await?.click().await?;
         let pin = remote.query(By::Css(".dialog .pin")).first().await?;
         pin.wait_until().displayed().await?;
-        pin.send_keys("2468").await?;
+        pin.send_keys("246813").await?;
         remote.find(By::XPath("//button[text()='Odblokuj']")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
         // The device list shows this tablet (which cannot revoke itself).

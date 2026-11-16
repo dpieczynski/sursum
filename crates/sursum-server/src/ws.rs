@@ -126,6 +126,10 @@ async fn forward_loop<T: Clone + Serialize>(
     let first = snapshots.borrow_and_update().as_ref().clone();
     send(sender, &wrap(first)).await.map_err(|_| "send failed")?;
     let mut revocations = control.as_ref().map(|control| control.guard.access.revocations());
+    // A revocation between the upgrade and this subscription would otherwise go unnoticed.
+    if control.as_ref().is_some_and(|control| control.guard.rights() == Rights::None) {
+        return Err("device revoked");
+    }
     loop {
         tokio::select! {
             Some(()) = revoked(&mut revocations) => {

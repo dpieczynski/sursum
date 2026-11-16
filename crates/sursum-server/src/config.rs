@@ -17,6 +17,9 @@ pub struct Config {
     pub data_dir: PathBuf,
     /// Extra `Origin` values allowed to open WebSockets (e.g. Trunk dev servers).
     pub allowed_origins: Vec<String>,
+    /// Host names the server answers to besides IP addresses, `localhost` and `*.local`
+    /// (protection against DNS rebinding), e.g. a name in the parish router's DNS.
+    pub allowed_hosts: Vec<String>,
     /// Physical description of the screen (safe area, exclusion zones).
     pub screen_profile: ScreenProfile,
     /// Crossfade duration in milliseconds; 0 for instant cuts.
@@ -49,6 +52,7 @@ impl Config {
             listen: SocketAddr::from(([0, 0, 0, 0], 8080)),
             data_dir: data_dir.into(),
             allowed_origins: Vec::new(),
+            allowed_hosts: Vec::new(),
             screen_profile: ScreenProfile { safe_area: Insets::uniform(48), exclusions: Vec::new() },
             transition_ms: 250,
             allow_public_clients: false,
@@ -68,6 +72,9 @@ impl Config {
         }
         if let Some(origins) = file.allowed_origins {
             self.allowed_origins = origins;
+        }
+        if let Some(hosts) = file.allowed_hosts {
+            self.allowed_hosts = hosts;
         }
         if let Some(profile) = file.screen_profile {
             self.screen_profile = profile;
@@ -91,6 +98,7 @@ impl Config {
 struct FileConfig {
     listen: Option<SocketAddr>,
     allowed_origins: Option<Vec<String>>,
+    allowed_hosts: Option<Vec<String>>,
     screen_profile: Option<ScreenProfile>,
     transition_ms: Option<u32>,
     allow_public_clients: Option<bool>,
