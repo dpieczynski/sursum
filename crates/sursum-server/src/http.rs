@@ -151,10 +151,10 @@ async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
     axum::Json(info).into_response()
 }
 
-/// `POST /api/admin`: unlocks admin mode on this paired device with the PIN (rate-limited).
+/// `POST /api/admin`: unlocks admin mode on this paired device with the PIN (rate-limited per
+/// device).
 async fn unlock_admin(
     State(app): State<App>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     axum::Json(request): axum::Json<AdminRequest>,
 ) -> Response {
@@ -163,7 +163,7 @@ async fn unlock_admin(
         // No PIN set: everyone is admin already.
         return axum::Json(PairOutcome::Unlocked).into_response();
     };
-    match app.access.check_pin(peer.ip(), &request.pin, now) {
+    match app.access.check_admin_pin(&device, &request.pin, now) {
         PinCheck::Correct => {
             app.access.grant_admin(device, now);
             tracing::info!("admin mode unlocked on a remote");
@@ -390,15 +390,26 @@ async fn save_song(
     axum::Json(app.state.save_song(draft).await).into_response()
 }
 
-async fn screen_socket(State(app): State<App>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {
-    socket(app, &headers, upgrade, Role::Screen)
+async fn screen_socket(
+    State(app): State<App>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    socket(app, &headers, upgrade, Role::Screen, peer.ip().is_loopback())
 }
 
 async fn remote_socket(State(app): State<App>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {
-    socket(app, &headers, upgrade, Role::Remote)
+    socket(app, &headers, upgrade, Role::Remote, false)
 }
 
-fn socket(app: App, headers: &HeaderMap, upgrade: WebSocketUpgrade, role: Role) -> Response {
+fn socket(
+    app: App,
+    headers: &HeaderMap,
+    upgrade: WebSocketUpgrade,
+    role: Role,
+    local_peer: bool,
+) -> Response {
     if !ws::origin_allowed(headers, &app.allowed_origins) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -407,6 +418,7 @@ fn socket(app: App, headers: &HeaderMap, upgrade: WebSocketUpgrade, role: Role) 
         headers: headers.clone(),
         power: app.power.clone(),
         presence: app.presence.clone(),
+        local_peer,
     };
     upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
 }

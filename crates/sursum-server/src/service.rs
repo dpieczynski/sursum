@@ -27,10 +27,13 @@ where
     Fut: std::future::Future<Output = bool> + Send,
 {
     let Some(interval) = watchdog_interval() else { return };
+    // Sleep and the liveness check each take at most half the interval, so a ping is sent at
+    // least every `interval` = half of `WatchdogSec`, even when the actor is busy for a while.
+    let step = interval / 2;
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(interval).await;
-            if tokio::time::timeout(interval, alive()).await.unwrap_or(false) {
+            tokio::time::sleep(step).await;
+            if tokio::time::timeout(step, alive()).await.unwrap_or(false) {
                 notify("WATCHDOG=1");
             } else {
                 tracing::error!("the state actor does not answer; withholding the watchdog ping");

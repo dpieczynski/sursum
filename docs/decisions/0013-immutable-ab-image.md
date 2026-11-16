@@ -68,3 +68,10 @@ Debian Trixie container, or a spare Pi 5. QEMU builds on x86 laptops are a conve
   `current`/`previous` by rename; `bundle rollback` swaps them back. Still to do on the device (M4):
   systemd units running `current/sursum-server`, the restart, the `/healthz` check with automatic
   rollback, and the browser/USB upload paths.
+- After a second review: each release records the database schema it found
+  (`releases/<v>/installed.json`); `bundle rollback` refuses once the newer release has migrated
+  the database (the older program could not read it) and points to the `before-<version>`
+  backup instead. The database is quarantined and restored from a backup only on real damage,
+  never because its schema is newer. Old releases are pruned (only `current` and `previous` stay),
+  half-written files are removed on failure, and `bundle install` backs up through a plain
+  connection, so it never migrates or "repairs" the database under a running server.

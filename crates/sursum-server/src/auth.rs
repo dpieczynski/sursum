@@ -100,11 +100,18 @@ pub struct Access {
     tokens: RwLock<HashSet<String>>,
     /// Token hash → end of its admin session.
     admin_until: Mutex<HashMap<String, Instant>>,
-    attempts: Mutex<HashMap<IpAddr, Attempts>>,
+    attempts: Mutex<HashMap<Attempter, Attempts>>,
     /// Times of recent wrong attempts from any address, for [`GLOBAL_FAILURES`].
     recent_failures: Mutex<std::collections::VecDeque<Instant>>,
     /// Bumped on every revocation so open sessions re-check their device.
     revocations: watch::Sender<u64>,
+}
+
+/// Who is entering a PIN: an address (pairing) or a paired device (unlocking admin mode).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Attempter {
+    Address(IpAddr),
+    Device(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -194,19 +201,34 @@ impl Access {
         {
             return PinCheck::Locked(GLOBAL_WINDOW.saturating_sub(now.saturating_duration_since(*oldest)));
         }
+        let check = self.check(&Attempter::Address(address), pin, now);
+        if check != PinCheck::Correct {
+            recent.push_back(now);
+        }
+        check
+    }
+
+    /// Checks the PIN entered on a paired device to unlock admin mode. Counted per device and
+    /// outside the global budget: guests guessing at the pairing form must not lock the parish's
+    /// own tablets out of admin mode.
+    pub fn check_admin_pin(&self, device: &str, pin: &str, now: Instant) -> PinCheck {
+        self.check(&Attempter::Device(device.to_owned()), pin, now)
+    }
+
+    /// One attempt with the per-attempter lockout (doubling after [`FREE_ATTEMPTS`]).
+    fn check(&self, attempter: &Attempter, pin: &str, now: Instant) -> PinCheck {
         let mut attempts = self.attempts.lock().expect("not poisoned");
-        let entry = attempts.entry(address).or_insert(Attempts { failures: 0, locked_until: None });
+        let entry = attempts.entry(attempter.clone()).or_insert(Attempts { failures: 0, locked_until: None });
         if let Some(until) = entry.locked_until.filter(|until| *until > now) {
             return PinCheck::Locked(until - now);
         }
         let correct =
             self.pin.read().expect("not poisoned").as_ref().is_some_and(|stored| stored.matches(pin));
         if correct {
-            attempts.remove(&address);
+            attempts.remove(attempter);
             return PinCheck::Correct;
         }
         entry.failures += 1;
-        recent.push_back(now);
         if entry.failures >= FREE_ATTEMPTS {
             let doublings = (entry.failures - FREE_ATTEMPTS).min(10);
             let lockout = (FIRST_LOCKOUT * 2_u32.pow(doublings)).min(MAX_LOCKOUT);
@@ -293,6 +315,8 @@ mod tests {
             assert_eq!(access.check_pin(address, "000000", now), PinCheck::Wrong);
         }
         let fresh: IpAddr = "192.168.1.200".parse().unwrap();
+        // The parish's own paired tablet can still unlock admin mode.
+        assert_eq!(access.check_admin_pin("tablet", "246813", now), PinCheck::Correct);
         assert!(
             matches!(access.check_pin(fresh, "246813", now), PinCheck::Locked(_)),
             "even the right PIN waits"

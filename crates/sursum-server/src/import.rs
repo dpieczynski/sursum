@@ -106,7 +106,17 @@ fn song_path(name: &str) -> Option<String> {
 
 /// Stores imported songs, then the sets (resolved against the whole library), and reports what
 /// happened. Returns the stored sets so a running server can show them without reloading.
+///
+/// One transaction for everything: a big library is one disk sync instead of one per song (an SD
+/// card needs seconds otherwise), and an interrupted import stores nothing half-way.
 pub fn store(
+    database: &mut Database,
+    library: &LibraryImport,
+) -> anyhow::Result<(ImportReport, Vec<ServiceSet>)> {
+    database.in_transaction(|database| store_in(database, library))
+}
+
+fn store_in(
     database: &mut Database,
     library: &LibraryImport,
 ) -> anyhow::Result<(ImportReport, Vec<ServiceSet>)> {

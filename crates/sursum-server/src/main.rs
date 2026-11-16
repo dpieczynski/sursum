@@ -152,13 +152,17 @@ fn run_bundle_task(task: &BundleTask, data_dir: &std::path::Path) -> anyhow::Res
                 anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no bundles")
             })?;
             let verified = bundle::verify(&std::fs::read(path)?, &trusted)?;
-            let database = sursum_server::db::Database::open(data_dir)?;
-            database.backup(data_dir, &format!("before-{}", verified.manifest.version))?;
-            let release = bundle::install(&verified, data_dir)?;
+            // A plain backup: the server may be running, and nothing must migrate or "repair"
+            // the database under it.
+            let label = format!("before-{}", verified.manifest.version);
+            sursum_server::db::Database::backup_file(data_dir, &label)?;
+            let schema = sursum_server::db::Database::schema_version(data_dir)?;
+            let release = bundle::install(&verified, data_dir, schema)?;
             println!("installed {}; restart the service to run it", release.display());
         }
         BundleTask::Rollback => {
-            let previous = bundle::rollback(data_dir)?;
+            let schema = sursum_server::db::Database::schema_version(data_dir)?;
+            let previous = bundle::rollback(data_dir, schema)?;
             println!("current is {} again; restart the service", previous.display());
         }
     }

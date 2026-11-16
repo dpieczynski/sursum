@@ -41,3 +41,6 @@ separate admin PIN can be added later as a setting without changing the protocol
   a hand-edited `.sursum` history can fast-forward over a local edit (the old version stays in
   `song_history`); a large merge runs on the state actor and briefly delays navigation, so merge
   outside services.
+- After a second review: unlocking admin mode on a paired tablet is rate-limited per device and
+  is not part of the global pairing budget, so guests guessing at the pairing form cannot lock
+  the parish out of admin mode.

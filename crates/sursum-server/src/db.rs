@@ -71,6 +71,13 @@ const MIGRATIONS: &[&str] = &[
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         revoked_at TEXT
     );",
+    // 5: content hashes of songs as other devices know them (from merged `.sursum` files), so a
+    // stale file can be recognised as older and never resurrects or duplicates a song.
+    "CREATE TABLE song_known_hashes (
+        song_id TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        PRIMARY KEY (song_id, content_hash)
+    );",
 ];
 
 /// The database file inside the data directory.
@@ -116,13 +123,15 @@ impl Database {
     /// Opens (or creates) `sursum.db` in `data_dir` and brings the schema up to date.
     ///
     /// If the file is damaged (e.g. after a power cut on a bad SD card), it is moved to
-    /// `corrupt/` and the newest backup from `backups/` is restored instead.
+    /// `corrupt/` and the newest backup from `backups/` is restored instead. Only real damage
+    /// does that: a schema newer than this program (an older release after a rollback), a busy
+    /// file or a permission problem is an error that leaves the file alone.
     pub fn open(data_dir: &Path) -> anyhow::Result<Self> {
         std::fs::create_dir_all(data_dir).with_context(|| format!("creating {}", data_dir.display()))?;
         let path = data_dir.join(DATABASE_FILE);
         match Self::open_checked(&path) {
             Ok(database) => Ok(database),
-            Err(error) if path.exists() => {
+            Err(error) if path.exists() && is_damage(&error) => {
                 tracing::error!(?error, "the database is damaged; restoring the newest backup");
                 restore_newest_backup(data_dir)?;
                 Self::open_checked(&path).context("opening the restored backup")
@@ -135,8 +144,45 @@ impl Database {
     fn open_checked(path: &Path) -> anyhow::Result<Self> {
         let database = Self::configure(Connection::open(path)?)?;
         let check: String = database.connection.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
-        anyhow::ensure!(check == "ok", "integrity check failed: {check}");
+        if check != "ok" {
+            return Err(anyhow::Error::new(Damaged(check)));
+        }
         Ok(database)
+    }
+
+    /// The schema version of the database in `data_dir` (0 if there is none yet), read without
+    /// migrating or repairing anything.
+    pub fn schema_version(data_dir: &Path) -> anyhow::Result<i64> {
+        let path = data_dir.join(DATABASE_FILE);
+        if !path.exists() {
+            return Ok(0);
+        }
+        let connection = Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        Ok(connection.pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// The schema version this program creates and understands.
+    pub fn supported_schema() -> i64 {
+        i64::try_from(MIGRATIONS.len()).unwrap_or(i64::MAX)
+    }
+
+    /// A backup of the database in `data_dir` through a plain connection: no migration and no
+    /// repair, so it is safe while the server is running (e.g. before installing an update).
+    pub fn backup_file(data_dir: &Path, label: &str) -> anyhow::Result<Option<PathBuf>> {
+        let path = data_dir.join(DATABASE_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let connection = Connection::open(&path)?;
+        connection.busy_timeout(std::time::Duration::from_secs(5))?;
+        let dir = data_dir.join(BACKUP_DIR);
+        std::fs::create_dir_all(&dir)?;
+        let seconds =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let target = dir.join(format!("sursum-{seconds:012}-{label}.db"));
+        connection.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
+        prune_backups(&dir)?;
+        Ok(Some(target))
     }
 
     /// Writes a consistent copy of the database into `data_dir/backups` and keeps the newest
@@ -203,7 +249,7 @@ impl Database {
     pub fn upsert_song(&mut self, song: &Song, source: &str) -> anyhow::Result<Upsert> {
         let body = serde_json::to_string(song)?;
         let hash = content_hash(&body);
-        let transaction = self.connection.transaction()?;
+        let transaction = self.connection.savepoint()?;
         let existing: Option<(i64, String)> = transaction
             .query_row("SELECT revision, content_hash FROM songs WHERE id = ?1", [song.id.as_str()], |row| {
                 Ok((row.get(0)?, row.get(1)?))
@@ -271,7 +317,7 @@ impl Database {
 
     /// Stores a set, replacing its previous items.
     pub fn save_set(&mut self, set: &ServiceSet) -> anyhow::Result<()> {
-        let transaction = self.connection.transaction()?;
+        let transaction = self.connection.savepoint()?;
         transaction.execute(
             "INSERT INTO sets (id, name) VALUES (?1, ?2)
              ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = datetime('now')",
@@ -357,9 +403,13 @@ impl Database {
         let mut songs = self
             .connection
             .prepare("SELECT id, body_json, content_hash, deleted_at IS NOT NULL FROM songs ORDER BY id")?;
-        let mut history = self
-            .connection
-            .prepare("SELECT content_hash FROM song_history WHERE song_id = ?1 ORDER BY revision")?;
+        // Own revisions first (in order), then hashes learned from other devices.
+        let mut history = self.connection.prepare(
+            "SELECT content_hash FROM song_history WHERE song_id = ?1
+             UNION ALL
+             SELECT content_hash FROM song_known_hashes WHERE song_id = ?1
+               AND content_hash NOT IN (SELECT content_hash FROM song_history WHERE song_id = ?1)",
+        )?;
         let rows: Vec<(String, String, String, bool)> = songs
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
             .collect::<Result<_, _>>()?;
@@ -371,6 +421,36 @@ impl Database {
                 Ok(StoredSong { song, content_hash, history, deleted })
             })
             .collect()
+    }
+
+    /// Remembers hashes another device knew for a song (its history in a merged file).
+    pub fn remember_hashes(&self, song_id: &str, hashes: &[String]) -> anyhow::Result<()> {
+        let mut statement = self.connection.prepare_cached(
+            "INSERT OR IGNORE INTO song_known_hashes (song_id, content_hash) VALUES (?1, ?2)",
+        )?;
+        for hash in hashes {
+            statement.execute([song_id, hash])?;
+        }
+        Ok(())
+    }
+
+    /// Runs `work` in one transaction: all of it is stored, or nothing. Bulk changes (merge,
+    /// import) also need one disk sync instead of one per song, which matters on an SD card.
+    pub fn in_transaction<T>(
+        &mut self,
+        work: impl FnOnce(&mut Self) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
+        match work(self) {
+            Ok(value) => {
+                self.connection.execute_batch("COMMIT")?;
+                Ok(value)
+            }
+            Err(error) => {
+                let _ = self.connection.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
     }
 
     /// Marks a song as deleted (it keeps its history and comes back if a newer version is
@@ -431,6 +511,24 @@ fn backups(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     files.retain(|path| path.extension().is_some_and(|extension| extension == "db"));
     files.sort();
     Ok(files)
+}
+
+/// The integrity check found damage.
+#[derive(Debug, thiserror::Error)]
+#[error("integrity check failed: {0}")]
+struct Damaged(String);
+
+/// True for errors that mean the file itself is damaged (and a backup should replace it).
+fn is_damage(error: &anyhow::Error) -> bool {
+    use rusqlite::ErrorCode;
+    error.chain().any(|cause| {
+        cause.is::<Damaged>()
+            || matches!(
+                cause.downcast_ref::<rusqlite::Error>(),
+                Some(rusqlite::Error::SqliteFailure(failure, _))
+                    if matches!(failure.code, ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase)
+            )
+    })
 }
 
 fn prune_backups(dir: &Path) -> anyhow::Result<()> {
@@ -519,6 +617,23 @@ mod tests {
         let database = Database::open(dir.path()).unwrap();
         assert_eq!(database.load_songs().unwrap()[0].verses[0].blocks[0].lines[0].text, "zapisana");
         assert!(dir.path().join("corrupt").read_dir().unwrap().next().is_some());
+    }
+
+    #[test]
+    fn a_newer_schema_is_refused_but_never_quarantined() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let database = Database::open(dir.path()).unwrap();
+            database.backup(dir.path(), "startup").unwrap();
+            database.connection.pragma_update(None, "user_version", 999).unwrap();
+        }
+        for _ in 0..3 {
+            let error = Database::open(dir.path()).err().expect("refused").to_string();
+            assert!(error.contains("newer"), "{error}");
+        }
+        assert!(!dir.path().join("corrupt").exists(), "the live database stays where it is");
+        assert_eq!(Database::schema_version(dir.path()).unwrap(), 999);
+        assert!(Database::backup_file(dir.path(), "before-x").unwrap().is_some());
     }
 
     #[test]

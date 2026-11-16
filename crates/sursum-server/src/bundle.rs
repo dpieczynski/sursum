@@ -42,6 +42,7 @@ pub struct Manifest {
 #[derive(Debug)]
 pub struct Verified {
     pub manifest: Manifest,
+    #[cfg_attr(not(unix), allow(dead_code))]
     binary: Vec<u8>,
 }
 
@@ -122,28 +123,91 @@ pub fn verify(bytes: &[u8], trusted: &VerifyingKey) -> anyhow::Result<Verified> 
     Ok(Verified { manifest, binary })
 }
 
-/// Writes the release and makes it `current`; returns the release folder.
+/// Written next to each installed binary: the database schema before this release first ran,
+/// so a rollback can tell whether the older program still understands the database.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(not(unix), allow(dead_code))]
+struct Installed {
+    schema_before: i64,
+}
+
+/// Writes the release and makes it `current`; returns the release folder. `schema_now` is the
+/// database's schema version at this moment (see `Database::schema_version`).
 #[cfg(unix)]
-pub fn install(verified: &Verified, data_dir: &Path) -> anyhow::Result<PathBuf> {
-    use std::os::unix::fs::PermissionsExt as _;
-    let release = data_dir.join("releases").join(&verified.manifest.version);
+pub fn install(verified: &Verified, data_dir: &Path, schema_now: i64) -> anyhow::Result<PathBuf> {
+    let releases = data_dir.join("releases");
+    let release = releases.join(&verified.manifest.version);
     std::fs::create_dir_all(&release)?;
-    let target = release.join(BINARY);
-    let temporary = release.join(format!(".{BINARY}.{}.part", uuid::Uuid::new_v4()));
-    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
-    file.write_all(&verified.binary)?;
-    file.set_permissions(std::fs::Permissions::from_mode(0o755))?;
-    file.sync_all()?;
-    std::fs::rename(&temporary, &target)?;
-    std::fs::File::open(&release)?.sync_all()?;
+    std::fs::File::open(&releases)?.sync_all()?;
+    let installed = serde_json::to_vec(&Installed { schema_before: schema_now })?;
+    write_atomically(&release, "installed.json", &installed, 0o644)?;
+    write_atomically(&release, BINARY, &verified.binary, 0o755)?;
     switch_current(data_dir, &PathBuf::from("releases").join(&verified.manifest.version))?;
+    prune_releases(data_dir)?;
     Ok(release)
 }
 
-/// Points `current` back to `previous` (and `previous` to what was current).
+/// Writes `bytes` to `folder/name` through a temporary file (removed again on any failure), so a
+/// full disk or a power cut never leaves a half-written file behind or under the real name.
 #[cfg(unix)]
-pub fn rollback(data_dir: &Path) -> anyhow::Result<PathBuf> {
+fn write_atomically(folder: &Path, name: &str, bytes: &[u8], mode: u32) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let temporary = folder.join(format!(".{name}.{}.part", uuid::Uuid::new_v4()));
+    let written = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+        file.write_all(bytes)?;
+        file.set_permissions(std::fs::Permissions::from_mode(mode))?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, folder.join(name))?;
+        std::fs::File::open(folder)?.sync_all()
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    Ok(written?)
+}
+
+/// Removes releases other than `current` and `previous` (each binary is tens of megabytes on
+/// the partition the database needs).
+#[cfg(unix)]
+fn prune_releases(data_dir: &Path) -> anyhow::Result<()> {
+    let keep: Vec<PathBuf> = ["current", "previous"]
+        .iter()
+        .filter_map(|name| std::fs::read_link(data_dir.join(name)).ok())
+        .collect();
+    for entry in std::fs::read_dir(data_dir.join("releases"))? {
+        let path = entry?.path();
+        let relative = PathBuf::from("releases").join(path.file_name().unwrap_or_default());
+        if !keep.contains(&relative) {
+            std::fs::remove_dir_all(&path)?;
+        }
+    }
+    Ok(())
+}
+
+/// Points `current` back to `previous` (and `previous` to what was current). Refused when the
+/// current release has upgraded the database since it was installed: the older program would
+/// not understand it. `schema_now` is the database's schema version at this moment.
+#[cfg(unix)]
+pub fn rollback(data_dir: &Path, schema_now: i64) -> anyhow::Result<PathBuf> {
     let previous = std::fs::read_link(data_dir.join("previous")).context("there is no previous release")?;
+    ensure!(
+        data_dir.join(&previous).join(BINARY).is_file(),
+        "the previous release {} is missing",
+        previous.display()
+    );
+    let current = std::fs::read_link(data_dir.join("current")).context("there is no current release")?;
+    let installed: Installed =
+        serde_json::from_slice(&std::fs::read(data_dir.join(&current).join("installed.json"))?)?;
+    ensure!(
+        schema_now <= installed.schema_before,
+        "{} upgraded the database (schema {} → {schema_now}); {} cannot read it. To go back anyway, \
+         restore the backup made before the update (backups/*-before-<version>.db) by hand — \
+         changes made since then would be lost",
+        current.display(),
+        installed.schema_before,
+        previous.display()
+    );
     switch_current(data_dir, &previous)?;
     Ok(previous)
 }
@@ -174,12 +238,12 @@ fn switch_current(data_dir: &Path, target: &Path) -> anyhow::Result<()> {
 }
 
 #[cfg(not(unix))]
-pub fn install(_: &Verified, _: &Path) -> anyhow::Result<PathBuf> {
+pub fn install(_: &Verified, _: &Path, _: i64) -> anyhow::Result<PathBuf> {
     anyhow::bail!("installing bundles is only supported on the Linux device")
 }
 
 #[cfg(not(unix))]
-pub fn rollback(_: &Path) -> anyhow::Result<PathBuf> {
+pub fn rollback(_: &Path, _: i64) -> anyhow::Result<PathBuf> {
     anyhow::bail!("installing bundles is only supported on the Linux device")
 }
 
@@ -256,16 +320,48 @@ mod tests {
     fn installing_switches_current_and_rollback_switches_back() {
         let dir = tempfile::tempdir().unwrap();
         let key = key();
-        for (version, binary) in [("0.1.0", &b"one"[..]), ("0.2.0", &b"two"[..])] {
+        let install_version = |version: &str, binary: &[u8], schema: i64| {
             let verified =
                 verify(&create(binary, version, "b", &key).unwrap(), &key.verifying_key()).unwrap();
-            install(&verified, dir.path()).unwrap();
-        }
+            install(&verified, dir.path(), schema).unwrap();
+        };
+        install_version("0.1.0", b"one", 4);
+        install_version("0.2.0", b"two", 4);
         let current = dir.path().join("current").join(BINARY);
         assert_eq!(std::fs::read(&current).unwrap(), b"two");
         assert_eq!(std::fs::read_link(dir.path().join("previous")).unwrap(), Path::new("releases/0.1.0"));
-        rollback(dir.path()).unwrap();
+        rollback(dir.path(), 4).unwrap();
         assert_eq!(std::fs::read(&current).unwrap(), b"one");
         assert_eq!(std::fs::read_link(dir.path().join("previous")).unwrap(), Path::new("releases/0.2.0"));
+
+        // A third release prunes the oldest one that is neither current nor previous.
+        rollback(dir.path(), 4).unwrap();
+        install_version("0.3.0", b"three", 4);
+        let mut kept: Vec<String> = std::fs::read_dir(dir.path().join("releases"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        kept.sort();
+        assert_eq!(kept, ["0.2.0", "0.3.0"]);
+        let leftovers = std::fs::read_dir(dir.path().join("releases/0.3.0"))
+            .unwrap()
+            .filter(|entry| entry.as_ref().unwrap().file_name().to_string_lossy().ends_with(".part"))
+            .count();
+        assert_eq!(leftovers, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rollback_is_refused_once_the_new_release_upgraded_the_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = key();
+        for version in ["0.1.0", "0.2.0"] {
+            let verified = verify(&create(b"x", version, "b", &key).unwrap(), &key.verifying_key()).unwrap();
+            install(&verified, dir.path(), 4).unwrap();
+        }
+        // 0.2.0 ran and migrated the database from schema 4 to 5.
+        let error = rollback(dir.path(), 5).unwrap_err().to_string();
+        assert!(error.contains("upgraded the database"), "{error}");
+        assert_eq!(std::fs::read_link(dir.path().join("current")).unwrap(), Path::new("releases/0.2.0"));
     }
 }

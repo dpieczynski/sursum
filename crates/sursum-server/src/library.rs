@@ -118,9 +118,15 @@ fn decide(incoming: &BundleSong, local: Option<&Local>) -> Decision {
         (Some(local), true) if known_there(local) => Decision::Delete,
         // Edited here after (or apart from) the version deleted there: keep it.
         (Some(_), true) => Decision::KeepLocal,
-        (Some(local), false) if local.deleted && known_here(local) => Decision::KeepLocal,
-        // Edited there after this device deleted it: the newer song comes back.
-        (Some(local), false) if local.deleted => Decision::FastForward,
+        // Edited there after the very version this device deleted: the newer song comes back.
+        // Anything else (an older or unrelated version from a stale file) stays deleted.
+        (Some(local), false) if local.deleted => {
+            if !known_here(local) && incoming.history.contains(&local.hash) {
+                Decision::FastForward
+            } else {
+                Decision::KeepLocal
+            }
+        }
         (Some(local), false) if incoming.content_hash == local.hash => Decision::Unchanged,
         (Some(local), false) if local.history.contains(&incoming.content_hash) => Decision::KeepLocal,
         (Some(local), false) if incoming.history.contains(&local.hash) => Decision::FastForward,
@@ -129,7 +135,17 @@ fn decide(incoming: &BundleSong, local: Option<&Local>) -> Decision {
 }
 
 /// Merges a bundle. With `dry_run` nothing is written.
+///
+/// Everything happens in one transaction (all or nothing, and one disk sync on the SD card). The
+/// histories in the file are remembered, so a stale file merged later is recognised as older.
 pub fn merge(database: &mut Database, incoming: &[BundleSong], dry_run: bool) -> anyhow::Result<MergeReport> {
+    if dry_run {
+        return merge_in(database, incoming, true);
+    }
+    database.in_transaction(|database| merge_in(database, incoming, false))
+}
+
+fn merge_in(database: &mut Database, incoming: &[BundleSong], dry_run: bool) -> anyhow::Result<MergeReport> {
     let local: HashMap<SongId, Local> = database
         .stored_songs()?
         .into_iter()
@@ -179,6 +195,12 @@ pub fn merge(database: &mut Database, incoming: &[BundleSong], dry_run: bool) ->
         };
         if let Some(song) = to_store.filter(|_| !dry_run) {
             database.upsert_song(&song, "merge")?;
+        }
+        if !dry_run && decision != Decision::Conflict {
+            // What the other device knew of this song (its own copy, not a conflict copy).
+            let mut known = bundle_song.history.clone();
+            known.push(bundle_song.content_hash.clone());
+            database.remember_hashes(bundle_song.song.id.as_str(), &known)?;
         }
     }
     Ok(report)
@@ -289,6 +311,56 @@ mod tests {
         assert_eq!(report.updated, 1, "{report:?}");
         assert_eq!(live_ids(&gowarzewo), ["d"]);
         assert_eq!(text_of(&gowarzewo, "d"), "poprawiona w Tulcach");
+    }
+
+    /// Exports of Tulce after each of three edits of song "s" (v1, v2, v3).
+    fn three_exports() -> Vec<Vec<BundleSong>> {
+        let mut tulce = Database::in_memory().unwrap();
+        ["v1", "v2", "v3"]
+            .iter()
+            .map(|text| {
+                tulce.upsert_song(&song("s", text), "editor").unwrap();
+                read_bundle(&export(&tulce).unwrap()).unwrap()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_stale_file_never_resurrects_a_deleted_song() {
+        let files = three_exports();
+        let mut gowarzewo = Database::in_memory().unwrap();
+        merge(&mut gowarzewo, &files[1], false).unwrap();
+        gowarzewo.delete_song("s").unwrap();
+        let report = merge(&mut gowarzewo, &files[0], false).unwrap();
+        assert_eq!(report.updated, 0, "{report:?}");
+        assert!(live_ids(&gowarzewo).is_empty(), "v1 is older than the deleted v2");
+        // A genuinely newer version (edited after v2) does come back.
+        let report = merge(&mut gowarzewo, &files[2], false).unwrap();
+        assert_eq!(report.updated, 1, "{report:?}");
+        assert_eq!(text_of(&gowarzewo, "s"), "v3");
+    }
+
+    #[test]
+    fn files_merged_out_of_order_make_no_conflict_copies() {
+        let files = three_exports();
+        let mut gowarzewo = Database::in_memory().unwrap();
+        for file in [&files[0], &files[2], &files[1]] {
+            let report = merge(&mut gowarzewo, file, false).unwrap();
+            assert!(report.conflicts.is_empty(), "{report:?}");
+        }
+        assert_eq!(live_ids(&gowarzewo), ["s"]);
+        assert_eq!(text_of(&gowarzewo, "s"), "v3");
+    }
+
+    #[test]
+    fn a_failed_merge_stores_nothing() {
+        let mut database = Database::in_memory().unwrap();
+        let result: anyhow::Result<()> = database.in_transaction(|database| {
+            database.upsert_song(&song("t", "zapisana?"), "merge")?;
+            anyhow::bail!("disk full")
+        });
+        assert!(result.is_err());
+        assert!(live_ids(&database).is_empty(), "all or nothing");
     }
 
     #[test]

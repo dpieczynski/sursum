@@ -32,6 +32,8 @@ pub struct Guard {
     pub power: crate::display_power::PowerHandle,
     /// Counts connected screens (for the screen guard and the remotes).
     pub presence: crate::screen_guard::ScreenPresence,
+    /// True for a screen on this machine (the kiosk); only those are counted.
+    pub local_peer: bool,
 }
 
 impl Guard {
@@ -98,7 +100,7 @@ pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role, guar
     tracing::debug!(%client_id, ?role, "client connected");
     let result = match role {
         Role::Screen => {
-            let _connected = guard.presence.connected();
+            let _connected = guard.local_peer.then(|| guard.presence.connected());
             forward_loop(
                 &mut sender,
                 &mut receiver,

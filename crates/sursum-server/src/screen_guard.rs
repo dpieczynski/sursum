@@ -3,6 +3,9 @@
 //! it is gone for longer than a grace period (a crashed renderer, a "sad tab", a stopped kiosk),
 //! the server runs a configured command — on the device, restarting the kiosk unit. Remotes are
 //! told whether a screen is connected, so the operator knows the slide is really up there.
+//!
+//! Only a screen on this machine counts (a loopback connection: the kiosk). A `/screen/` page
+//! opened on some laptop must not hide a crashed kiosk.
 
 use std::time::Duration;
 
@@ -16,14 +19,20 @@ use crate::actor::StateHandle;
 pub struct ScreenGuardConfig {
     /// The command and its arguments, e.g. `["systemctl", "restart", "sursum-kiosk"]`.
     pub restart_command: Vec<String>,
-    /// How long the screen may be away before the command runs.
+    /// How long the screen may be away before the command runs. The default is well above the
+    /// screen's own reconnect delay (at most about 5 s) plus the server's Hello timeout (5 s), so
+    /// a kiosk that is reconnecting by itself is not restarted.
     #[serde(default = "default_grace_s")]
     pub grace_s: u64,
 }
 
 fn default_grace_s() -> u64 {
-    5
+    15
 }
+
+/// After the server starts, the kiosk gets this long to connect for the first time (cage and
+/// Chromium may start well after the server).
+const STARTUP_GRACE: Duration = Duration::from_secs(60);
 
 /// After running the command, wait this long before trying again (the kiosk needs time to start).
 const RETRY: Duration = Duration::from_secs(30);
@@ -69,8 +78,10 @@ pub fn spawn(presence: &ScreenPresence, config: Option<ScreenGuardConfig>, state
     let mut count = presence.subscribe();
     tokio::spawn(async move {
         let mut was_connected = None;
+        let mut ever_connected = false;
         loop {
             let connected = *count.borrow_and_update() > 0;
+            ever_connected |= connected;
             if was_connected != Some(connected) {
                 state.screen_connected(connected).await;
                 was_connected = Some(connected);
@@ -83,6 +94,7 @@ pub fn spawn(presence: &ScreenPresence, config: Option<ScreenGuardConfig>, state
             }
             let Some(config) = &config else { continue };
             let grace = Duration::from_secs(config.grace_s);
+            let grace = if ever_connected { grace } else { grace.max(STARTUP_GRACE) };
             // Wait for the screen to come back within the grace period.
             let back =
                 matches!(tokio::time::timeout(grace, count.wait_for(|count| *count > 0)).await, Ok(Ok(_)));
