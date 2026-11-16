@@ -77,7 +77,9 @@ no data loss; the pillar zone can be set from the remote in < 2 minutes.
 
 ## P1 — Windows pilot
 
-- [ ] `start-pilot.ps1` (server + kiosk on the second monitor ⚠), operator guide
+- [x] `deploy/windows/start-pilot.ps1` written (server + Edge kiosk on the non-primary monitor + remote) — ⚠ not yet run on Windows
+- [x] Operator guide in Polish: `docs/operator-guide-pl.md`
+- [ ] Try the pilot script on the parish PC; Windows has no boot id yet, so every start shows the logo
 
 **Done when:** one real service in one church with OpenSong ready as plan B; feedback filed.
 
