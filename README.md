@@ -3,7 +3,9 @@
 Offline song-lyrics display for churches: a small appliance (Raspberry Pi 5 next to the projector)
 shows lyrics to the congregation, and a one-hand remote in a tablet or PC browser controls it.
 
-> **Status: pre-alpha.** Nothing is usable yet. See [docs/roadmap.md](docs/roadmap.md).
+> **Status: pre-alpha.** Runs on a Linux PC (and should on Windows) with the screen and the
+> remote in browsers; not yet on the Pi, not yet used in a service. See
+> [docs/roadmap.md](docs/roadmap.md) and, for operators, [docs/operator-guide-pl.md](docs/operator-guide-pl.md).
 
 ## Goals
 
@@ -39,8 +41,12 @@ just browsers-image && just browsers && just e2e
 ```
 
 The demo set contains a public-domain hymn, a synthetic song and an announcement. A
-`config.toml` in the data directory sets the listen address, the crossfade duration and the screen
-profile (safe area, exclusion zones); see `crates/sursum-server/src/config.rs`.
+`config.toml` in the data directory sets the listen address, allowed host names, the crossfade
+duration, the screen profile (safe area, exclusion zones), display power (`[display_power]`,
+PJLink) and the screen guard (`[screen_guard]`); see `crates/sursum-server/src/config.rs`.
+
+Set a PIN before using it on a shared network (`sursum-server --data-dir … set-pin 123456`);
+without one, every device on the LAN has admin rights.
 
 ## Contributing
 
