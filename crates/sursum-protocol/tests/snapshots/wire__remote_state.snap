@@ -58,7 +58,8 @@ expression: state
           "height": 1080
         }
       ]
-    }
+    },
+    "calibration": null
   },
   "next": null,
   "sections": [
@@ -89,5 +90,25 @@ expression: state
   "display_power": {
     "state": "unavailable",
     "reason": "not_configured"
+  },
+  "screen_profile": {
+    "safe_area": {
+      "top": 48,
+      "right": 48,
+      "bottom": 48,
+      "left": 48
+    },
+    "exclusions": [
+      {
+        "name": "słup",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 600,
+          "height": 1080
+        },
+        "mask": "black"
+      }
+    ]
   }
 }

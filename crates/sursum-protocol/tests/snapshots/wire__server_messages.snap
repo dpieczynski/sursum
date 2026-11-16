@@ -64,7 +64,8 @@ expression: messages
             "height": 1080
           }
         ]
-      }
+      },
+      "calibration": null
     }
   },
   {

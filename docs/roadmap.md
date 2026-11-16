@@ -69,7 +69,7 @@ without a mouse.
 - [x] PIN pairing: `sursum-server set-pin`, salted hash, rate-limited `/api/pair` with doubling lockout, `HttpOnly; SameSite=Strict` device cookie (only its hash stored), protected `/ws/remote` and `/api/*`, pairing screen in the remote; screen stays open
 - [ ] Roles (operator vs admin) and the device list with revocation
 - [x] `.sursum` library file: export (`GET /api/library/export`, ZIP with `manifest.json` + `songs.jsonl` incl. revision history), merge with mandatory dry run in the remote; fast-forward by ancestor hashes, newer-local kept, conflicts stored as a copy, backup before merging (sets and soft deletions not yet carried)
-- [ ] Screen calibration panel (grid, drag exclusion zone on the preview)
+- [x] Screen calibration panel: hold to open, test card on the screen and the tablet, drag a zone or type exact numbers, safe area margins; stored in settings, validated on the server (ADR 0008 amendment)
 
 **Done when:** WebDriver tests prove set edits never change the screen; simultaneous "next" from two
 remotes advances once; merging two libraries with a planted conflict yields a correct report and

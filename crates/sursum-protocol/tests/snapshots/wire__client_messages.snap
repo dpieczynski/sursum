@@ -38,6 +38,43 @@ expression: messages
     }
   },
   {
+    "t": "cmd",
+    "seq": 6,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "set_screen_profile",
+      "profile": {
+        "safe_area": {
+          "top": 48,
+          "right": 48,
+          "bottom": 48,
+          "left": 48
+        },
+        "exclusions": [
+          {
+            "name": "słup",
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 600,
+              "height": 1080
+            },
+            "mask": "black"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 7,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "calibrate",
+      "on": true
+    }
+  },
+  {
     "t": "ping"
   },
   {

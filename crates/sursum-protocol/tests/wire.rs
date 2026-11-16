@@ -32,6 +32,18 @@ fn sample_screen() -> ScreenState {
             content: Rect::new(600, 48, 1272, 984),
             masks: vec![Rect::new(0, 0, 600, 1080)],
         },
+        calibration: None,
+    }
+}
+
+fn sample_profile() -> ScreenProfile {
+    ScreenProfile {
+        safe_area: Insets::uniform(48),
+        exclusions: vec![ExclusionZone {
+            name: "słup".into(),
+            rect: Rect::new(0, 0, 600, 1080),
+            mask: MaskMode::Black,
+        }],
     }
 }
 
@@ -51,6 +63,12 @@ fn client_messages() {
             cmd: Command::GoTo { item_id: ItemId::from("item-2"), slide_index: 1 },
         },
         ClientMsg::Cmd { seq: 5, base_rev: Rev(7), cmd: Command::SetOverlay { overlay: Overlay::Logo } },
+        ClientMsg::Cmd {
+            seq: 6,
+            base_rev: Rev(7),
+            cmd: Command::SetScreenProfile { profile: sample_profile() },
+        },
+        ClientMsg::Cmd { seq: 7, base_rev: Rev(7), cmd: Command::Calibrate { on: true } },
         ClientMsg::Ping,
         ClientMsg::Log { message: "font missing".into() },
     ];
@@ -84,6 +102,7 @@ fn remote_state() {
         sets: vec![SetSummary { set_id: SetId::from("set"), name: "Msza".into(), items: 1 }],
         can_undo: false,
         display_power: DisplayPowerState::Unavailable { reason: "not_configured".into() },
+        screen_profile: sample_profile(),
     };
     insta::assert_json_snapshot!(state);
 }

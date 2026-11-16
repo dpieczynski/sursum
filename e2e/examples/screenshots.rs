@@ -42,6 +42,16 @@ async fn main() -> anyhow::Result<()> {
     remote_page.find(thirtyfour::By::XPath("//button[text()='Edytuj zestaw']")).await?.click().await?;
     tokio::time::sleep(Duration::from_millis(400)).await;
     remote_page.screenshot(&output.join("set-edit.png")).await?;
+    // Calibration: the test card on the screen and the panel on the remote.
+    remote.command(Command::Calibrate { on: true }).await?;
+    let open = remote_page.find(thirtyfour::By::XPath("//button[contains(text(), 'Kalibracja')]")).await?;
+    remote_page.action_chain().click_and_hold_element(&open).perform().await?;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+    remote_page.action_chain().release().perform().await?;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    screen.screenshot(&output.join("screen-calibration.png")).await?;
+    remote_page.screenshot(&output.join("calibration.png")).await?;
+    remote.command(Command::Calibrate { on: false }).await?;
     screen.quit().await?;
     remote_page.quit().await?;
     println!("saved to {}", output.display());

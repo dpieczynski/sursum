@@ -262,3 +262,67 @@ async fn remote_pairs_with_the_pin_before_it_can_control() -> anyhow::Result<()>
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn pillar_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> anyhow::Result<()> {
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    with_engine(screen_engine(), 1920, 1080, async |screen| {
+        screen.goto(server.url("/screen/")).await?;
+        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+            remote.goto(server.url("/remote/")).await?;
+            wait_until(Duration::from_secs(10), || async {
+                remote.find(By::Css(".status-dot.connected")).await.is_ok()
+            })
+            .await?;
+            // Calibration needs a hold, so a stray tap during Mass cannot start it.
+            let open = remote.find(By::XPath("//button[contains(text(), 'Kalibracja')]")).await?;
+            remote.action_chain().click_and_hold_element(&open).perform().await?;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+            remote.action_chain().release().perform().await?;
+            wait_until(Duration::from_secs(5), || async {
+                screen.find(By::Css("[data-calibration]")).await.is_ok()
+            })
+            .await
+            .map_err(|error| error.context("the screen never showed the test card"))?;
+
+            // Drag a strip over the left fifth of the frame on the tablet.
+            // The frame has the on-screen size; the stage inside is scaled with a transform.
+            let surface = remote.find(By::Css(".calibration-frame")).await?;
+            let bounds = surface.rect().await?;
+            let (width, height) = (bounds.width, bounds.height);
+            remote
+                .action_chain()
+                .move_to_element_with_offset(&surface, (-width * 0.4) as i64, (-height * 0.45) as i64)
+                .click_and_hold()
+                .move_by_offset((width * 0.1) as i64, (height * 0.45) as i64)
+                .move_by_offset((width * 0.05) as i64, (height * 0.45) as i64)
+                .release()
+                .perform()
+                .await?;
+            wait_until(Duration::from_secs(5), || async {
+                screen.find(By::Css(".sursum-calibration-zone")).await.is_ok()
+            })
+            .await
+            .map_err(|error| error.context("the drawn zone never reached the screen"))?;
+
+            remote.find(By::XPath("//button[text()='Zamknij']")).await?.click().await?;
+            wait_until(Duration::from_secs(5), || async {
+                screen.find(By::Css("[data-calibration]")).await.is_err()
+            })
+            .await?;
+            // The zone stays as a black mask: x ≈ 0.1 × 1920 = 192 px, width ≈ 0.15 × 1920 = 288 px.
+            let style = screen.find(By::Css(".sursum-mask")).await?.attr("style").await?.unwrap_or_default();
+            let pixels = |name: &str| -> Option<f64> {
+                let start = style.find(&format!("{name}:"))? + name.len() + 1;
+                style[start..].split("px").next()?.trim().parse().ok()
+            };
+            let (left, mask_width) = (pixels("left").unwrap_or(-1.0), pixels("width").unwrap_or(-1.0));
+            anyhow::ensure!((left - 192.0).abs() < 40.0, "mask starts at {left} px ({style})");
+            anyhow::ensure!((mask_width - 288.0).abs() < 40.0, "mask is {mask_width} px wide ({style})");
+            Ok(())
+        })
+        .await
+    })
+    .await
+}

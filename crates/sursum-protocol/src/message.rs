@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{ClientId, ItemId, Rev, SetId, SongId};
+use crate::layout::ScreenProfile;
 use crate::state::{Overlay, RemoteState, ScreenState};
 
 /// Bumped on any incompatible change; a client with another version reloads itself.
@@ -71,6 +72,11 @@ pub enum Command {
     NewSet { name: String },
     /// Make another set active (the screen keeps its slide until the next navigation).
     ActivateSet { set_id: SetId },
+    /// Replace this device's screen profile (safe area and exclusion zones, ADR 0008). The server
+    /// validates it, stores it and recomputes the layout for the screen and every preview.
+    SetScreenProfile { profile: ScreenProfile },
+    /// Show or hide the calibration pattern on the screen (outside services only).
+    Calibrate { on: bool },
 }
 
 impl Command {
@@ -88,6 +94,8 @@ pub enum ErrorCode {
     NoActiveSet,
     Forbidden,
     Unsupported,
+    /// The screen profile leaves no room for text (or the safe area is empty).
+    InvalidProfile,
 }
 
 /// Result of one command.

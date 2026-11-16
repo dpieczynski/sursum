@@ -124,7 +124,9 @@ impl Program {
             | Command::MoveItem { .. }
             | Command::UndoRemove
             | Command::NewSet { .. }
-            | Command::ActivateSet { .. } => Err(Rejection::NotAProgramCommand),
+            | Command::ActivateSet { .. }
+            | Command::SetScreenProfile { .. }
+            | Command::Calibrate { .. } => Err(Rejection::NotAProgramCommand),
         }
     }
 

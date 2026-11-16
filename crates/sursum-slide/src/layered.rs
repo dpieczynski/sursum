@@ -10,9 +10,10 @@
 use futures_util::StreamExt;
 use leptos::html::Div;
 use leptos::prelude::*;
-use sursum_protocol::{Background, DeckId, Overlay, ScreenLayout, ScreenState, Slide, SlideKey, Theme};
+use sursum_protocol::{Background, DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideKey, Theme};
 use wasm_bindgen::JsCast;
 
+use crate::calibration::CalibrationPattern;
 use crate::dom;
 use crate::fit::{Fit, fit_deck};
 use crate::slide_view::{SlideView, background_style};
@@ -82,6 +83,12 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
     let transitions_attr = move || transitions.get().to_string();
     let overlay_attr = move || overlay_name(overlay());
     let mask_views = move || masks().into_iter().map(mask_view).collect_view();
+    let calibration = move || state.with(|state| state.as_ref().and_then(|state| state.calibration.clone()));
+    let content =
+        move || state.with(|state| state.as_ref().map_or(Rect::SCENE, |state| state.layout.content));
+    let pattern = move || {
+        calibration().map(|profile| view! { <CalibrationPattern profile content=Signal::derive(content) /> })
+    };
     let overlay_style = move || format!("z-index:10;transition-duration:{}ms;", overlay_ms());
 
     view! {
@@ -103,6 +110,7 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
                     class:visible=move || overlay() != Overlay::None
                     style=overlay_style
                 ></div>
+                {pattern}
             </div>
         </Stage>
     }

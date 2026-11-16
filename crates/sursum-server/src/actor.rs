@@ -16,8 +16,8 @@ use sursum_core::search::SearchIndex;
 use sursum_core::slides::{SlideRules, compile_song, compile_text};
 use sursum_protocol::{
     ClientId, CmdOutcome, Command, Deck, DisplayPowerState, ErrorCode, ItemId, LiveSlide, Overlay, Rect,
-    RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenState, SetId, SetItemView, SetView, SongDraft, SongId,
-    SongSummary, Theme,
+    RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenProfile, ScreenState, SetId, SetItemView, SetView,
+    SongDraft, SongId, SongSummary, Theme,
 };
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -174,6 +174,12 @@ pub fn spawn(
     let active_set: Option<SetId> = database.setting(ACTIVE_SET_KEY).context("loading the active set")?;
     let songs = database.load_songs().context("loading the song library")?;
     tracing::info!(songs = songs.len(), "song library loaded");
+    let saved_profile: Option<ScreenProfile> =
+        database.setting(SCREEN_PROFILE_KEY).context("loading the screen profile")?;
+    if saved_profile.is_some() {
+        tracing::info!("using the screen profile calibrated from a remote (config.toml's is ignored)");
+    }
+    let profile = saved_profile.unwrap_or_else(|| config.screen_profile.clone());
     let mut state = AppState {
         index: SearchIndex::build(&songs),
         data_dir: config.data_dir.clone(),
@@ -182,7 +188,9 @@ pub fn spawn(
         program: Program::default(),
         rev: Rev(1),
         theme: Theme::default(),
-        layout: layout_or_fallback(config),
+        layout: layout_or_fallback(&profile),
+        profile,
+        calibrating: false,
         transition_ms: config.transition_ms,
         rules: SlideRules::default(),
         boot_id: platform.boot_id(),
@@ -270,6 +278,10 @@ struct AppState {
     rev: Rev,
     theme: Theme,
     layout: ScreenLayout,
+    /// The profile `layout` was computed from (shown in the calibration panel).
+    profile: ScreenProfile,
+    /// True while the screen shows the calibration pattern; never persisted.
+    calibrating: bool,
     transition_ms: u32,
     rules: SlideRules,
     boot_id: Option<String>,
@@ -297,6 +309,11 @@ impl AppState {
                     Err(ErrorCode::NotFound)
                 }
             }
+            Command::SetScreenProfile { profile } => self.set_screen_profile(profile),
+            Command::Calibrate { on } => {
+                self.calibrating = *on;
+                Ok(None)
+            }
             _ => return self.run_program_command(actor, base_rev, command),
         };
         match result {
@@ -310,6 +327,17 @@ impl AppState {
             }
             Err(code) => (CmdOutcome::Rejected { code }, false),
         }
+    }
+
+    /// Validates, applies and stores a new screen profile.
+    fn set_screen_profile(&mut self, profile: &ScreenProfile) -> Result<Option<ServiceSet>, ErrorCode> {
+        let layout = layout::screen_layout(profile).map_err(|_| ErrorCode::InvalidProfile)?;
+        if let Err(error) = self.database.set_setting(SCREEN_PROFILE_KEY, profile) {
+            tracing::error!(?error, "could not store the screen profile");
+        }
+        self.layout = layout;
+        self.profile = profile.clone();
+        Ok(None)
     }
 
     /// Inserts a song right after the live item (or at the end if nothing is live) and shows it.
@@ -558,6 +586,7 @@ impl AppState {
             theme: self.theme.clone(),
             transition_ms: self.transition_ms,
             layout: self.layout.clone(),
+            calibration: self.calibrating.then(|| self.profile.clone()),
         }
     }
 
@@ -574,6 +603,7 @@ impl AppState {
             sets: self.sets.summaries(),
             can_undo: self.sets.can_undo(),
             display_power: DisplayPowerState::Unavailable { reason: "not_configured".to_owned() },
+            screen_profile: self.profile.clone(),
         }
     }
 
@@ -630,6 +660,8 @@ fn new_item_id() -> ItemId {
 
 /// The settings key holding the active set.
 const ACTIVE_SET_KEY: &str = "active_set";
+/// Settings key of a screen profile calibrated from a remote; it wins over `config.toml`.
+const SCREEN_PROFILE_KEY: &str = "screen_profile";
 
 /// Compiles the deck for a set item.
 fn compile_item(songs: &HashMap<SongId, Song>, rules: SlideRules, item: &SetItem) -> Option<Deck> {
@@ -645,14 +677,13 @@ fn live_slide(live: &Live) -> LiveSlide {
     LiveSlide { deck: live.deck.clone(), slide_index: live.slide_index as u32 }
 }
 
-/// The configured layout, or the plain safe area if the profile is invalid (logged).
-fn layout_or_fallback(config: &Config) -> ScreenLayout {
-    match layout::screen_layout(&config.screen_profile) {
+/// The layout for a profile, or the plain safe area if the profile is invalid (logged).
+fn layout_or_fallback(profile: &ScreenProfile) -> ScreenLayout {
+    match layout::screen_layout(profile) {
         Ok(layout) => layout,
         Err(error) => {
             tracing::error!(%error, "invalid screen profile; ignoring exclusion zones");
-            let without_zones =
-                sursum_protocol::ScreenProfile { exclusions: Vec::new(), ..config.screen_profile.clone() };
+            let without_zones = ScreenProfile { exclusions: Vec::new(), ..profile.clone() };
             let content = layout::content_region(&without_zones).unwrap_or(Rect::SCENE);
             ScreenLayout { content, masks: Vec::new() }
         }

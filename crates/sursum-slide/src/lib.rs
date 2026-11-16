@@ -14,6 +14,7 @@
 // Leptos components take their props by value; clippy's pass-by-value lint does not fit them.
 #![allow(clippy::needless_pass_by_value)]
 
+pub mod calibration;
 pub mod fit;
 pub mod layered;
 pub mod preview;
@@ -22,6 +23,7 @@ pub mod stage;
 
 mod dom;
 
+pub use calibration::CalibrationPattern;
 pub use layered::LayeredStage;
 pub use preview::{PreviewData, SlidePreview};
 pub use stage::Stage;

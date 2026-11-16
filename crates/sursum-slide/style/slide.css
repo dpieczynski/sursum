@@ -122,3 +122,49 @@
   max-width: 60%;
   max-height: 60%;
 }
+
+/* Calibration test card (ADR 0008): only while an operator calibrates, outside services. */
+.sursum-calibration {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background-color: #101010;
+  background-image:
+    linear-gradient(to right, #5a5a5a 2px, transparent 2px),
+    linear-gradient(to bottom, #5a5a5a 2px, transparent 2px);
+  background-size: 120px 120px;
+  font-family: "Lato", sans-serif;
+  font-weight: 700;
+}
+.sursum-calibration-label {
+  position: absolute;
+  color: #9a9a9a;
+  font-size: 28px;
+}
+.sursum-calibration-safe {
+  position: absolute;
+  border: 4px dashed #facc15;
+  box-sizing: border-box;
+}
+.sursum-calibration-content {
+  position: absolute;
+  border: 6px solid #22c55e;
+  box-sizing: border-box;
+}
+.sursum-calibration-zone {
+  position: absolute;
+  background: rgba(239, 68, 68, 0.45);
+  border: 6px solid #ef4444;
+  box-sizing: border-box;
+}
+.sursum-calibration-zone.unmasked {
+  border-style: dashed;
+  background: rgba(239, 68, 68, 0.2);
+}
+.sursum-calibration-name {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  color: #fff;
+  font-size: 32px;
+}

@@ -8,6 +8,8 @@
 
 mod api;
 mod bundle;
+mod calibration;
+mod calibration_form;
 mod editor;
 mod hold;
 mod import;
@@ -45,6 +47,10 @@ fn Root() -> impl IntoView {
     }
 }
 
+/// True while the calibration panel is open (shared through the Leptos context).
+#[derive(Clone, Copy)]
+struct Calibrating(RwSignal<bool>);
+
 /// Sends commands with the revision the operator currently sees (for the `Stale` rule).
 #[derive(Clone, Copy)]
 pub struct Commands {
@@ -74,6 +80,10 @@ fn App() -> impl IntoView {
         ServerMsg::CmdResult { outcome: CmdOutcome::Stale { .. }, .. } => {
             notice.set(Some(Msg::AlreadyAdvanced));
         }
+        ServerMsg::CmdResult {
+            outcome: CmdOutcome::Rejected { code: sursum_protocol::ErrorCode::InvalidProfile },
+            ..
+        } => notice.set(Some(Msg::InvalidProfile)),
         ServerMsg::CmdResult { outcome: CmdOutcome::Rejected { .. }, .. } => {
             notice.set(Some(Msg::NotPossible));
         }
@@ -87,9 +97,15 @@ fn App() -> impl IntoView {
     provide_context(editing);
     let editor_view =
         move || editing.get().map(|target| view! { <editor::Editor target editing state commands /> });
+    let calibrating = Calibrating(RwSignal::new(false));
+    provide_context(calibrating);
+    let open = calibrating.0;
+    let calibration_view =
+        move || open.get().then(|| view! { <calibration::CalibrationPanel open state commands /> });
 
     view! {
         {editor_view}
+        {calibration_view}
         <main class="remote">
             <TopBar status notice state />
             <Previews state />
@@ -212,6 +228,8 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
     let query = RwSignal::new(String::new());
     let searching = move || !query.with(|query| query.trim().is_empty());
     let set_list = move || view! { <set_list::SetPanel state commands /> };
+    let calibrating = expect_context::<Calibrating>();
+    let open_calibration = move || calibrating.0.set(true);
     view! {
         <section class="library">
             <search::SearchBox query />
@@ -219,6 +237,7 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
                 <NewSongButton />
                 <import::ImportButton />
                 <bundle::LibraryFile />
+                <hold::HoldButton label=pl(Msg::Calibrate) on_hold=open_calibration />
             </div>
             <Show when=searching fallback=set_list>
                 <search::SearchResults query commands />

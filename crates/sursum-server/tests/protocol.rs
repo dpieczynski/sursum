@@ -526,3 +526,48 @@ async fn library_file_moves_new_songs_to_another_device_after_a_dry_run() {
     tulce.stop().await.unwrap();
     gowarzewo.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn calibration_changes_the_layout_at_once_and_survives_a_restart() {
+    use sursum_protocol::{ErrorCode, ExclusionZone, Insets, MaskMode, Rect, ScreenProfile};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "admin").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    next_screen_state(&mut screen).await;
+
+    let outcome = command(&mut remote, 1, Rev(u32::MAX), Command::Calibrate { on: true }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    assert!(next_screen_state(&mut screen).await.calibration.is_some());
+
+    let pillar = ScreenProfile {
+        safe_area: Insets::uniform(48),
+        exclusions: vec![ExclusionZone {
+            name: "słup".into(),
+            rect: Rect::new(0, 0, 600, 1080),
+            mask: MaskMode::Black,
+        }],
+    };
+    command(&mut remote, 2, Rev(u32::MAX), Command::SetScreenProfile { profile: pillar.clone() }).await;
+    let state = next_screen_state(&mut screen).await;
+    assert!(state.layout.content.x >= 600, "text moves right of the pillar: {:?}", state.layout);
+    assert_eq!(state.layout.masks, [Rect::new(0, 0, 600, 1080)]);
+    assert_eq!(state.calibration.as_ref(), Some(&pillar), "the pattern follows the new profile");
+
+    let covering = ScreenProfile {
+        safe_area: Insets::uniform(0),
+        exclusions: vec![ExclusionZone { name: "all".into(), rect: Rect::SCENE, mask: MaskMode::Black }],
+    };
+    let outcome =
+        command(&mut remote, 3, Rev(u32::MAX), Command::SetScreenProfile { profile: covering }).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::InvalidProfile });
+    drop((remote, screen));
+    server.stop().await.unwrap();
+
+    let server = start(dir.path(), "boot-1").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    let state = next_screen_state(&mut screen).await;
+    assert_eq!(state.layout.masks, [Rect::new(0, 0, 600, 1080)], "the profile was stored");
+    assert!(state.calibration.is_none(), "calibration never survives a restart");
+    server.stop().await.unwrap();
+}

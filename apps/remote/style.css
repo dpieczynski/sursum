@@ -148,6 +148,10 @@ body {
   font-size: 18px;
   font-weight: 700;
 }
+a.import-button {
+  color: var(--text);
+  text-decoration: none;
+}
 .import-button input {
   display: none;
 }
@@ -337,6 +341,7 @@ body {
   gap: var(--gap);
 }
 .editor-buttons button,
+.calibration-header button,
 .new-song {
   min-height: 52px;
   padding: 0 18px;
@@ -533,4 +538,110 @@ body {
 .loading {
   padding: 2rem;
   color: var(--muted);
+}
+
+/* Screen calibration panel (ADR 0008). */
+.calibration {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap);
+  background: var(--bg);
+  overflow: auto;
+}
+.calibration-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.calibration-header h2 {
+  margin: 0;
+}
+.calibration-frame {
+  position: relative;
+  width: min(100%, calc((100vh - 220px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  flex: none;
+  align-self: center;
+  border: 1px solid #444;
+}
+.calibration-frame .sursum-frame {
+  position: absolute;
+  inset: 0;
+}
+.calibration-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  cursor: crosshair;
+  touch-action: none;
+}
+.calibration-drag {
+  position: absolute;
+  z-index: 25;
+  border: 8px dashed #fff;
+  box-sizing: border-box;
+}
+.calibration-zones {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap);
+}
+.calibration-zones .calibration-row {
+  align-self: stretch;
+}
+.calibration-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+.calibration-row.selected {
+  outline: 2px solid var(--accent);
+}
+.calibration-row input[type="radio"],
+.calibration-row input[type="checkbox"] {
+  width: 28px;
+  height: 28px;
+}
+.calibration-row .zone-name {
+  min-width: 10em;
+  font-size: 18px;
+  font-weight: 700;
+}
+.calibration-row input.zone-name {
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: var(--bg);
+  color: var(--text);
+}
+.number-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.number-field input {
+  width: 5.5em;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 18px;
+}
+.zone-mask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

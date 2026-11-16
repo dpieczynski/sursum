@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{ItemId, Rev, SetId, SongId};
-use crate::layout::ScreenLayout;
+use crate::layout::{ScreenLayout, ScreenProfile};
 use crate::slide::Deck;
 
 /// The layer above content: nothing, black, or the parish logo.
@@ -76,6 +76,9 @@ pub struct ScreenState {
     /// Crossfade duration; 0 means an instant cut.
     pub transition_ms: u32,
     pub layout: ScreenLayout,
+    /// While set, the screen draws the calibration pattern for this profile on top of everything.
+    #[serde(default)]
+    pub calibration: Option<ScreenProfile>,
 }
 
 /// A jump button for one section of the live deck.
@@ -151,4 +154,7 @@ pub struct RemoteState {
     /// True while the last removal can be undone.
     pub can_undo: bool,
     pub display_power: DisplayPowerState,
+    /// The profile being used, for the calibration panel.
+    #[serde(default)]
+    pub screen_profile: ScreenProfile,
 }
