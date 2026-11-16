@@ -448,7 +448,7 @@ async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() 
     assert!(http_get(&server, "/api/songs?q=a").await.is_empty(), "the API is closed too");
     let session: sursum_protocol::SessionInfo =
         serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
-    assert_eq!(session, sursum_protocol::SessionInfo { pin_required: true, paired: false });
+    assert_eq!(session, sursum_protocol::SessionInfo { pin_required: true, paired: false, admin: false });
 
     assert!(pair_with(&server, "1111").await.starts_with("HTTP/1.1 401"));
     let response = pair_with(&server, "2468").await;
@@ -569,5 +569,106 @@ async fn calibration_changes_the_layout_at_once_and_survives_a_restart() {
     let state = next_screen_state(&mut screen).await;
     assert_eq!(state.layout.masks, [Rect::new(0, 0, 600, 1080)], "the profile was stored");
     assert!(state.calibration.is_none(), "calibration never survives a restart");
+    server.stop().await.unwrap();
+}
+
+/// An HTTP request from a paired browser; returns the whole response.
+async fn http_as(server: &RunningServer, cookie: &str, method: &str, path: &str, body: &str) -> String {
+    http_raw(
+        server,
+        &format!(
+            "{method} {path} HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    )
+    .await
+}
+
+fn cookie_of(response: &str) -> String {
+    response
+        .lines()
+        .find_map(|line| line.strip_prefix("set-cookie: "))
+        .and_then(|value| value.split(';').next())
+        .expect("a cookie is set")
+        .to_owned()
+}
+
+/// A remote socket with a device cookie, after `Welcome`.
+async fn connect_as(server: &RunningServer, cookie: &str, client: &str) -> Socket {
+    let url = format!("ws://{}/ws/remote", server.addr);
+    let mut request =
+        tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(&url).unwrap();
+    request.headers_mut().insert("cookie", cookie.parse().unwrap());
+    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let hello = ClientMsg::Hello {
+        protocol: PROTOCOL_VERSION,
+        role: Role::Remote,
+        client_id: ClientId::from(client),
+        build_id: "test".into(),
+    };
+    send(&mut socket, &hello).await;
+    assert!(matches!(receive(&mut socket).await, ServerMsg::Welcome { .. }));
+    socket
+}
+
+#[tokio::test]
+async fn operators_need_admin_mode_for_setup_and_revoked_remotes_are_cut_off() {
+    use sursum_protocol::{AdminRequest, DeviceView, ErrorCode, PairOutcome, SessionInfo};
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let database = sursum_server::db::Database::open(dir.path()).unwrap();
+        let pin = sursum_server::auth::PinHash::new("2468").unwrap();
+        database.set_setting(sursum_server::auth::PIN_SETTING, &pin).unwrap();
+    }
+    let server = start(dir.path(), "boot-1").await;
+    let organist = cookie_of(&pair_with(&server, "2468").await);
+    let sacristan = cookie_of(&pair_with(&server, "2468").await);
+    let mut organist_socket = connect_as(&server, &organist, "organist").await;
+    let mut sacristan_socket = connect_as(&server, &sacristan, "sacristan").await;
+
+    // A paired remote operates the service but cannot change the setup.
+    assert!(http_as(&server, &organist, "GET", "/api/devices", "").await.starts_with("HTTP/1.1 403"));
+    let import = http_as(&server, &organist, "POST", "/api/import/opensong", "").await;
+    assert!(import.starts_with("HTTP/1.1 403"), "{import}");
+    let outcome = command(&mut organist_socket, 1, Rev(u32::MAX), Command::Calibrate { on: true }).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::Forbidden });
+    let outcome = command(&mut organist_socket, 2, Rev(u32::MAX), Command::Next).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+
+    // The PIN again unlocks admin mode on this device only.
+    let wrong = serde_json::to_string(&AdminRequest { pin: "1111".into() }).unwrap();
+    assert!(http_as(&server, &organist, "POST", "/api/admin", &wrong).await.starts_with("HTTP/1.1 401"));
+    let right = serde_json::to_string(&AdminRequest { pin: "2468".into() }).unwrap();
+    let unlocked = http_as(&server, &organist, "POST", "/api/admin", &right).await;
+    assert!(unlocked.ends_with(&serde_json::to_string(&PairOutcome::Unlocked).unwrap()), "{unlocked}");
+    let session = http_as(&server, &organist, "GET", "/api/session", "").await;
+    let session: SessionInfo = serde_json::from_str(session.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    assert!(session.admin);
+    assert!(http_as(&server, &sacristan, "GET", "/api/devices", "").await.starts_with("HTTP/1.1 403"));
+    let outcome = command(&mut organist_socket, 3, Rev(u32::MAX), Command::Calibrate { on: false }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+
+    let listing = http_as(&server, &organist, "GET", "/api/devices", "").await;
+    let devices: Vec<DeviceView> = serde_json::from_str(listing.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    assert_eq!(devices.len(), 2);
+    assert_eq!(devices.iter().filter(|device| device.this_device).count(), 1);
+    let other = devices.iter().find(|device| !device.this_device).unwrap();
+
+    // Revoking the other tablet closes its connection and closes the API for it.
+    let path = format!("/api/devices/{}/revoke", other.device_id);
+    assert!(http_as(&server, &organist, "POST", &path, "").await.starts_with("HTTP/1.1 204"));
+    let closed = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match sacristan_socket.next().await {
+                None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return,
+                Some(Ok(_)) => {}
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "the revoked remote's socket must close");
+    assert!(http_as(&server, &sacristan, "GET", "/api/songs?q=a", "").await.starts_with("HTTP/1.1 401"));
+    let outcome = command(&mut organist_socket, 4, Rev(u32::MAX), Command::Next).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "the other remote keeps working: {outcome:?}");
     server.stop().await.unwrap();
 }

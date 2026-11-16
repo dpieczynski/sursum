@@ -645,3 +645,25 @@ a.import-button {
   align-items: center;
   gap: 6px;
 }
+
+/* Paired devices (admin mode). */
+.device-list {
+  list-style: none;
+  margin: 0;
+  width: 100%;
+}
+.device {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 52px;
+}
+.device-name {
+  flex: 1;
+  font-weight: 700;
+}
+.device-date,
+.device-self {
+  color: var(--muted);
+}

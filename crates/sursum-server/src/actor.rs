@@ -86,6 +86,22 @@ impl StateHandle {
         stored.await.unwrap_or(false)
     }
 
+    /// Paired devices: `(id, name, token_hash, paired_at)`.
+    pub async fn devices(&self) -> Vec<(String, String, String, String)> {
+        let (reply, devices) = oneshot::channel();
+        if self.requests.send(Request::Devices { reply }).await.is_err() {
+            return Vec::new();
+        }
+        devices.await.unwrap_or_default()
+    }
+
+    /// Revokes a device; returns its token hash so access can be withdrawn at once.
+    pub async fn revoke_device(&self, device_id: String) -> Option<String> {
+        let (reply, hash) = oneshot::channel();
+        self.requests.send(Request::RevokeDevice { device_id, reply }).await.ok()?;
+        hash.await.ok().flatten()
+    }
+
     /// The whole library as a `.sursum` file.
     pub async fn export_library(&self) -> Option<Vec<u8>> {
         let (reply, bytes) = oneshot::channel();
@@ -147,6 +163,13 @@ enum Request {
         name: String,
         token_hash: String,
         reply: oneshot::Sender<bool>,
+    },
+    Devices {
+        reply: oneshot::Sender<Vec<(String, String, String, String)>>,
+    },
+    RevokeDevice {
+        device_id: String,
+        reply: oneshot::Sender<Option<String>>,
     },
     Import {
         library: sursum_formats::opensong::LibraryImport,
@@ -245,6 +268,22 @@ pub fn spawn(
                         }
                         tracing::info!(device = %name, "a remote was paired");
                         let _ = reply.send(stored.is_ok());
+                    }
+                    Request::Devices { reply } => {
+                        let devices = state.database.devices();
+                        if let Err(error) = &devices {
+                            tracing::error!(?error, "could not list devices");
+                        }
+                        let _ = reply.send(devices.unwrap_or_default());
+                    }
+                    Request::RevokeDevice { device_id, reply } => {
+                        let hash = state.database.revoke_device(&device_id);
+                        match &hash {
+                            Ok(Some(_)) => tracing::info!(%device_id, "a remote was revoked"),
+                            Ok(None) => {}
+                            Err(error) => tracing::error!(?error, "could not revoke a device"),
+                        }
+                        let _ = reply.send(hash.ok().flatten());
                     }
                     Request::Import { library, reply } => {
                         let report = state.import(&library);

@@ -18,7 +18,7 @@ pub fn Pairing() -> impl IntoView {
         let request = PairRequest { pin: pin.get_untracked(), name: name.get_untracked() };
         leptos::task::spawn_local(async move {
             match post_json::<_, PairOutcome>("/api/pair", &request).await {
-                Some(PairOutcome::Paired) => reload(),
+                Some(PairOutcome::Paired | PairOutcome::Unlocked) => reload(),
                 Some(PairOutcome::WrongPin) => status.set(Some(pl(Msg::WrongPin).to_owned())),
                 Some(PairOutcome::Locked { retry_after_s }) => status.set(Some(locked_for(retry_after_s))),
                 None => status.set(Some(pl(Msg::Disconnected).to_owned())),

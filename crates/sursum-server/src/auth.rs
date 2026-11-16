@@ -6,6 +6,11 @@
 //! that wrong attempts are rate-limited per address. A paired device keeps a random 256-bit token
 //! in an `HttpOnly; SameSite=Strict` cookie; only its hash is stored. Until a PIN is set, control
 //! is open (first setup and development).
+//!
+//! Two levels of rights: a paired device is an **operator** (navigation, sets, songs). Entering
+//! the PIN again on a paired device unlocks **admin** mode for [`ADMIN_SESSION`] (import, merge,
+//! calibration, device list); it lives only in memory, so a restart ends it too. Revoking a
+//! device removes its token at once and wakes its open WebSocket sessions to close them.
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -15,6 +20,7 @@ use std::time::{Duration, Instant};
 use axum::http::HeaderMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tokio::sync::watch;
 
 /// Name of the cookie that carries a device token.
 pub const COOKIE: &str = "sursum_device";
@@ -25,6 +31,8 @@ const FREE_ATTEMPTS: u32 = 5;
 /// First lockout; it doubles with every further wrong attempt (capped).
 const FIRST_LOCKOUT: Duration = Duration::from_secs(30);
 const MAX_LOCKOUT: Duration = Duration::from_secs(15 * 60);
+/// How long admin mode stays unlocked after entering the PIN.
+pub const ADMIN_SESSION: Duration = Duration::from_secs(15 * 60);
 
 /// The stored PIN: a random salt and SHA-256(salt ‖ PIN), both hex.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,11 +77,26 @@ pub fn cookie_header(token: &str) -> String {
     format!("{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=315360000")
 }
 
+/// What a request may do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Rights {
+    /// Not paired: may only see the pairing form.
+    None,
+    /// A paired remote: navigation, sets, songs.
+    Operator,
+    /// Admin mode unlocked (or no PIN set): import, merge, calibration, device list.
+    Admin,
+}
+
 /// Access rules shared by all requests.
 pub struct Access {
     pin: RwLock<Option<PinHash>>,
     tokens: RwLock<HashSet<String>>,
+    /// Token hash → end of its admin session.
+    admin_until: Mutex<HashMap<String, Instant>>,
     attempts: Mutex<HashMap<IpAddr, Attempts>>,
+    /// Bumped on every revocation so open sessions re-check their device.
+    revocations: watch::Sender<u64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -96,8 +119,49 @@ impl Access {
         Access {
             pin: RwLock::new(pin),
             tokens: RwLock::new(token_hashes.into_iter().collect()),
+            admin_until: Mutex::new(HashMap::new()),
             attempts: Mutex::new(HashMap::new()),
+            revocations: watch::Sender::new(0),
         }
+    }
+
+    /// What a request with these headers may do at `now`.
+    pub fn rights(&self, headers: &HeaderMap, now: Instant) -> Rights {
+        if !self.pin_required() {
+            return Rights::Admin;
+        }
+        let Some(hash) = self.device(headers) else { return Rights::None };
+        let admin =
+            self.admin_until.lock().expect("not poisoned").get(&hash).is_some_and(|until| *until > now);
+        if admin { Rights::Admin } else { Rights::Operator }
+    }
+
+    /// The token hash of the paired device sending these headers, if it is paired.
+    pub fn device(&self, headers: &HeaderMap) -> Option<String> {
+        let hash = token_hash(cookie_token(headers)?);
+        self.tokens.read().expect("not poisoned").contains(&hash).then_some(hash)
+    }
+
+    /// Unlocks admin mode for a device (after its PIN was checked) until `now + ADMIN_SESSION`.
+    pub fn grant_admin(&self, device: String, now: Instant) {
+        self.admin_until.lock().expect("not poisoned").insert(device, now + ADMIN_SESSION);
+    }
+
+    /// Ends admin mode for a device.
+    pub fn drop_admin(&self, device: &str) {
+        self.admin_until.lock().expect("not poisoned").remove(device);
+    }
+
+    /// Forgets a device: its requests are refused from now on and its sessions close.
+    pub fn revoke(&self, device: &str) {
+        self.tokens.write().expect("not poisoned").remove(device);
+        self.drop_admin(device);
+        self.revocations.send_modify(|generation| *generation += 1);
+    }
+
+    /// Changes whenever a device is revoked.
+    pub fn revocations(&self) -> watch::Receiver<u64> {
+        self.revocations.subscribe()
     }
 
     /// True once a PIN is set.
@@ -105,13 +169,9 @@ impl Access {
         self.pin.read().expect("not poisoned").is_some()
     }
 
-    /// True if the request may control the screen.
+    /// True if the request may control the screen (operator or admin).
     pub fn allows(&self, headers: &HeaderMap) -> bool {
-        if !self.pin_required() {
-            return true;
-        }
-        cookie_token(headers)
-            .is_some_and(|token| self.tokens.read().expect("not poisoned").contains(&token_hash(token)))
+        !self.pin_required() || self.device(headers).is_some()
     }
 
     /// Checks a PIN attempt from `address`, counting failures for the lockout.
@@ -203,6 +263,25 @@ mod tests {
         access.add_token(hash);
         assert!(access.allows(&headers(&format!("other=1; {COOKIE}={token}"))));
         assert!(!access.allows(&headers(&format!("{COOKIE}=forged"))));
+    }
+
+    #[test]
+    fn admin_mode_is_per_device_expires_and_ends_on_revocation() {
+        let (token, hash) = new_token().unwrap();
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()]);
+        let request = headers(&format!("{COOKIE}={token}"));
+        let now = Instant::now();
+        assert_eq!(access.rights(&request, now), Rights::Operator);
+        access.grant_admin(hash.clone(), now);
+        assert_eq!(access.rights(&request, now + Duration::from_secs(60)), Rights::Admin);
+        assert_eq!(access.rights(&request, now + ADMIN_SESSION), Rights::Operator, "expired");
+        assert_eq!(access.rights(&headers("x=1"), now), Rights::None);
+
+        let revocations = access.revocations();
+        access.revoke(&hash);
+        assert!(revocations.has_changed().unwrap());
+        assert_eq!(access.rights(&request, now), Rights::None);
+        assert_eq!(Access::new(None, vec![]).rights(&HeaderMap::new(), now), Rights::Admin);
     }
 
     #[test]

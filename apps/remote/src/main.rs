@@ -6,6 +6,7 @@
 // Leptos components take their props by value; clippy's pass-by-value lint does not fit them.
 #![allow(clippy::needless_pass_by_value)]
 
+mod admin;
 mod api;
 mod bundle;
 mod calibration;
@@ -38,18 +39,15 @@ fn Root() -> impl IntoView {
     leptos::task::spawn_local(async move {
         let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
         // If the question itself fails, try to connect anyway; the server decides.
-        session.set(Some(info.unwrap_or(sursum_protocol::SessionInfo { pin_required: false, paired: true })));
+        let open = sursum_protocol::SessionInfo { pin_required: false, paired: true, admin: true };
+        session.set(Some(info.unwrap_or(open)));
     });
     move || match session.get() {
         None => view! { <p class="loading">{pl(Msg::Connecting)}</p> }.into_any(),
         Some(info) if info.pin_required && !info.paired => view! { <pairing::Pairing /> }.into_any(),
-        Some(_) => view! { <App /> }.into_any(),
+        Some(info) => view! { <App info /> }.into_any(),
     }
 }
-
-/// True while the calibration panel is open (shared through the Leptos context).
-#[derive(Clone, Copy)]
-struct Calibrating(RwSignal<bool>);
 
 /// Sends commands with the revision the operator currently sees (for the `Stale` rule).
 #[derive(Clone, Copy)]
@@ -70,9 +68,11 @@ impl Commands {
 }
 
 #[component]
-fn App() -> impl IntoView {
+fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     let state = RwSignal::new(None::<RemoteState>);
     let notice = RwSignal::new(None::<Msg>);
+    let session = admin::Session(RwSignal::new(info));
+    provide_context(session);
 
     let client = Client::connect(Role::Remote, move |message| match message {
         ServerMsg::Welcome { .. } if needs_reload(&message) => reload(),
@@ -84,6 +84,13 @@ fn App() -> impl IntoView {
             outcome: CmdOutcome::Rejected { code: sursum_protocol::ErrorCode::InvalidProfile },
             ..
         } => notice.set(Some(Msg::InvalidProfile)),
+        ServerMsg::CmdResult {
+            outcome: CmdOutcome::Rejected { code: sursum_protocol::ErrorCode::Forbidden },
+            ..
+        } => {
+            notice.set(Some(Msg::AdminRequired));
+            session.refresh();
+        }
         ServerMsg::CmdResult { outcome: CmdOutcome::Rejected { .. }, .. } => {
             notice.set(Some(Msg::NotPossible));
         }
@@ -97,7 +104,7 @@ fn App() -> impl IntoView {
     provide_context(editing);
     let editor_view =
         move || editing.get().map(|target| view! { <editor::Editor target editing state commands /> });
-    let calibrating = Calibrating(RwSignal::new(false));
+    let calibrating = calibration::Calibrating(RwSignal::new(false));
     provide_context(calibrating);
     let open = calibrating.0;
     let calibration_view =
@@ -228,16 +235,14 @@ fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl Int
     let query = RwSignal::new(String::new());
     let searching = move || !query.with(|query| query.trim().is_empty());
     let set_list = move || view! { <set_list::SetPanel state commands /> };
-    let calibrating = expect_context::<Calibrating>();
-    let open_calibration = move || calibrating.0.set(true);
+
     view! {
         <section class="library">
             <search::SearchBox query />
             <div class="library-tools">
                 <NewSongButton />
-                <import::ImportButton />
-                <bundle::LibraryFile />
-                <hold::HoldButton label=pl(Msg::Calibrate) on_hold=open_calibration />
+                <bundle::ExportLink />
+                <admin::AdminTools />
             </div>
             <Show when=searching fallback=set_list>
                 <search::SearchResults query commands />

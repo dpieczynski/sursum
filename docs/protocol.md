@@ -9,8 +9,19 @@ same Rust types, so they cannot drift apart within one build.
 - `GET /ws/screen`: read-only, no authentication, loopback and LAN only.
 - `GET /ws/remote`: requires the device cookie set during PIN pairing; `Origin` and `Host` are
   validated on upgrade (protection against cross-site WebSocket hijacking and DNS rebinding).
-- REST under `/api/…` for large or on-demand data: search, song details, import/export, assets,
-  pairing, `POST /api/songs/compile` (editor preview).
+- REST under `/api/…` for large or on-demand data: search, song drafts and preview, import,
+  library export/merge, pairing, admin mode and the device list.
+
+### Rights (ADR 0016)
+
+| Who | May |
+|---|---|
+| anyone on the LAN | `/screen/`, `/ws/screen`, `/api/session`, `/api/pair`, `/healthz`, `/licenses` |
+| paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `/api/library/export`, `POST/DELETE /api/admin` |
+| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile` and `Calibrate` |
+
+Without a PIN everyone has admin rights. Refusals: HTTP 401 (not paired) or 403 (needs admin
+mode); WebSocket commands answer `Rejected { code: forbidden }`.
 
 JSON text frames (`serde_json` on both sides, readable in browser dev tools); serde enums tagged
 with `"t"`; default Rust (snake_case) field names, since no JavaScript consumes them.
@@ -22,13 +33,15 @@ Hello   { protocol, role: "screen"|"remote", clientId, buildId, clientTime? }
 Cmd     { seq, baseRev, cmd: Command }
 Ping    { }
 
-Command = Next | Prev | NextItem | PrevItem
-        | GoTo { itemId, slideKey } | GoToItemNumber { n } | GoToSection { label }
+Command = Next | Prev | NextItem | PrevItem                // relative: subject to `Stale`
+        | GoTo { item_id, slide_index } | GoToItemNumber { number } | GoToSlide { slide_index }
         | SetOverlay { overlay: "none"|"black"|"logo" } | ToggleBlack
-        | ShowNow { songId }            // insert after the live item and go live
-        | ActivateSet { setId }
-        | SetOp { setId, op: Add{after?, item} | Remove{itemId} | Move{itemId, before?} | UpdateItem{itemId, item} }
-        | DisplayPower { action: "on"|"standby" }   // HDMI-CEC / PJLink, ADR 0012
+        | ShowNow { song_id }           // insert after the live item and go live
+        | AddSong { song_id } | AddText { title, text }
+        | RemoveItem { item_id } | MoveItem { item_id, to_index } | UndoRemove
+        | NewSet { name } | ActivateSet { set_id }
+        | SetScreenProfile { profile } | Calibrate { on }   // admin mode, ADR 0008
+        // planned: DisplayPower { action: "on"|"standby" }  (HDMI-CEC / PJLink, ADR 0012)
 ```
 
 ## Server → client

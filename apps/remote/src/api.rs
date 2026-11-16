@@ -33,6 +33,15 @@ pub async fn post_file<T: DeserializeOwned>(url: &str, file: &web_sys::File) -> 
     decode(JsFuture::from(promise).await.ok()?).await
 }
 
+/// A request without a body (e.g. `DELETE /api/admin`); the HTTP status, `None` on network errors.
+pub async fn request_status(method: &str, url: &str) -> Option<u16> {
+    let init = web_sys::RequestInit::new();
+    init.set_method(method);
+    let promise = web_sys::window()?.fetch_with_str_and_init(url, &init);
+    let response: web_sys::Response = JsFuture::from(promise).await.ok()?.dyn_into().ok()?;
+    Some(response.status())
+}
+
 async fn decode<T: DeserializeOwned>(response: JsValue) -> Option<T> {
     // Error responses may carry a JSON answer too (e.g. a wrong PIN); callers decide.
     let response: web_sys::Response = response.dyn_into().ok()?;

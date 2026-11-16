@@ -24,9 +24,19 @@ enum Step {
     Failed,
 }
 
-/// "Export library" link and "Merge library" picker with a confirmation step.
+/// Downloads the whole library (also a backup); any paired remote may do it.
 #[component]
-pub fn LibraryFile() -> impl IntoView {
+pub fn ExportLink() -> impl IntoView {
+    view! {
+        <a class="import-button" href="/api/library/export" download="biblioteka.sursum">
+            {pl(Msg::ExportLibrary)}
+        </a>
+    }
+}
+
+/// "Merge library" picker with a dry run and a confirmation step (admin mode).
+#[component]
+pub fn MergeButton() -> impl IntoView {
     let step = RwSignal::new(Step::Idle);
     // `web_sys::File` is not `Send`, so it lives in a local store.
     let chosen = StoredValue::new_local(None::<web_sys::File>);
@@ -59,9 +69,6 @@ pub fn LibraryFile() -> impl IntoView {
     };
     let reviewing = move || matches!(step.get(), Step::Review(_));
     view! {
-        <a class="import-button" href="/api/library/export" download="biblioteka.sursum">
-            {pl(Msg::ExportLibrary)}
-        </a>
         <label class="import-button">
             {pl(Msg::MergeLibrary)} <input type="file" accept=".sursum" on:change=on_change />
         </label>

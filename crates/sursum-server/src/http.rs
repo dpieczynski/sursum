@@ -13,10 +13,10 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use rust_embed::Embed;
 use serde::Deserialize;
-use sursum_protocol::{PairOutcome, PairRequest, Role, SessionInfo};
+use sursum_protocol::{AdminRequest, DeviceView, PairOutcome, PairRequest, Role, SessionInfo};
 
 use crate::actor::StateHandle;
-use crate::auth::{self, Access, PinCheck};
+use crate::auth::{self, Access, PinCheck, Rights};
 use crate::config::Config;
 use crate::ws;
 
@@ -54,6 +54,20 @@ pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Route
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
     };
+    // Bulk changes and device management need admin mode (once a PIN is set).
+    let admin = Router::new()
+        .route(
+            "/api/import/opensong",
+            axum::routing::post(import_opensong)
+                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+        )
+        .route(
+            "/api/library/merge",
+            axum::routing::post(merge_library).layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+        )
+        .route("/api/devices", get(list_devices))
+        .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
+        .route_layer(middleware::from_fn_with_state(app.clone(), require_admin));
     // Everything that controls the screen or changes data needs a paired device (once a PIN is set).
     let protected = Router::new()
         .route("/ws/remote", get(remote_socket))
@@ -61,16 +75,9 @@ pub fn router(state: StateHandle, config: &Config, access: Arc<Access>) -> Route
         .route("/api/songs/preview", axum::routing::post(preview_song))
         .route("/api/songs/save", axum::routing::post(save_song))
         .route("/api/songs/{id}/draft", get(song_draft))
-        .route(
-            "/api/import/opensong",
-            axum::routing::post(import_opensong)
-                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
-        )
         .route("/api/library/export", get(export_library))
-        .route(
-            "/api/library/merge",
-            axum::routing::post(merge_library).layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
-        )
+        .route("/api/admin", axum::routing::post(unlock_admin).delete(lock_admin))
+        .merge(admin)
         .route_layer(middleware::from_fn_with_state(app.clone(), require_pairing));
     Router::new()
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
@@ -99,10 +106,87 @@ async fn require_pairing(State(app): State<App>, request: Request, next: Next) -
     }
 }
 
-/// `GET /api/session`: whether a PIN is set and whether this browser is paired.
+/// Refuses bulk changes and device management outside admin mode.
+async fn require_admin(State(app): State<App>, request: Request, next: Next) -> Response {
+    if app.access.rights(request.headers(), std::time::Instant::now()) == Rights::Admin {
+        next.run(request).await
+    } else {
+        StatusCode::FORBIDDEN.into_response()
+    }
+}
+
+/// `GET /api/session`: whether a PIN is set, whether this browser is paired and is admin.
 async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
-    let info = SessionInfo { pin_required: app.access.pin_required(), paired: app.access.allows(&headers) };
+    let rights = app.access.rights(&headers, std::time::Instant::now());
+    let info = SessionInfo {
+        pin_required: app.access.pin_required(),
+        paired: rights >= Rights::Operator,
+        admin: rights == Rights::Admin,
+    };
     axum::Json(info).into_response()
+}
+
+/// `POST /api/admin`: unlocks admin mode on this paired device with the PIN (rate-limited).
+async fn unlock_admin(
+    State(app): State<App>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    axum::Json(request): axum::Json<AdminRequest>,
+) -> Response {
+    let now = std::time::Instant::now();
+    let Some(device) = app.access.device(&headers) else {
+        // No PIN set: everyone is admin already.
+        return axum::Json(PairOutcome::Unlocked).into_response();
+    };
+    match app.access.check_pin(peer.ip(), &request.pin, now) {
+        PinCheck::Correct => {
+            app.access.grant_admin(device, now);
+            tracing::info!("admin mode unlocked on a remote");
+            axum::Json(PairOutcome::Unlocked).into_response()
+        }
+        PinCheck::Wrong => (StatusCode::UNAUTHORIZED, axum::Json(PairOutcome::WrongPin)).into_response(),
+        PinCheck::Locked(wait) => {
+            let retry_after_s = u32::try_from(wait.as_secs().max(1)).unwrap_or(u32::MAX);
+            (StatusCode::TOO_MANY_REQUESTS, axum::Json(PairOutcome::Locked { retry_after_s })).into_response()
+        }
+    }
+}
+
+/// `DELETE /api/admin`: ends admin mode on this device.
+async fn lock_admin(State(app): State<App>, headers: HeaderMap) -> Response {
+    if let Some(device) = app.access.device(&headers) {
+        app.access.drop_admin(&device);
+    }
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `GET /api/devices`: paired remotes.
+async fn list_devices(State(app): State<App>, headers: HeaderMap) -> Response {
+    let this_device = app.access.device(&headers);
+    let devices: Vec<DeviceView> = app
+        .state
+        .devices()
+        .await
+        .into_iter()
+        .map(|(device_id, name, token_hash, paired_at)| DeviceView {
+            device_id,
+            name,
+            paired_at,
+            this_device: this_device.as_deref() == Some(token_hash.as_str()),
+        })
+        .collect();
+    axum::Json(devices).into_response()
+}
+
+/// `POST /api/devices/{id}/revoke`: forgets a remote; it must pair again with the PIN.
+async fn revoke_device(State(app): State<App>, Path(device_id): Path<String>) -> Response {
+    match app.state.revoke_device(device_id).await {
+        Some(hash) => {
+            app.access.revoke(&hash);
+            StatusCode::NO_CONTENT.into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// `POST /api/pair`: pairs this browser with the PIN (rate-limited per address).
@@ -252,7 +336,8 @@ fn socket(app: App, headers: &HeaderMap, upgrade: WebSocketUpgrade, role: Role) 
     if !ws::origin_allowed(headers, &app.allowed_origins) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role))
+    let guard = ws::Guard { access: app.access.clone(), headers: headers.clone() };
+    upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
 }
 
 async fn screen_index(State(app): State<App>) -> Response {

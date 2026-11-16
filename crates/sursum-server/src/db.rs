@@ -302,6 +302,29 @@ impl Database {
         Ok(())
     }
 
+    /// Paired devices that are not revoked: `(id, name, token_hash, paired_at)`, oldest first.
+    pub fn devices(&self) -> anyhow::Result<Vec<(String, String, String, String)>> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, name, token_hash, created_at FROM devices WHERE revoked_at IS NULL ORDER BY created_at, id",
+        )?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Marks a device as revoked; returns its token hash (`None` if there is no such device).
+    pub fn revoke_device(&self, id: &str) -> anyhow::Result<Option<String>> {
+        let hash: Option<String> = self
+            .connection
+            .query_row("SELECT token_hash FROM devices WHERE id = ?1 AND revoked_at IS NULL", [id], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        if hash.is_some() {
+            self.connection.execute("UPDATE devices SET revoked_at = datetime('now') WHERE id = ?1", [id])?;
+        }
+        Ok(hash)
+    }
+
     /// Token hashes of all devices that are not revoked.
     pub fn device_token_hashes(&self) -> anyhow::Result<Vec<String>> {
         let mut statement =

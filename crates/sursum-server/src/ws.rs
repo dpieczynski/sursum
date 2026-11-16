@@ -3,19 +3,61 @@
 //!
 //! A session waits for `Hello`, answers with `Welcome` and the full snapshot, then forwards
 //! every new snapshot and (for remotes) executes commands. See `docs/protocol.md`.
+//!
+//! Rights are checked for every command, not only at connection time: admin mode expires and a
+//! device can be revoked while its tablet stays connected. A revocation closes the session.
 
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::extract::ws::{Message, WebSocket};
 use axum::http::HeaderMap;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
-use sursum_protocol::{ClientMsg, CmdOutcome, ErrorCode, PROTOCOL_VERSION, Role, ServerMsg};
+use sursum_protocol::{
+    ClientId, ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, Role, ServerMsg,
+};
 use tokio::sync::watch;
 
 use crate::BUILD_ID;
 use crate::actor::StateHandle;
+use crate::auth::{Access, Rights};
+
+/// The access rules and the upgrade request's headers (with the device cookie).
+pub struct Guard {
+    pub access: Arc<Access>,
+    pub headers: HeaderMap,
+}
+
+impl Guard {
+    fn rights(&self) -> Rights {
+        self.access.rights(&self.headers, Instant::now())
+    }
+}
+
+/// Commands that change the device's setup rather than the service: admin mode only.
+fn needs_admin(command: &Command) -> bool {
+    matches!(command, Command::SetScreenProfile { .. } | Command::Calibrate { .. })
+}
+
+/// A remote's right to send commands.
+struct Control<'a> {
+    state: &'a StateHandle,
+    client_id: ClientId,
+    guard: &'a Guard,
+}
+
+impl Control<'_> {
+    /// Runs a command if this device may, else answers `Forbidden`.
+    async fn run(&self, base_rev: sursum_protocol::Rev, cmd: Command) -> CmdOutcome {
+        let required = if needs_admin(&cmd) { Rights::Admin } else { Rights::Operator };
+        if self.guard.rights() < required {
+            return CmdOutcome::Rejected { code: ErrorCode::Forbidden };
+        }
+        self.state.command(self.client_id.clone(), base_rev, cmd).await
+    }
+}
 
 /// How long a client may take to send `Hello`.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -23,7 +65,7 @@ const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Runs one session until the client disconnects.
-pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role) {
+pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role, guard: Guard) {
     let (mut sender, mut receiver) = socket.split();
     let hello = tokio::time::timeout(HELLO_TIMEOUT, next_message(&mut receiver)).await;
     let Ok(Some(ClientMsg::Hello { protocol, role, client_id, .. })) = hello else {
@@ -51,12 +93,13 @@ pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role) {
         }
         Role::Remote => {
             let remote = state.remote.clone();
+            let control = Control { state: &state, client_id: client_id.clone(), guard: &guard };
             forward_loop(
                 &mut sender,
                 &mut receiver,
                 remote,
                 |state| ServerMsg::Remote { state },
-                Some((&state, client_id.clone())),
+                Some(control),
             )
             .await
         }
@@ -70,12 +113,18 @@ async fn forward_loop<T: Clone + Serialize>(
     receiver: &mut SplitStream<WebSocket>,
     mut snapshots: watch::Receiver<std::sync::Arc<T>>,
     wrap: impl Fn(T) -> ServerMsg,
-    commands: Option<(&StateHandle, sursum_protocol::ClientId)>,
+    control: Option<Control<'_>>,
 ) -> Result<(), &'static str> {
     let first = snapshots.borrow_and_update().as_ref().clone();
     send(sender, &wrap(first)).await.map_err(|_| "send failed")?;
+    let mut revocations = control.as_ref().map(|control| control.guard.access.revocations());
     loop {
         tokio::select! {
+            Some(()) = revoked(&mut revocations) => {
+                if control.as_ref().is_some_and(|control| control.guard.rights() == Rights::None) {
+                    return Err("device revoked");
+                }
+            }
             changed = snapshots.changed() => {
                 changed.map_err(|_| "state actor stopped")?;
                 let snapshot = snapshots.borrow_and_update().as_ref().clone();
@@ -83,14 +132,14 @@ async fn forward_loop<T: Clone + Serialize>(
             }
             message = tokio::time::timeout(IDLE_TIMEOUT, next_message(receiver)) => {
                 let message = message.map_err(|_| "idle timeout")?.ok_or("closed")?;
-                let reply = match (message, &commands) {
+                let reply = match (message, &control) {
                     (ClientMsg::Ping, _) => Some(ServerMsg::Pong),
                     (ClientMsg::Log { message }, _) => {
                         tracing::warn!(client_message = %message, "client reported a problem");
                         None
                     }
-                    (ClientMsg::Cmd { seq, base_rev, cmd }, Some((state, client_id))) => {
-                        let outcome = state.command(client_id.clone(), base_rev, cmd).await;
+                    (ClientMsg::Cmd { seq, base_rev, cmd }, Some(control)) => {
+                        let outcome = control.run(base_rev, cmd).await;
                         Some(ServerMsg::CmdResult { seq, outcome })
                     }
                     // The screen is read-only.
@@ -104,6 +153,14 @@ async fn forward_loop<T: Clone + Serialize>(
                 }
             }
         }
+    }
+}
+
+/// Resolves when a device was revoked somewhere; never for sessions without a device (screen).
+async fn revoked(revocations: &mut Option<tokio::sync::watch::Receiver<u64>>) -> Option<()> {
+    match revocations {
+        Some(receiver) => receiver.changed().await.ok(),
+        None => std::future::pending().await,
     }
 }
 

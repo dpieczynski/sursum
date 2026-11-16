@@ -238,7 +238,7 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
-async fn remote_pairs_with_the_pin_before_it_can_control() -> anyhow::Result<()> {
+async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> anyhow::Result<()> {
     let server = Server::start_with_pin("2468").await?;
     with_engine(Browser::Chromium, 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
@@ -258,6 +258,23 @@ async fn remote_pairs_with_the_pin_before_it_can_control() -> anyhow::Result<()>
             remote.find(By::Css(".status-dot.connected")).await.is_ok()
         })
         .await?;
+        // An operator sees no setup tools until admin mode is unlocked with the PIN again.
+        let import = By::XPath("//label[contains(text(), 'Import z OpenSong')]");
+        anyhow::ensure!(remote.find(import.clone()).await.is_err(), "import must need admin mode");
+        remote.find(By::XPath("//button[text()='Tryb administratora']")).await?.click().await?;
+        let pin = remote.query(By::Css(".dialog .pin")).first().await?;
+        pin.wait_until().displayed().await?;
+        pin.send_keys("2468").await?;
+        remote.find(By::XPath("//button[text()='Odblokuj']")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
+        // The device list shows this tablet (which cannot revoke itself).
+        remote.find(By::XPath("//button[text()='Urządzenia']")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            remote.find(By::Css("[data-testid=devices] .device-self")).await.is_ok()
+        })
+        .await?;
+        remote.find(By::XPath("//button[text()='Zakończ tryb administratora']")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_err() }).await?;
         Ok(())
     })
     .await

@@ -16,6 +16,10 @@ use crate::Commands;
 use crate::calibration_form::{SafeAreaForm, ZoneList};
 use crate::messages::{Msg, pl};
 
+/// True while the calibration panel is open (shared through the Leptos context).
+#[derive(Clone, Copy)]
+pub struct Calibrating(pub RwSignal<bool>);
+
 /// The calibration panel; `open` is cleared when it closes.
 #[component]
 pub fn CalibrationPanel(
