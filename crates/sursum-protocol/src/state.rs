@@ -160,4 +160,7 @@ pub struct RemoteState {
     /// The profile being used, for the calibration panel.
     #[serde(default)]
     pub screen_profile: ScreenProfile,
+    /// True while a screen (the kiosk browser) is connected.
+    #[serde(default)]
+    pub screen_connected: bool,
 }

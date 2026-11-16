@@ -111,5 +111,6 @@ expression: state
         "mask": "black"
       }
     ]
-  }
+  },
+  "screen_connected": true
 }

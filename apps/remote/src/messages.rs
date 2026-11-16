@@ -99,6 +99,7 @@ pub enum Msg {
     KeysPressNow,
     ParishLogo,
     ItemNumber,
+    ScreenMissing,
     EditSet,
     DoneEditing,
     Remove,
@@ -236,6 +237,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KeysPressNow => "Naciśnij teraz…",
         Msg::ParishLogo => "Logo parafii",
         Msg::ItemNumber => "Numer pozycji w zestawie",
+        Msg::ScreenMissing => "Uwaga: ekran nie jest połączony z sursum",
     }
 }
 

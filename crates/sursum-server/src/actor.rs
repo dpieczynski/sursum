@@ -86,6 +86,11 @@ impl StateHandle {
         stored.await.unwrap_or(false)
     }
 
+    /// Records whether a screen is connected (from the screen guard).
+    pub async fn screen_connected(&self, connected: bool) {
+        let _ = self.requests.send(Request::ScreenConnected { connected }).await;
+    }
+
     /// True if the state actor answers (for the systemd watchdog).
     pub async fn alive(&self) -> bool {
         let (reply, answer) = oneshot::channel();
@@ -181,6 +186,9 @@ enum Request {
     Ping {
         reply: oneshot::Sender<()>,
     },
+    ScreenConnected {
+        connected: bool,
+    },
     Devices {
         reply: oneshot::Sender<Vec<(String, String, String, String)>>,
     },
@@ -235,6 +243,7 @@ pub fn spawn(
         calibrating: false,
         display_power: DisplayPowerState::Unknown,
         logo,
+        screen_connected: false,
         transition_ms: config.transition_ms,
         rules: SlideRules::default(),
         boot_id: platform.boot_id(),
@@ -281,6 +290,11 @@ pub fn spawn(
                             remote_tx.send_replace(Arc::new(state.remote_state()));
                         }
                         let _ = reply.send(report);
+                    }
+                    Request::ScreenConnected { connected } => {
+                        state.screen_connected = connected;
+                        state.rev = state.rev.next();
+                        remote_tx.send_replace(Arc::new(state.remote_state()));
                     }
                     Request::Ping { reply } => {
                         let _ = reply.send(());
@@ -369,6 +383,8 @@ struct AppState {
     display_power: DisplayPowerState,
     /// The parish logo for the logo overlay.
     logo: Option<sursum_protocol::AssetId>,
+    /// True while a screen is connected.
+    screen_connected: bool,
     transition_ms: u32,
     rules: SlideRules,
     boot_id: Option<String>,
@@ -719,6 +735,7 @@ impl AppState {
             can_undo: self.sets.can_undo(),
             display_power: self.display_power.clone(),
             screen_profile: self.profile.clone(),
+            screen_connected: self.screen_connected,
         }
     }
 

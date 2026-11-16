@@ -104,6 +104,7 @@ fn remote_state() {
         can_undo: false,
         display_power: DisplayPowerState::Unavailable { reason: "not_configured".into() },
         screen_profile: sample_profile(),
+        screen_connected: true,
     };
     insta::assert_json_snapshot!(state);
 }

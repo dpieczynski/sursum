@@ -880,3 +880,25 @@ async fn foreign_pages_cannot_upload_and_foreign_host_names_are_refused() {
     assert!(rebound.starts_with("HTTP/1.1 421"), "{rebound}");
     server.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn a_screen_that_stays_away_gets_its_kiosk_restarted_and_remotes_know() {
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("kiosk-restarted");
+    let mut config = Config::with_data_dir(dir.path());
+    config.listen = "127.0.0.1:0".parse().unwrap();
+    config.screen_guard = Some(sursum_server::screen_guard::ScreenGuardConfig {
+        restart_command: vec!["sh".into(), "-c".into(), format!("touch '{}'", marker.display())],
+        grace_s: 1,
+    });
+    let server = sursum_server::start(config, &FixedPlatform(Some("boot-1".to_owned()))).await.unwrap();
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let screen = connect(&server, Role::Screen, "screen").await;
+    while !next_remote_state(&mut remote).await.screen_connected {}
+    drop(screen);
+    while next_remote_state(&mut remote).await.screen_connected {}
+    assert!(!marker.exists(), "not before the grace period");
+    tokio::time::sleep(Duration::from_millis(1800)).await;
+    assert!(marker.exists(), "the kiosk restart command ran");
+    server.stop().await.unwrap();
+}

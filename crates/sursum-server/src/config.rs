@@ -30,6 +30,8 @@ pub struct Config {
     pub wasm_delay_ms: u64,
     /// How the server switches the display on and off (ADR 0012).
     pub display_power: DisplayPowerConfig,
+    /// What to do when the screen stays disconnected (restart the kiosk); off when `None`.
+    pub screen_guard: Option<crate::screen_guard::ScreenGuardConfig>,
 }
 
 /// `[display_power]` in `config.toml`.
@@ -58,6 +60,7 @@ impl Config {
             allow_public_clients: false,
             wasm_delay_ms: 0,
             display_power: DisplayPowerConfig::None,
+            screen_guard: None,
         }
     }
 
@@ -88,6 +91,9 @@ impl Config {
         if let Some(display_power) = file.display_power {
             self.display_power = display_power;
         }
+        if let Some(screen_guard) = file.screen_guard {
+            self.screen_guard = Some(screen_guard);
+        }
         Ok(self)
     }
 }
@@ -103,6 +109,7 @@ struct FileConfig {
     transition_ms: Option<u32>,
     allow_public_clients: Option<bool>,
     display_power: Option<DisplayPowerConfig>,
+    screen_guard: Option<crate::screen_guard::ScreenGuardConfig>,
 }
 
 fn read_file(path: &Path) -> anyhow::Result<Option<FileConfig>> {

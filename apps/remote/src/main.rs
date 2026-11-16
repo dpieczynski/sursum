@@ -142,12 +142,20 @@ fn TopBar(
             .with(|state| state.as_ref().and_then(|s| s.active_set.as_ref().map(|set| set.name.clone())))
             .unwrap_or_else(|| pl(Msg::NoSet).to_owned())
     };
+    // Only once a snapshot arrived: before that we do not know.
+    let screen_missing =
+        move || state.with(|state| state.as_ref().is_some_and(|state| !state.screen_connected));
     view! {
         <header class="topbar">
             <span class="status-dot" class:connected=move || status.get() == Status::Connected></span>
             <span>{status_text}</span>
             <span>" · "{set_name}</span>
             <span class="notice">{move || notice.get().map(pl)}</span>
+            <Show when=screen_missing>
+                <span class="notice" data-testid="screen-missing">
+                    {pl(Msg::ScreenMissing)}
+                </span>
+            </Show>
             <a class="about" href="/licenses" target="_blank">
                 {pl(Msg::About)}
             </a>

@@ -21,6 +21,7 @@ pub mod library;
 pub mod licenses;
 pub mod limits;
 pub mod platform;
+pub mod screen_guard;
 pub mod service;
 pub mod sets;
 pub mod ws;
@@ -74,7 +75,9 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     let state = actor::spawn(&config, database, platform)?;
     let power = display_power::spawn(&config.display_power, state.clone());
     let state_for_watchdog = state.clone();
-    let router = http::router(state, &config, access, power);
+    let presence = screen_guard::ScreenPresence::default();
+    screen_guard::spawn(&presence, config.screen_guard.clone(), state.clone());
+    let router = http::router(state, &config, access, power, presence);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;

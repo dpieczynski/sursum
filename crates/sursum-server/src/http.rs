@@ -44,6 +44,7 @@ struct App {
     allowed_origins: Arc<Vec<String>>,
     allowed_hosts: Arc<Vec<String>>,
     power: crate::display_power::PowerHandle,
+    presence: crate::screen_guard::ScreenPresence,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
 }
@@ -54,9 +55,11 @@ pub fn router(
     config: &Config,
     access: Arc<Access>,
     power: crate::display_power::PowerHandle,
+    presence: crate::screen_guard::ScreenPresence,
 ) -> Router {
     let app = App {
         power,
+        presence,
         state,
         data_dir: Arc::new(config.data_dir.clone()),
         access,
@@ -399,7 +402,12 @@ fn socket(app: App, headers: &HeaderMap, upgrade: WebSocketUpgrade, role: Role) 
     if !ws::origin_allowed(headers, &app.allowed_origins) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let guard = ws::Guard { access: app.access.clone(), headers: headers.clone(), power: app.power.clone() };
+    let guard = ws::Guard {
+        access: app.access.clone(),
+        headers: headers.clone(),
+        power: app.power.clone(),
+        presence: app.presence.clone(),
+    };
     upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
 }
 
