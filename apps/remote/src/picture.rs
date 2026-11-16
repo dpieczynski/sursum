@@ -43,7 +43,7 @@ fn UploadPicture(
             <input type="file" accept="image/png,image/jpeg,image/webp" hidden=true on:change=on_change />
         </label>
         <Show when=move || failed.get()>
-            <span class="import-status">{pl(Msg::PictureFailed)}</span>
+            <span class="status-text">{pl(Msg::PictureFailed)}</span>
         </Show>
     }
 }
@@ -59,7 +59,7 @@ pub fn AddPictureButton(commands: Commands) -> impl IntoView {
 #[component]
 pub fn LogoButton(commands: Commands) -> impl IntoView {
     let set = move |asset_id, _title| commands.send(Command::SetLogo { asset_id: Some(asset_id) });
-    view! { <UploadPicture label=Msg::ParishLogo class="import-button" on_uploaded=set /> }
+    view! { <UploadPicture label=Msg::ParishLogo class="btn btn--sm" on_uploaded=set /> }
 }
 
 /// "plakat-adwent.jpg" → "plakat-adwent": the set list shows something recognisable.

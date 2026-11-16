@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Admin mode: changes to the library as a whole and to the device's setup (import, merge,
-//! calibration, paired devices). A paired remote unlocks it by entering the PIN again; the server
-//! ends it after a while and enforces it on every request, so this module only decides what to
-//! show.
+//! calibration, logo, paired devices). A paired remote unlocks it by entering the PIN again; the
+//! server ends it after a while and enforces it on every request, so the remote only decides what
+//! to show. The tools themselves are in the Ustawienia view.
 
 use leptos::prelude::*;
 use sursum_protocol::{AdminRequest, DeviceView, PairOutcome, SessionInfo};
 
 use crate::api::{get_json, post_json, request_status};
-use crate::calibration::Calibrating;
 use crate::messages::{Msg, locked_for, pl};
 use crate::ui::HoldButton;
 
@@ -30,69 +29,29 @@ impl Session {
     }
 }
 
-/// The admin tools, or the button that unlocks them.
-#[component]
-pub fn AdminTools() -> impl IntoView {
-    let session = expect_context::<Session>();
-    let unlocking = RwSignal::new(false);
-    let devices = RwSignal::new(false);
-    let calibrating = expect_context::<Calibrating>();
-    let commands = expect_context::<crate::Commands>();
+/// Re-reads the session every minute while admin mode is on, so the admin tools hide when it
+/// expires. Lives as long as the calling component.
+pub fn watch_expiry(session: Session) {
     let refresh = gloo_timers::callback::Interval::new(REFRESH_MS, move || {
         if session.0.get_untracked().admin {
             session.refresh();
         }
     });
-    // Dropped (and so cancelled) together with this component.
+    // Dropped (and so cancelled) together with the component.
     let _refresh = StoredValue::new_local(refresh);
-    let admin = move || session.0.get().admin;
-    let with_pin = move || session.0.get().pin_required;
-    let end = move |_| {
-        leptos::task::spawn_local(async move {
-            request_status("DELETE", "/api/admin").await;
-            session.refresh();
-        });
-        devices.set(false);
-    };
-    let tools = move || {
-        view! {
-            <crate::import::ImportButton />
-            <crate::bundle::MergeButton />
-            <HoldButton label=pl(Msg::Calibrate) on_hold=move || calibrating.0.set(true) />
-            <crate::picture::LogoButton commands />
-            <Show when=with_pin>
-                <button class="import-button" on:click=move |_| devices.update(|open| *open = !*open)>
-                    {pl(Msg::Devices)}
-                </button>
-                <button class="import-button" on:click=end>
-                    {pl(Msg::EndAdmin)}
-                </button>
-            </Show>
-        }
-    };
-    let locked = move || {
-        view! {
-            <button class="import-button" on:click=move |_| unlocking.set(true)>
-                {pl(Msg::AdminMode)}
-            </button>
-        }
-    };
-    view! {
-        <Show when=admin fallback=locked>
-            {tools}
-        </Show>
-        <Show when=move || unlocking.get() && !admin()>
-            <AdminUnlock open=unlocking session />
-        </Show>
-        <Show when=move || devices.get() && admin()>
-            <DeviceList />
-        </Show>
-    }
+}
+
+/// Ends admin mode on this device.
+pub fn end_admin(session: Session) {
+    leptos::task::spawn_local(async move {
+        request_status("DELETE", "/api/admin").await;
+        session.refresh();
+    });
 }
 
 /// Asks for the PIN to unlock admin mode on this device.
 #[component]
-fn AdminUnlock(open: RwSignal<bool>, session: Session) -> impl IntoView {
+pub fn AdminUnlock(open: RwSignal<bool>, session: Session) -> impl IntoView {
     let pin = RwSignal::new(String::new());
     let status = RwSignal::new(None::<String>);
     let submit = move |event: leptos::ev::SubmitEvent| {
@@ -137,7 +96,7 @@ fn AdminUnlock(open: RwSignal<bool>, session: Session) -> impl IntoView {
 
 /// Paired remotes; any but this one can be revoked with a hold.
 #[component]
-fn DeviceList() -> impl IntoView {
+pub fn DeviceList() -> impl IntoView {
     let devices = RwSignal::new(Vec::<DeviceView>::new());
     let load = move || {
         leptos::task::spawn_local(async move {
@@ -147,7 +106,7 @@ fn DeviceList() -> impl IntoView {
     load();
     let rows = move || devices.get().into_iter().map(|device| device_row(device, load)).collect_view();
     view! {
-        <ul class="dialog device-list" data-testid="devices">
+        <ul class="device-list" data-testid="devices">
             {rows}
         </ul>
     }

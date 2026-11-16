@@ -54,7 +54,7 @@ fn typing_in_a_field(event: &web_sys::KeyboardEvent) -> bool {
 pub fn KeysButton() -> impl IntoView {
     let open = RwSignal::new(false);
     view! {
-        <button class="import-button" on:click=move |_| open.update(|open| *open = !*open)>
+        <button class="btn btn--sm" on:click=move |_| open.update(|open| *open = !*open)>
             {pl(Msg::Keys)}
         </button>
         <Show when=move || open.get()>
@@ -77,14 +77,14 @@ pub fn KeySettings(open: RwSignal<bool>) -> impl IntoView {
         open.set(false);
     };
     view! {
-        <div class="dialog key-settings" data-testid="key-settings">
+        <div class="key-settings" data-testid="key-settings">
             <p class="editor-help">{pl(Msg::KeysHelp)}</p>
             {rows}
-            <div class="editor-buttons">
-                <button type="button" on:click=reset>
+            <div class="setting-row">
+                <button type="button" class="btn btn--sm btn--quiet" on:click=reset>
                     {pl(Msg::KeysReset)}
                 </button>
-                <button type="button" class="primary" on:click=close>
+                <button type="button" class="btn btn--sm btn--primary" on:click=close>
                     {pl(Msg::Close)}
                 </button>
             </div>
@@ -102,10 +102,10 @@ fn action_row(keys: Keys, action: Action) -> impl IntoView {
     let learn = move |_| keys.learning.set(Some(action));
     let learn_label = move || if waiting() { pl(Msg::KeysPressNow) } else { pl(Msg::KeysLearn) };
     view! {
-        <div class="calibration-row key-row" class:selected=waiting data-action=action_name(action)>
-            <span class="zone-name">{pl(action_label(action))}</span>
+        <div class="key-row" class:selected=waiting data-action=action_name(action)>
+            <span class="key-action">{pl(action_label(action))}</span>
             <span class="key-names">{bound}</span>
-            <button type="button" class="set-tool" on:click=learn>
+            <button type="button" class="btn btn--sm" on:click=learn>
                 {learn_label}
             </button>
         </div>

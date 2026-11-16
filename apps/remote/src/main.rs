@@ -25,6 +25,7 @@ mod prefs;
 mod scroll;
 mod search;
 mod sets;
+mod settings;
 mod shell;
 mod ui;
 
@@ -157,7 +158,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         (Some(target), _) => view! { <editor::Editor target editing state commands /> }.into_any(),
         (None, View::Live) => view! { <live::LiveSet state commands /> }.into_any(),
         (None, View::Set) => view! { <sets::SetsView state commands /> }.into_any(),
-        (None, View::Settings) => view! { <SettingsViewForNow /> }.into_any(),
+        (None, View::Settings) => view! { <settings::SettingsView state commands /> }.into_any(),
     };
     let view_attr = move || match current.0.get() {
         View::Live => "live",
@@ -195,55 +196,6 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         <ui::Toast toasts send=move |command| commands.send(command) />
         {search_sheet}
         {screen_sheet}
-    }
-}
-
-/// The Ustawienia view until it is rebuilt: this device, pedal, library and admin tools.
-#[component]
-fn SettingsViewForNow() -> impl IntoView {
-    let prefs = expect_context::<prefs::Prefs>();
-    let hand = move |hand: prefs::Hand| move |_| prefs.set_hand(hand);
-    let side = move |hand: prefs::Hand| move || prefs.hand.get() == hand;
-    view! {
-        <section class="library">
-            <div class="library-tools">
-                <span>{pl(Msg::ButtonsSide)}</span>
-                <button
-                    class="btn btn--sm"
-                    class:selected=side(prefs::Hand::Right)
-                    data-testid="hand-right"
-                    on:click=hand(prefs::Hand::Right)
-                >
-                    {pl(Msg::ButtonsRight)}
-                </button>
-                <button
-                    class="btn btn--sm"
-                    class:selected=side(prefs::Hand::Left)
-                    data-testid="hand-left"
-                    on:click=hand(prefs::Hand::Left)
-                >
-                    {pl(Msg::ButtonsLeft)}
-                </button>
-            </div>
-            <div class="library-tools">
-                <label class="check">
-                    <input
-                        type="checkbox"
-                        prop:checked=move || prefs.vibration.get()
-                        on:change=move |event| prefs.set_vibration(event_target_checked(&event))
-                    />
-                    {pl(Msg::Vibration)}
-                </label>
-                <a class="btn btn--sm btn--quiet" href="/licenses" target="_blank">
-                    {pl(Msg::About)}
-                </a>
-            </div>
-            <div class="library-tools">
-                <bundle::ExportLink />
-                <key_settings::KeysButton />
-                <admin::AdminTools />
-            </div>
-        </section>
     }
 }
 

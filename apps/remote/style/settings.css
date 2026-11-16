@@ -1,0 +1,152 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* The Ustawienia view: cards with sections, choices, locked admin items. */
+
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.card-heading {
+  margin: 0;
+  font-size: var(--font-title);
+}
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.setting-row:empty {
+  display: none;
+}
+.setting-label {
+  color: var(--muted);
+}
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.choices legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap-sm);
+}
+.choice input {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  accent-color: var(--accent);
+}
+.locked {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  text-align: left;
+}
+.lock-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--warn);
+}
+.locked-hint {
+  width: 100%;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.admin-on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #3b2a06;
+  color: var(--warn);
+  font-weight: 700;
+}
+.admin-on .btn {
+  margin-left: auto;
+}
+.logo-thumb {
+  height: 48px;
+  max-width: 120px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #000;
+}
+.report-lines {
+  margin: 0;
+  padding-left: 20px;
+  user-select: text;
+}
+.report-lines li {
+  margin: 4px 0;
+}
+
+/* Pedal keys and paired devices inside their cards. */
+.key-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #262626;
+}
+.key-row.selected {
+  color: var(--warn);
+}
+.key-action {
+  min-width: 9em;
+  font-weight: 700;
+}
+.key-names {
+  flex: 1;
+  color: var(--muted);
+}
+.device-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.device {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 56px;
+  border-bottom: 1px solid #262626;
+}
+.device-name {
+  flex: 1;
+  font-weight: 700;
+}
+.device-date,
+.device-self {
+  color: var(--muted);
+}

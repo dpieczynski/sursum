@@ -32,7 +32,7 @@ pub fn ZoneList(editor: ProfileEditor, selected: RwSignal<usize>) -> impl IntoVi
     };
     view! {
         <div class="calibration-zones">
-            {rows} <button class="import-button" on:click=add>
+            {rows} <button class="btn btn--sm" on:click=add>
                 {pl(Msg::AddZone)}
             </button>
         </div>

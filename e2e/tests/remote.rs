@@ -293,19 +293,19 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         open_tab(remote, "ustawienia").await?;
         let import = By::XPath("//label[contains(text(), 'Import z OpenSong')]");
         anyhow::ensure!(remote.find(import.clone()).await.is_err(), "import must need admin mode");
-        remote.find(By::XPath("//button[text()='Tryb administratora']")).await?.click().await?;
+        // Admin items are visible with a lock; tapping one asks for the PIN.
+        remote.find(By::Css("[data-testid=locked]")).await?.click().await?;
         let pin = remote.query(By::Css("[data-testid=admin-unlock] .pin")).first().await?;
         pin.wait_until().displayed().await?;
         pin.send_keys("246813").await?;
         remote.find(By::Css("[data-testid=admin-unlock-submit]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
         // The device list shows this tablet (which cannot revoke itself).
-        remote.find(By::XPath("//button[text()='Urządzenia']")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async {
             remote.find(By::Css("[data-testid=devices] .device-self")).await.is_ok()
         })
         .await?;
-        remote.find(By::XPath("//button[text()='Zakończ tryb administratora']")).await?.click().await?;
+        remote.find(By::Css("[data-testid=end-admin]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_err() }).await?;
         Ok(())
     })
@@ -364,12 +364,10 @@ async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> any
                 remote.find(By::Css(".status-dot.connected")).await.is_ok()
             })
             .await?;
-            // Calibration needs a hold, so a stray tap during Mass cannot start it.
+            // Calibration is in Ustawienia and asks first ("only outside Mass").
             open_tab(remote, "ustawienia").await?;
-            let open = remote.find(By::XPath("//button[contains(text(), 'Kalibracja')]")).await?;
-            remote.action_chain().click_and_hold_element(&open).perform().await?;
-            tokio::time::sleep(Duration::from_millis(1000)).await;
-            remote.action_chain().release().perform().await?;
+            remote.find(By::Css("[data-testid=calibrate]")).await?.click().await?;
+            remote.find(By::Css("[data-testid=calibrate-start]")).await?.click().await?;
             wait_until(Duration::from_secs(5), || async {
                 screen.find(By::Css("[data-calibration]")).await.is_ok()
             })

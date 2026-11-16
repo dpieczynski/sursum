@@ -6,6 +6,23 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Msg {
     TabLive,
+    AdminOn,
+    NeedsAdmin,
+    SectionDisplay,
+    SectionDevice,
+    SectionLibrary,
+    SectionAbout,
+    EndOfItemLabel,
+    EndGap,
+    EndContinue,
+    Fullscreen,
+    ExitFullscreen,
+    SleepTip,
+    CalibrateStart,
+    CalibrateHint,
+    Version,
+    LicenseNote,
+    ImportDone,
     NoSetHint,
     ChangeSet,
     Rename,
@@ -197,6 +214,29 @@ pub enum Msg {
 pub fn pl(msg: Msg) -> &'static str {
     match msg {
         Msg::TabLive => "Msza",
+        Msg::AdminOn => "Tryb administratora jest włączony (wyłączy się sam po 15 minutach)",
+        Msg::NeedsAdmin => "wymaga trybu administratora",
+        Msg::SectionDisplay => "Wyświetlanie",
+        Msg::SectionDevice => "To urządzenie",
+        Msg::SectionLibrary => "Baza pieśni",
+        Msg::SectionAbout => "O programie",
+        Msg::EndOfItemLabel => "Po ostatnim slajdzie pieśni „Dalej”…",
+        Msg::EndGap => "najpierw wygasza ekran (pusty slajd), potem następna pozycja",
+        Msg::EndContinue => "od razu pokazuje następną pozycję",
+        Msg::Fullscreen => "Pełny ekran",
+        Msg::ExitFullscreen => "Zamknij pełny ekran",
+        Msg::SleepTip => {
+            "Tablet nie może zgasnąć w trakcie mszy: w ustawieniach Androida wydłuż czas wygaszania ekranu (albo włącz „Pozostaw ekran włączony” w opcjach programisty)."
+        }
+        Msg::CalibrateStart => "Rozpocznij kalibrację",
+        Msg::CalibrateHint => {
+            "Tylko poza mszą: na ekranie w kościele pojawi się siatka kalibracyjna zamiast slajdu."
+        }
+        Msg::Version => "wersja",
+        Msg::LicenseNote => {
+            "Licencja GPL-3.0-or-later, bez żadnej gwarancji. Kod źródłowy: github.com/dpieczynski/sursum."
+        }
+        Msg::ImportDone => "Zaimportowano",
         Msg::NoSetHint => "Nie ma jeszcze zestawu. Utwórz go przyciskiem „Zmień zestaw” → „Nowy zestaw”.",
         Msg::ChangeSet => "Zmień zestaw",
         Msg::Rename => "Zmień nazwę",
@@ -325,10 +365,10 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ExportLibrary => "Eksport bazy",
         Msg::MergeLibrary => "Scal bazę z pliku",
         Msg::MergeChecking => "Sprawdzanie pliku…",
-        Msg::MergeWouldDo => "Po scaleniu:",
+        Msg::MergeWouldDo => "Sprawdzono plik. Po scaleniu:",
         Msg::MergeConfirm => "Scal",
         Msg::Merging => "Scalanie…",
-        Msg::MergeDone => "Scalono:",
+        Msg::MergeDone => "Scalono.",
         Msg::MergeFailed => "Scalanie nie powiodło się – czy to plik .sursum?",
         Msg::Calibrate => "Kalibracja ekranu",
         Msg::CalibrationTitle => "Kalibracja ekranu",
@@ -414,34 +454,38 @@ pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
     }
 }
 
-/// One-line import report, e.g. "Zaimportowano: 12 nowych, 3 zmienionych, …".
-pub fn import_summary(
-    inserted: u32,
-    updated: u32,
-    unchanged: u32,
-    failed: u32,
-    sets: u32,
-    problems: usize,
-) -> String {
-    format!(
-        "Zaimportowano: {inserted} nowych, {updated} zmienionych, {unchanged} bez zmian, {failed} błędów, {sets} zestawów, {problems} uwag"
-    )
+/// The import report, one line per number, then the problems found (file and line).
+pub fn import_lines(report: &sursum_protocol::ImportReport) -> Vec<String> {
+    let mut lines = vec![
+        format!("Nowe pieśni: {}", report.inserted),
+        format!("Zmienione: {}", report.updated),
+        format!("Bez zmian: {}", report.unchanged),
+        format!("Zestawy: {}", report.sets),
+    ];
+    if report.failed > 0 {
+        lines.push(format!("Nie udało się wczytać: {}", report.failed));
+    }
+    lines.extend(report.problems.iter().map(|problem| format!("Uwaga: {problem}")));
+    lines
 }
 
-/// One-line merge report; conflicting titles are listed because they need a human decision.
-pub fn merge_summary(report: &sursum_protocol::MergeReport) -> String {
-    let mut text = format!(
-        "{} nowych, {} zaktualizowanych, {} usuniętych, {} bez zmian, {} nowszych tutaj",
-        report.added, report.updated, report.deleted, report.unchanged, report.kept_local
-    );
+/// The merge report, one line per number; conflicting titles are listed because they need a
+/// human decision.
+pub fn merge_lines(report: &sursum_protocol::MergeReport) -> Vec<String> {
+    let mut lines = vec![
+        format!("Nowe pieśni: {}", report.added),
+        format!("Zaktualizowane: {}", report.updated),
+        format!("Usunięte: {}", report.deleted),
+        format!("Bez zmian: {}", report.unchanged),
+        format!("Nowsze tutaj (zostają): {}", report.kept_local),
+    ];
     if !report.conflicts.is_empty() {
-        text.push_str(&format!(
-            ", {} konfliktów (zapisane jako kopie): {}",
-            report.conflicts.len(),
+        lines.push(format!(
+            "Zmienione w obu kościołach (zapisane jako kopie): {}",
             report.conflicts.join(", ")
         ));
     }
-    text
+    lines
 }
 
 /// "Nowa pieśń: „Barka”" (from a search without results).

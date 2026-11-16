@@ -311,3 +311,26 @@ async fn search_adds_without_closing_and_shows_at_once() -> anyhow::Result<()> {
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn the_gap_can_be_turned_off_in_the_settings() -> anyhow::Result<()> {
+    with_remote(1280, 800, async |server, _, remote| {
+        open_tab(remote, "ustawienia").await?;
+        remote.find(By::Css("[data-testid=end-continue]")).await?.click().await?;
+        open_tab(remote, "msza").await?;
+        let mut control = server.remote("organist").await?;
+        let last = remote.find_all(By::Css(".slide-tile")).await?.len() as u32 - 1;
+        control.command(Command::GoToSlide { slide_index: last }).await?;
+        wait_until(Duration::from_secs(5), || async {
+            match remote.find(By::Css("[data-testid=next-caption]")).await {
+                Ok(caption) => caption.text().await.unwrap_or_default().starts_with("→ 2."),
+                Err(_) => false,
+            }
+        })
+        .await
+        .context("next should go straight to the next song")?;
+        Ok(())
+    })
+    .await
+}
