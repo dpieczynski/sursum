@@ -8,17 +8,17 @@
 
 mod api;
 mod editor;
+mod hold;
 mod import;
 mod messages;
 mod search;
+mod set_list;
 
 use leptos::ev;
 use leptos::prelude::*;
 use messages::{Msg, pl, section_label};
 use sursum_client::{Client, Status, needs_reload};
-use sursum_protocol::{
-    ClientMsg, CmdOutcome, Command, ItemId, Overlay, RemoteState, Role, SectionJump, ServerMsg, SetItemView,
-};
+use sursum_protocol::{ClientMsg, CmdOutcome, Command, Overlay, RemoteState, Role, SectionJump, ServerMsg};
 use sursum_slide::{PreviewData, SlidePreview};
 
 fn main() {
@@ -192,7 +192,7 @@ fn chip(jump: SectionJump, end: u32, current: Signal<Option<u32>>, commands: Com
 fn Library(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
     let query = RwSignal::new(String::new());
     let searching = move || !query.with(|query| query.trim().is_empty());
-    let set_list = move || view! { <SetList state commands /> };
+    let set_list = move || view! { <set_list::SetPanel state commands /> };
     view! {
         <section class="library">
             <search::SearchBox query />
@@ -215,39 +215,6 @@ fn NewSongButton() -> impl IntoView {
         <button class="new-song" on:click=move |_| editing.set(Some(editor::EditorTarget::New))>
             {pl(Msg::NewSong)}
         </button>
-    }
-}
-
-#[component]
-fn SetList(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let live_item = Signal::derive(move || {
-        state.with(|state| {
-            state.as_ref().and_then(|s| s.program.live.as_ref().map(|live| live.deck.item_id.clone()))
-        })
-    });
-    let rows = move || {
-        let items = state.with(|state| {
-            state
-                .as_ref()
-                .and_then(|s| s.active_set.as_ref().map(|set| set.items.clone()))
-                .unwrap_or_default()
-        });
-        items.into_iter().map(|item| set_row(item, live_item, commands)).collect_view()
-    };
-    view! { <ul class="set-list">{rows}</ul> }
-}
-
-/// One entry of the set; tapping it shows the item's first slide.
-fn set_row(item: SetItemView, live_item: Signal<Option<ItemId>>, commands: Commands) -> impl IntoView {
-    let number = item.number;
-    let is_live = move || live_item.with(|live| live.as_ref() == Some(&item.item_id));
-    let title = if item.title.is_empty() { pl(Msg::Untitled).to_owned() } else { item.title.clone() };
-    let show = move |_| commands.send(Command::GoToItemNumber { number });
-    view! {
-        <li class="set-item" class:live=is_live on:click=show>
-            <span class="number">{number}</span>
-            <span>{title}</span>
-        </li>
     }
 }
 

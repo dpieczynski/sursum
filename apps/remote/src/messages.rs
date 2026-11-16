@@ -44,6 +44,15 @@ pub enum Msg {
     ImportOpenSong,
     Importing,
     ImportFailed,
+    EditSet,
+    DoneEditing,
+    Remove,
+    Undo,
+    NewSet,
+    NewSetPrompt,
+    Announcement,
+    AnnouncementText,
+    Cancel,
 }
 
 /// The Polish text for a message.
@@ -90,6 +99,15 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::LoadFailed => "Nie udało się wczytać pieśni",
         Msg::ImportOpenSong => "Import z OpenSong (ZIP)",
         Msg::Importing => "Importowanie…",
+        Msg::EditSet => "Edytuj zestaw",
+        Msg::DoneEditing => "Gotowe",
+        Msg::Remove => "Usuń (przytrzymaj)",
+        Msg::Undo => "Cofnij usunięcie",
+        Msg::NewSet => "Nowy zestaw",
+        Msg::NewSetPrompt => "Nazwa nowego zestawu",
+        Msg::Announcement => "Ogłoszenie",
+        Msg::AnnouncementText => "Treść (pusta linia zaczyna nowy slajd)",
+        Msg::Cancel => "Anuluj",
         Msg::ImportFailed => "Import nie powiódł się – czy to plik ZIP z folderem OpenSong?",
     }
 }

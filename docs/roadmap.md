@@ -62,7 +62,8 @@ without a mouse.
 
 ## M3 — Sets, live editing, pairing, shared library
 
-- [ ] Sets CRUD/activate, `SetOp`, frozen program with ghost position, "Show now", Text/Image/Blank items
+- [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items); image and blank items still open
+- [x] Remote: two-column landscape layout (previews left, library/set right, controls bottom)
 - [ ] OpenSong set import
 - [ ] Multi-remote `Stale` rule, PIN pairing, roles
 - [ ] `.sursum` export/import with merge and dry-run

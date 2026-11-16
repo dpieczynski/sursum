@@ -36,6 +36,12 @@ async fn main() -> anyhow::Result<()> {
     remote_page.find(thirtyfour::By::Css(".result-action")).await?.click().await?;
     tokio::time::sleep(Duration::from_millis(1200)).await;
     remote_page.screenshot(&output.join("editor.png")).await?;
+    // The set in edit mode.
+    remote_page.find(thirtyfour::By::XPath("//button[text()='Zamknij']")).await?.click().await?;
+    remote_page.find(thirtyfour::By::Css(".search-clear")).await?.click().await?;
+    remote_page.find(thirtyfour::By::XPath("//button[text()='Edytuj zestaw']")).await?.click().await?;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    remote_page.screenshot(&output.join("set-edit.png")).await?;
     screen.quit().await?;
     remote_page.quit().await?;
     println!("saved to {}", output.display());
