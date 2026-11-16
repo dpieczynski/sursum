@@ -67,6 +67,12 @@ async fn main() -> anyhow::Result<()> {
     screen.screenshot(&output.join("screen-calibration.png")).await?;
     remote_page.screenshot(&output.join("calibration.png")).await?;
     remote.command(Command::Calibrate { on: false }).await?;
+    // A tablet held upright.
+    let portrait = browser.open(800, 1280).await?;
+    portrait.goto(server.url("/remote/")).await?;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    portrait.screenshot(&output.join("remote-portrait.png")).await?;
+    portrait.quit().await?;
     screen.quit().await?;
     remote_page.quit().await?;
     println!("saved to {}", output.display());

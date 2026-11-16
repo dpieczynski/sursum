@@ -31,9 +31,11 @@ pub fn DisplayPowerBar(state: RwSignal<Option<RemoteState>>, commands: Commands)
     let cooling = move || power() == DisplayPowerState::CoolingDown;
     let turn_on = move |_| commands.send(Command::DisplayPower { action: PowerAction::On });
     let standby = move || commands.send(Command::DisplayPower { action: PowerAction::Standby });
+    // The container is always there (empty without power control): the remote's grid has a
+    // fixed row for it.
     view! {
-        <Show when=configured>
-            <div class="power" data-testid="display-power">
+        <div class="power" data-testid="display-power">
+            <Show when=configured>
                 <span class="power-state">{move || pl(state_label(&power()))}</span>
                 <button class="power-on" on:click=turn_on prop:disabled=cooling>
                     {pl(Msg::DisplayOn)}
@@ -45,8 +47,8 @@ pub fn DisplayPowerBar(state: RwSignal<Option<RemoteState>>, commands: Commands)
                 <Show when=cooling>
                     <span class="power-warning">{pl(Msg::ProjectorCooling)}</span>
                 </Show>
-            </div>
-        </Show>
+            </Show>
+        </div>
     }
 }
 

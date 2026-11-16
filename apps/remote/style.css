@@ -27,7 +27,8 @@ body {
 
 .remote {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  /* top bar, display power, previews, section chips, library (scrolls), controls */
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   gap: var(--gap);
   /* Exactly one screen high: the set list scrolls, the controls stay in the thumb zone. */
   height: 100dvh;
