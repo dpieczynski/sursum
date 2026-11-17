@@ -21,6 +21,10 @@ image:
   # backups, up to 2 GB of pictures, application releases and a 64M journal.
   data_part_size: 4G
 
+locale:
+  # Both churches are in Poland; the base default is Europe/London.
+  timezone: Europe/Warsaw
+
 layer:
   server: sursum-device
   app: sursum-kiosk
