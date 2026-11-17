@@ -154,6 +154,24 @@ pub fn locate(data_dir: &Path, id: &str) -> Option<(PathBuf, &'static str)> {
     path.is_file().then_some((path, kind.mime()))
 }
 
+/// Every stored picture as (id, file), sorted by id; unfinished uploads are left out.
+pub fn list(data_dir: &Path) -> std::io::Result<Vec<(String, PathBuf)>> {
+    let entries = match std::fs::read_dir(data_dir.join(FOLDER)) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut pictures = Vec::new();
+    for entry in entries {
+        let name = entry?.file_name().to_string_lossy().into_owned();
+        if let Some((path, _)) = locate(data_dir, &name) {
+            pictures.push((name, path));
+        }
+    }
+    pictures.sort();
+    Ok(pictures)
+}
+
 /// True if a picture with this id is stored.
 pub fn exists(data_dir: &Path, id: &AssetId) -> bool {
     locate(data_dir, id.as_str()).is_some()

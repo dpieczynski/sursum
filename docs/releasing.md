@@ -32,7 +32,7 @@ second amendment).
 - **Over SSH** (developers): `just deploy <host> <version>` builds, signs (needs
   `SURSUM_BUNDLE_KEY` and `SURSUM_BUNDLE_SIGNING_KEY` locally), copies, installs, restarts and
   waits for the trial to end.
-- **USB stick**: not built yet (M4).
+- There is no USB stick path (ADR 0013, amendment of 2026-11-17).
 
 ## Keys
 

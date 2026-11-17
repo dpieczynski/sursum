@@ -91,6 +91,12 @@ pub fn router(
                 .layer(axum::extract::DefaultBodyLimit::max(MAX_UPDATE_BYTES))
                 .layer(middleware::from_fn(require_upload_header)),
         )
+        .route(
+            "/api/backup/restore",
+            axum::routing::post(restore_backup)
+                .layer(axum::extract::DefaultBodyLimit::disable())
+                .layer(middleware::from_fn(require_upload_header)),
+        )
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
         .route_layer(middleware::from_fn_with_state(app.clone(), require_admin));
@@ -102,6 +108,7 @@ pub fn router(
         .route("/api/songs/save", axum::routing::post(save_song))
         .route("/api/songs/{id}/draft", get(song_draft))
         .route("/api/library/export", get(export_library))
+        .route("/api/backup", get(download_backup))
         .route("/api/update/status", get(update_status))
         .route(
             "/api/assets",
@@ -437,6 +444,110 @@ async fn export_library(State(app): State<App>) -> Response {
         )
             .into_response(),
         None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /api/backup`: a whole-device backup (`.sursum-backup`, ADR 0018), streamed from a
+/// temporary file (pictures can make it large) that is removed once sent.
+async fn download_backup(State(app): State<App>) -> Response {
+    let data_dir = app.data_dir.clone();
+    let created = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        let mut temporary = crate::device_backup::TemporaryFile::new(&data_dir)?;
+        crate::device_backup::create(&data_dir, temporary.file())?;
+        std::io::Seek::rewind(temporary.file())?;
+        Ok(temporary)
+    })
+    .await;
+    let temporary = match created {
+        Ok(Ok(temporary)) => temporary,
+        Ok(Err(error)) => {
+            tracing::error!(?error, "could not create a device backup");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let chunks = futures_util::stream::try_unfold(temporary, |mut temporary| async move {
+        let read = tokio::task::spawn_blocking(move || {
+            let mut chunk = vec![0; 256 * 1024];
+            let read = std::io::Read::read(temporary.file(), &mut chunk)?;
+            chunk.truncate(read);
+            Ok::<_, std::io::Error>((chunk, temporary))
+        })
+        .await
+        .map_err(std::io::Error::other)??;
+        let (chunk, temporary) = read;
+        Ok::<_, std::io::Error>((!chunk.is_empty()).then(|| (axum::body::Bytes::from(chunk), temporary)))
+    });
+    (
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("application/zip")),
+            (
+                header::CONTENT_DISPOSITION,
+                HeaderValue::from_static("attachment; filename=\"kopia.sursum-backup\""),
+            ),
+        ],
+        axum::body::Body::from_stream(chunks),
+    )
+        .into_response()
+}
+
+/// `POST /api/backup/restore` (admin): checks and stages a backup, answers, then restarts so the
+/// next start puts it in place.
+async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Response {
+    use futures_util::StreamExt as _;
+    use sursum_protocol::{RestoreOutcome, RestoreRefusal};
+    let refuse = |reason| axum::Json(RestoreOutcome::Refused { reason }).into_response();
+    if !app.updates.supervised {
+        return refuse(RestoreRefusal::NotSupervised);
+    }
+    let _busy = app.updates.installing.lock().await;
+    let data_dir = app.data_dir.clone();
+    let mut upload = match crate::device_backup::TemporaryFile::new(&data_dir) {
+        Ok(upload) => upload,
+        Err(error) => {
+            tracing::error!(?error, "could not store an uploaded backup");
+            return refuse(RestoreRefusal::Failed);
+        }
+    };
+    let mut received: u64 = 0;
+    let mut stream = body.into_data_stream();
+    while let Some(chunk) = stream.next().await {
+        let Ok(chunk) = chunk else { return StatusCode::BAD_REQUEST.into_response() };
+        received += chunk.len() as u64;
+        if received > crate::device_backup::MAX_BACKUP_BYTES {
+            return refuse(RestoreRefusal::TooLarge);
+        }
+        if let Err(error) = std::io::Write::write_all(upload.file(), &chunk) {
+            tracing::error!(?error, "could not store an uploaded backup");
+            return refuse(RestoreRefusal::Failed);
+        }
+    }
+    let staged = tokio::task::spawn_blocking(move || {
+        std::io::Seek::rewind(upload.file())
+            .map_err(|error| crate::device_backup::RestoreError::Failed(error.into()))?;
+        crate::device_backup::stage(&data_dir, upload.file())
+    })
+    .await;
+    match staged {
+        Ok(Ok(summary)) => {
+            tracing::info!(
+                songs = summary.songs,
+                sets = summary.sets,
+                "device backup staged; restarting into it"
+            );
+            let restart = app.updates.restart.clone();
+            tokio::spawn(async move {
+                // Let the answer reach the remote first.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                restart.notify_one();
+            });
+            axum::Json(RestoreOutcome::Restored { summary }).into_response()
+        }
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "device backup refused");
+            refuse(error.refusal())
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 

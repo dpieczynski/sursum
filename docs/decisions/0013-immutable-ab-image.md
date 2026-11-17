@@ -103,3 +103,9 @@ depend on the new binary being able to judge itself:
 Verified on a desktop with a systemd user unit: a release that exits at once and one that never
 reports ready both went back by themselves after three starts (about 5 s and 3 × the start
 timeout), and a good release committed after 30 s.
+
+## Amendment (2026-11-17): no USB stick path
+The maintainer decided that application updates from a USB stick are not needed: the remote
+uploads the same signed `.sursum-app` file from any tablet or PC, with the same trial and
+rollback. The image therefore gets no automount or udev rule for updates; the two paths are the
+remote and `just deploy` over SSH.

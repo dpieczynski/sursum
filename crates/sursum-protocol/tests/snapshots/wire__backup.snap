@@ -1,0 +1,20 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: outcomes
+---
+[
+  {
+    "outcome": "restored",
+    "summary": {
+      "created_unix": 1795000000,
+      "build": "0.2.0",
+      "songs": 254,
+      "sets": 12,
+      "pictures": 3
+    }
+  },
+  {
+    "outcome": "refused",
+    "reason": "newer_version"
+  }
+]

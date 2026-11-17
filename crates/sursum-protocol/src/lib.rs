@@ -5,6 +5,7 @@
 //! It must compile for both the native target and `wasm32-unknown-unknown`, which is why it
 //! depends on nothing but `serde`.
 
+mod backup;
 mod editor;
 mod ids;
 mod layout;
@@ -14,6 +15,7 @@ mod slide;
 mod state;
 mod update;
 
+pub use backup::{BackupSummary, RestoreOutcome, RestoreRefusal};
 pub use editor::{
     DraftPreview, ImportReport, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome, SongDraft,
 };

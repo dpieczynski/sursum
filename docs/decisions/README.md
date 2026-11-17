@@ -23,3 +23,4 @@ supersedes the old one instead of editing it.
 | [0015](0015-screen-engine-portability.md) | Screen portability to WPE WebKit (cog): API contract, blocking WPE tests, engine switch in the image |
 | [0016](0016-operator-and-admin-mode.md) | Operator rights by pairing, time-limited admin mode by entering the PIN again |
 | [0017](0017-remote-three-views.md) | The remote: three views (Msza, Zestaw, Ustawienia) around a fixed live area |
+| [0018](0018-whole-device-backup.md) | Whole-device backup (`.sursum-backup`) and restore from the remote, credentials stay on the device |

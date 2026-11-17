@@ -4,6 +4,7 @@
 //! to know where admin mode is switched on.
 
 mod about;
+mod backup;
 mod device;
 mod display;
 mod library;
@@ -40,6 +41,7 @@ pub fn SettingsView(state: RwSignal<Option<RemoteState>>, commands: Commands) ->
             <display::DisplaySection state commands />
             <device::DeviceSection />
             <library::LibrarySection />
+            <backup::BackupSection />
             <Section title=Msg::Devices>
                 <AdminOnly label=Msg::Devices>
                     <DeviceList />

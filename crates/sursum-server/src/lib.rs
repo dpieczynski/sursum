@@ -13,6 +13,7 @@ pub mod bundle;
 pub mod config;
 pub mod db;
 pub mod demo;
+pub mod device_backup;
 pub mod display_power;
 pub mod editor;
 pub mod http;
@@ -69,6 +70,13 @@ impl RunningServer {
 
 /// Starts the server in the background and returns once it listens.
 pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<RunningServer> {
+    match device_backup::apply_staged(&config.data_dir) {
+        Ok(true) => tracing::info!("restored a device backup"),
+        Ok(false) => {}
+        Err(error) => {
+            tracing::error!(?error, "could not restore the staged device backup; keeping the current data");
+        }
+    }
     let database = db::Database::open(&config.data_dir).context("opening the database")?;
     if let Err(error) = database.backup(&config.data_dir, "startup") {
         tracing::error!(?error, "could not write the startup backup");

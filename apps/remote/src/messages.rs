@@ -241,6 +241,20 @@ pub enum Msg {
     UpdateAlreadyCurrent,
     UpdateFailed,
     UpdateOnTrial,
+    SectionBackup,
+    BackupHint,
+    BackupDownload,
+    BackupRestore,
+    BackupRestoreTitle,
+    BackupWarning,
+    BackupConfirm,
+    BackupRestoring,
+    BackupRestored,
+    BackupNotSupervised,
+    BackupNotABackup,
+    BackupNewerVersion,
+    BackupTooLarge,
+    BackupFailed,
 }
 
 /// The Polish text for a message.
@@ -510,7 +524,53 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::UpdateOnTrial => {
             "Nowa wersja jest sprawdzana. Jeśli nie zadziała, urządzenie samo wróci do poprzedniej."
         }
+        Msg::SectionBackup => "Kopia zapasowa urządzenia",
+        Msg::BackupHint => {
+            "Pełna kopia: pieśni z historią zmian, zestawy, logo, obrazy, kalibracja i ustawienia \
+             (bez PIN-u i sparowanych pilotów). Trzymaj ją poza urządzeniem, np. na komputerze."
+        }
+        Msg::BackupDownload => "Pobierz kopię",
+        Msg::BackupRestore => "Przywróć z kopii",
+        Msg::BackupRestoreTitle => "Przywracanie kopii",
+        Msg::BackupWarning => {
+            "Nie przywracaj w czasie mszy. Pieśni, zestawy, logo, obrazy i ustawienia zostaną \
+             zastąpione zawartością kopii; obecne dane zostaną zachowane na urządzeniu. PIN \
+             i sparowane piloty się nie zmienią. Program uruchomi się ponownie, a ekran na kilka \
+             sekund zgaśnie."
+        }
+        Msg::BackupConfirm => "Przywróć",
+        Msg::BackupRestoring => "Przywracanie…",
+        Msg::BackupRestored => "Program uruchamia się ponownie z danymi z kopii. Pilot połączy się sam.",
+        Msg::BackupNotSupervised => "Na tym komputerze nie można przywrócić kopii z pilota.",
+        Msg::BackupNotABackup => "To nie jest kopia zapasowa sursum albo plik jest uszkodzony.",
+        Msg::BackupNewerVersion => "Kopię zrobiła nowsza wersja programu. Najpierw zaktualizuj program.",
+        Msg::BackupTooLarge => "Plik jest za duży, by był kopią tego urządzenia.",
+        Msg::BackupFailed => {
+            "Przywracanie nie powiodło się (np. brak miejsca). Dane urządzenia się nie zmieniły."
+        }
     }
+}
+
+/// Why the server did not restore a backup.
+pub fn restore_refusal(reason: sursum_protocol::RestoreRefusal) -> Msg {
+    use sursum_protocol::RestoreRefusal;
+    match reason {
+        RestoreRefusal::NotSupervised => Msg::BackupNotSupervised,
+        RestoreRefusal::NotABackup => Msg::BackupNotABackup,
+        RestoreRefusal::NewerVersion => Msg::BackupNewerVersion,
+        RestoreRefusal::TooLarge => Msg::BackupTooLarge,
+        RestoreRefusal::Failed => Msg::BackupFailed,
+    }
+}
+
+/// "Kopia z 17.11.2026, 9:05" and "Pieśni: 254, zestawy: 12, obrazy: 3". The date parts come
+/// from the browser (local time) as day, month, year, hour, minute.
+pub fn backup_summary_lines(summary: &sursum_protocol::BackupSummary, date: [u32; 5]) -> [String; 2] {
+    let [day, month, year, hour, minute] = date;
+    [
+        format!("Kopia z {day}.{month:02}.{year}, {hour}:{minute:02}"),
+        format!("Pieśni: {}, zestawy: {}, obrazy: {}", summary.songs, summary.sets, summary.pictures),
+    ]
 }
 
 /// "Tryb administratora włączony – wyłączy się za 14 min".
@@ -644,5 +704,20 @@ mod tests {
         assert_eq!(section_title("c"), "Refren");
         assert_eq!(section_title("c2"), "Refren 2");
         assert_eq!(section_title("Alleluja"), "Alleluja");
+    }
+
+    #[test]
+    fn a_backup_summary_reads_as_a_date_and_counts() {
+        let summary = sursum_protocol::BackupSummary {
+            created_unix: 0,
+            build: "0.1.0".into(),
+            songs: 254,
+            sets: 12,
+            pictures: 3,
+        };
+        assert_eq!(
+            backup_summary_lines(&summary, [7, 3, 2026, 9, 5]),
+            ["Kopia z 7.03.2026, 9:05", "Pieśni: 254, zestawy: 12, obrazy: 3"]
+        );
     }
 }

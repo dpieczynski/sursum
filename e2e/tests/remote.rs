@@ -545,3 +545,33 @@ async fn about_tells_when_an_update_was_undone_and_hides_installing_where_it_can
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a browser; run with `just e2e`"]
+async fn settings_offer_a_whole_device_backup_that_downloads_as_a_zip() -> anyhow::Result<()> {
+    let server = Server::start().await?;
+    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        remote.goto(server.url("/remote/")).await?;
+        remote.query(By::Css("[data-testid=tab-ustawienia]")).first().await?.wait_until().displayed().await?;
+        open_tab(remote, "ustawienia").await?;
+        let link = remote.query(By::Css("[data-testid=backup-download]")).first().await?;
+        link.wait_until().displayed().await?;
+        let name = link.attr("download").await?.unwrap_or_default();
+        anyhow::ensure!(name.starts_with("kopia-sursum-") && name.ends_with(".sursum-backup"), "{name}");
+        // What the link downloads, fetched with this remote's own pairing.
+        let head = remote
+            .execute(
+                "return fetch('/api/backup').then(async (response) => { \
+                   const bytes = new Uint8Array(await response.arrayBuffer()); \
+                   return { status: response.status, magic: String.fromCharCode(bytes[0], bytes[1]), size: bytes.length }; \
+                 });",
+                Vec::new(),
+            )
+            .await?;
+        let head = head.json();
+        anyhow::ensure!(head["status"] == 200 && head["magic"] == "PK", "{head}");
+        anyhow::ensure!(head["size"].as_u64().unwrap_or(0) > 1000, "{head}");
+        Ok(())
+    })
+    .await
+}

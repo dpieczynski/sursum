@@ -52,6 +52,7 @@ manual run on a laptop + tablet and both hardware spikes are still open.
 - [x] Extended OpenSong conventions checked against a real Polish library (see [opensong-format.md](opensong-format.md)); numbered lines still ⚠
 - [x] SQLite schema (migration 2: `songs` with revisions, `song_history`)
 - [x] Backups (`VACUUM INTO`, 14 kept, at startup and before imports), `quick_check` at startup + automatic restore of the newest backup (damaged file kept in `corrupt/`)
+- [x] Whole-device backup (ADR 0018): `.sursum-backup` with the database (without PIN and paired devices) and all pictures, download from any remote, restore in admin mode staged and applied at the next start (device keeps its own credentials, replaced database kept in `backups/`)
 - [x] In-memory search with Polish folding (ł!) and ranking; ~1.2 ms per query over 5000 songs (laptop); remote search panel with Show now / Add / Edit
 - [x] Keyboard-friendly song editor (OpenSong markup, `---` optional break) with server-compiled preview drawn by `sursum-slide`; revision history and optimistic locking (conflict detection)
 
@@ -62,7 +63,7 @@ without a mouse.
 
 ## M3 — Sets, live editing, pairing, shared library
 
-- [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items), the parish logo for the LOGO button (admin upload, drawn inside the content area, pre-decoded), pictures (content-addressed uploads in `<data>/assets/`, PNG/JPEG/WebP, decoded before the fade) and pauses (blank items); assets are not yet part of backups or `.sursum` files
+- [x] Persistent sets (create, activate), live editing (move, hold-to-remove, undo), frozen program with ghost position, "Show now", announcements (text items), the parish logo for the LOGO button (admin upload, drawn inside the content area, pre-decoded), pictures (content-addressed uploads in `<data>/assets/`, PNG/JPEG/WebP, decoded before the fade) and pauses (blank items); pictures travel in whole-device backups (ADR 0018), not in `.sursum` files
 - [x] Remote: two-column landscape layout (previews left, library/set right, controls bottom)
 - [x] Remote: "#" keypad to jump to item N of the set (plan §7), no system keyboard needed
 - [x] OpenSong set import (folder and ZIP): songs by path/file name/title, `presentation` override, custom and scripture groups as text items, image groups reported; re-import replaces the set
@@ -95,15 +96,15 @@ no data loss; the pillar zone can be set from the remote in < 2 minutes.
 - [ ] Image build in CI on arm64 ⚠ (runner availability, privileged container); artifacts `.img` and `.update.tar.zst`
 - [x] Signed application bundles, core (ADR 0013 amendment): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
 - [x] Bundles on the device, server side (ADR 0013 second amendment): trial with a start-counting guard run from the previous release (`ExecStartPre`), automatic rollback incl. the database copy when the schema changed, self-commit after 30 s healthy, upload from the remote (admin, "O programie") with restart into the new release, outcome shown in the remote, `just deploy <host> <version>`; checked with a systemd user unit (crash and hang both roll back)
-- [ ] Bundles on the device, still open: unit and paths in the image (first release shipped with the image), USB stick, `just deploy` against a real Pi
+- [ ] Bundles on the device, still open: unit and paths in the image (first release shipped with the image), `just deploy` against a real Pi (no USB stick path: ADR 0013 amendment of 2026-11-17)
 - [ ] `kiosk.engine = chromium | cog` in the `sursum-kiosk` layer; weekly CI build of the cog image variant
 - [ ] PoE evaluation
 - [x] Display power, PJLink part (ADR 0012 amendment): codec checked against the JBMIA 1.04 example, background task with polling, state indicator, "on" tap and 1.5 s standby hold in the remote, tested against a fake projector (integration + e2e)
 - [ ] Display power, CEC part: `cec_linux` backend, udev rule for `/dev/cec0` (needs the hardware spike)
 
 **Done when:** a device flashed from the CI image needs no manual steps beyond configuration (PIN,
-address, screen profile) and `apt install` on it fails (read-only root); app updates via browser
-and USB work, a deliberately broken bundle rolls back by itself with the matching database, and a
+address, screen profile) and `apt install` on it fails (read-only root); app updates via the browser
+work, a deliberately broken bundle rolls back by itself with the matching database, and a
 bundle with a bad signature is rejected; power-on shows only black/logo then content (HDMI
 capture); 100 power cuts without DB damage, logo + position after each boot; late projector power-on and HDMI replug pass; killed
 Chromium/server recovers in < 5 s; Tulce pillar zone calibrated on site and text readable from the

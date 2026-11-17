@@ -147,8 +147,10 @@ spróbuj za chwilę”). To normalne.
   razu następna pozycja. Dotyczy wszystkich pilotów.
 - **To urządzenie**: strona przycisków (prawa lub lewa), wibracja, **Pełny ekran** (chowa paski
   przeglądarki), **Pedał i klawisze**.
-- **Baza pieśni**: **Eksport bazy** (kopia zapasowa), **Scal bazę z pliku** 🔒,
-  **Import z OpenSong (ZIP)** 🔒.
+- **Baza pieśni**: **Eksport bazy** (same pieśni, do wymiany z drugim kościołem), **Scal bazę
+  z pliku** 🔒, **Import z OpenSong (ZIP)** 🔒.
+- **Kopia zapasowa urządzenia**: **Pobierz kopię** (wszystko: pieśni, zestawy, logo, obrazy,
+  kalibracja i ustawienia) i **Przywróć z kopii** 🔒.
 - **Urządzenia** 🔒 i **O programie** (wersja, **Zainstaluj aktualizację** 🔒).
 
 ### Dla administratora (🔒)
@@ -179,6 +181,14 @@ przyciskiem **Zakończ tryb administratora**.
   pół minuty jest „na próbę”: jeśli się nie uruchomi albo zawiesza, urządzenie samo wraca do
   poprzedniej wersji, a w **O programie** pojawia się informacja, że aktualizacja nie zadziałała.
   Plik bez właściwego podpisu jest odrzucany i nic się nie zmienia.
+- **Przywróć z kopii** (w **Kopia zapasowa urządzenia**): wybierz plik `.sursum-backup` i
+  potwierdź. **Nigdy w czasie mszy.** Wszystkie pieśni, zestawy, logo, obrazy i ustawienia
+  zostają zastąpione zawartością kopii; program uruchamia się ponownie, a ekran na kilka sekund
+  gaśnie. PIN i sparowane piloty się nie zmieniają, więc tablet, z którego przywracasz, zostaje
+  sparowany. Dotychczasowe dane urządzenie zachowuje u siebie (kopia „before-restore”), na
+  wypadek pomyłki. Kopię warto pobierać co jakiś czas i trzymać poza urządzeniem, np. na
+  komputerze w kancelarii: po awarii karty wystarczy sparować tablet z nowym urządzeniem i
+  przywrócić kopię.
 - **Usuń zestaw** (przytrzymaj, w oknie **Zmień zestaw**): zaraz potem można go przywrócić
   przyciskiem **Cofnij** w komunikacie na dole. Nie da się usunąć zestawu, którego pozycja jest
   właśnie na ekranie.

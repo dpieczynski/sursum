@@ -204,6 +204,76 @@ impl Database {
         Ok(target)
     }
 
+    /// Writes a consistent copy of the database in `data_dir` to `target` for a device backup,
+    /// without what lets anyone in (the PIN hash and the paired devices): a backup file may be
+    /// carried around on a stick, and restoring keeps the device's own credentials anyway.
+    /// Works through a plain connection, so it is safe while the server runs.
+    pub(crate) fn copy_without_credentials(data_dir: &Path, target: &Path) -> anyhow::Result<Contents> {
+        let live = Connection::open(data_dir.join(DATABASE_FILE))?;
+        live.busy_timeout(std::time::Duration::from_secs(5))?;
+        live.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
+        drop(live);
+        let copy = Connection::open(target)?;
+        copy.execute_batch(&format!(
+            "DELETE FROM devices; DELETE FROM settings WHERE key = '{}'; VACUUM;",
+            crate::auth::PIN_SETTING
+        ))?;
+        contents(&copy)
+    }
+
+    /// Checks that `path` is a sursum database this program can open (without changing it) and
+    /// says what it holds.
+    pub(crate) fn inspect(path: &Path) -> Result<Contents, Unreadable> {
+        let damaged = |_| Unreadable::Damaged;
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(damaged)?;
+        let application: i64 =
+            connection.pragma_query_value(None, "application_id", |row| row.get(0)).map_err(damaged)?;
+        let version: i64 =
+            connection.pragma_query_value(None, "user_version", |row| row.get(0)).map_err(damaged)?;
+        if application != APPLICATION_ID || version < 1 {
+            return Err(Unreadable::Damaged);
+        }
+        if version > Self::supported_schema() {
+            return Err(Unreadable::Newer);
+        }
+        let check: String =
+            connection.query_row("PRAGMA integrity_check", [], |row| row.get(0)).map_err(damaged)?;
+        if check != "ok" {
+            return Err(Unreadable::Damaged);
+        }
+        contents(&connection).map_err(|_| Unreadable::Damaged)
+    }
+
+    /// Replaces this database's PIN and paired devices with those of the database at `live`
+    /// (if there is one), so restoring a backup never locks out the remote that restored it.
+    pub(crate) fn adopt_credentials(&mut self, live: &Path) -> anyhow::Result<()> {
+        let transaction = self.connection.transaction()?;
+        transaction.execute("DELETE FROM devices", [])?;
+        transaction.execute("DELETE FROM settings WHERE key = ?1", [crate::auth::PIN_SETTING])?;
+        transaction.commit()?;
+        if !live.exists() {
+            return Ok(());
+        }
+        self.connection.execute("ATTACH DATABASE ?1 AS live", [live.to_string_lossy()])?;
+        let copied = self.connection.execute_batch(&format!(
+            "BEGIN;
+             INSERT INTO main.devices (id, name, token_hash, created_at, revoked_at)
+                 SELECT id, name, token_hash, created_at, revoked_at FROM live.devices;
+             INSERT INTO main.settings (key, json) SELECT key, json FROM live.settings WHERE key = '{}';
+             COMMIT;",
+            crate::auth::PIN_SETTING
+        ));
+        if copied.is_err() {
+            let _ = self.connection.execute_batch("ROLLBACK");
+        }
+        self.connection.execute("DETACH DATABASE live", [])?;
+        copied?;
+        // Fold the write-ahead log into the file, which is about to be moved into place.
+        self.connection.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+        Ok(())
+    }
+
     /// An in-memory database, for tests.
     pub fn in_memory() -> anyhow::Result<Self> {
         Self::configure(Connection::open_in_memory()?)
@@ -517,6 +587,34 @@ impl Database {
         )?;
         Ok(())
     }
+}
+
+/// What a database holds, for the summary of a device backup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Contents {
+    pub songs: u32,
+    pub sets: u32,
+}
+
+/// Why a database file from a backup cannot be used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum Unreadable {
+    #[error("not a sursum database, or damaged")]
+    Damaged,
+    #[error("made by a newer version of the program")]
+    Newer,
+}
+
+fn contents(connection: &Connection) -> anyhow::Result<Contents> {
+    let count = |table: &str| -> anyhow::Result<u32> {
+        let count: i64 = connection.query_row(
+            &format!("SELECT count(*) FROM {table} WHERE deleted_at IS NULL"),
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(u32::try_from(count)?)
+    };
+    Ok(Contents { songs: count("songs")?, sets: count("sets")? })
 }
 
 /// Backups sorted oldest first (names start with a zero-padded timestamp).

@@ -203,3 +203,19 @@ fn update() {
     ];
     insta::assert_json_snapshot!((status, LastUpdate::Committed { version: "0.2.0".into() }, outcomes));
 }
+
+#[test]
+fn backup() {
+    let summary = BackupSummary {
+        created_unix: 1_795_000_000,
+        build: "0.2.0".into(),
+        songs: 254,
+        sets: 12,
+        pictures: 3,
+    };
+    let outcomes = [
+        RestoreOutcome::Restored { summary },
+        RestoreOutcome::Refused { reason: RestoreRefusal::NewerVersion },
+    ];
+    insta::assert_json_snapshot!(outcomes);
+}

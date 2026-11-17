@@ -200,7 +200,8 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     }
 }
 
-fn reload() {
+/// Reloads the page (a new server build, or data replaced from a backup).
+pub(crate) fn reload() {
     if let Some(window) = web_sys::window() {
         let _ = window.location().reload();
     }
