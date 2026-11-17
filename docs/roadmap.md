@@ -140,9 +140,34 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] Admin mode counts down in the remote (`SessionInfo.admin_remaining_s`, plan §8.5)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
 
+## M7 — Offline system updates (next after the first image boots)
+
+Application bundles (`.sursum-app`) update only the server binary with its embedded pages; the
+kiosk unit, Chromium policies, cursors, `sursum.service`, Chromium, cage and the kernel are part of
+the read-only system. Until system updates exist, changing any of them on an imaged device means
+reflashing (with a device backup first). Priority right after the first image works on the Pi.
+
+- [ ] Decide the mechanism (new ADR): rpi-image-gen's own building blocks (`sursum.update.tar.zst`
+  with sparse `boot`/`system` images, `/dev/disk/by-slot/{active,other}`, `rpi-slot-tryboot`) with
+  a small applier of ours, or **RAUC** (Debian trixie) on the same A/B layout. The only ready
+  applier in rpi-image-gen is Raspberry Pi Connect's remote update, which needs the cloud: not an
+  option offline
+- [ ] Upload from the remote like application updates (admin, same signing key or a second one),
+  written to the inactive slot, trial boot through `tryboot`, commit only after the server and the
+  kiosk are healthy, otherwise the firmware falls back to the old slot by itself
+- [ ] State shared by both slots (`/var/lib/sursum`) must stay readable by the older slot after a
+  rollback (rpi-image-gen warns about this); application releases already handle their own
+  database rollback
+- [ ] `just image` also publishes the update bundle; the release workflow attaches it once images
+  build in CI
+
+**Done when:** a changed kiosk unit reaches an imaged Pi from the remote without reflashing, data
+and pairing survive, and a deliberately broken system update boots back into the old slot by
+itself.
+
 ## Later
 
-M6 optional HTTPS (device CA) + PWA + wake lock · M7 offline A/B **system** updates (rpi-image-gen
-bundle or RAUC, trial boot, rollback) and an x86_64 mini-PC image (`mkosi` + `systemd-sysupdate`) ·
+M6 optional HTTPS (device CA) + PWA + wake lock · an x86_64 mini-PC image (`mkosi` +
+`systemd-sysupdate`) ·
 M8 liturgical calendar/readings (licensing!) · M9 video backgrounds (HEVC on Pi 5) · M10 multiple
 screens · M11 internet sync · iPad (WebKit) support. **MIDI: dropped** (ADR 0002).
