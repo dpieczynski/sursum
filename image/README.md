@@ -34,13 +34,16 @@ Results land in `target/image/work/`: the image `sursum.img` (and its zstd-compr
 and manifest in `deploy-*/`) and the A/B update bundle `sursum.update.tar.zst` for later system
 updates (M7).
 
-Flash `sursum.img` with Raspberry Pi Imager ("Use custom") or `dd`. The image is about 7.5 GB, so
-use a 16 GB card or larger.
+Flash `sursum.img` with Raspberry Pi Imager ("Use custom", and answer "No" to OS customisation)
+or `dd`. The image is about 4 GB; on first boot the data partition grows to fill the card, so use a
+16 GB card or larger. The image is for the Raspberry Pi 5 only (a Pi 4 blinks seven times: no
+kernel for it).
 
 ## What the device looks like
 
-- **Partitions**: `bootconfig`, two boot slots, two read-only system slots (erofs), and
-  `/persistent` (ext4, 4 GB, does not grow). Everything writable is on `/persistent`; `/var` is
+- **Partitions**: `bootconfig`, two boot slots, two read-only system slots (erofs, 1500M each),
+  and `/persistent` (ext4), which `sursum-grow-persistent` grows to fill the card before its
+  first mount. Everything writable is on `/persistent`; `/var` is
   per slot, and `/var/lib/sursum` is shared by both slots, so the database, pictures and
   application releases survive a system update.
 - **First boot**: `/var/lib/sursum` is copied from the image (release on trial, committed after

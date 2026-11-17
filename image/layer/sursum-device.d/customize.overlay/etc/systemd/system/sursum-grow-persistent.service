@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Grows the persistent partition and file system to fill the card (the image ships them small),
+# before they are checked and mounted; a no-op once they fill the card. See grow-persistent.
+[Unit]
+Description=Grow the persistent partition to fill the card
+DefaultDependencies=no
+Requires=dev-disk-by\x2dslot-persistent.device
+After=dev-disk-by\x2dslot-persistent.device
+Before=systemd-fsck@dev-disk-by\x2dslot-persistent.service persistent.mount
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/sursum/grow-persistent /dev/disk/by-slot/persistent
+StandardOutput=journal+console
+
+[Install]
+WantedBy=persistent.mount

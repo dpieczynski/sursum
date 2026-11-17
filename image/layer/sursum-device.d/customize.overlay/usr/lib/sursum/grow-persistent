@@ -1,0 +1,44 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Grows the persistent partition (the last one on the card) and its ext4 file system to fill the
+# card, so the image ships a small data partition and every card size is used in full.
+# rpi-image-gen does not do this for images flashed with Raspberry Pi Imager.
+#
+#   grow-persistent <partition device>   (the unit passes /dev/disk/by-slot/persistent)
+#
+# Runs at every boot BEFORE /persistent is checked and mounted (sursum-grow-persistent.service):
+# rewriting the partition table under mounted file systems made udev re-probe the disk and
+# systemd stop everything bound to it (tried on a Pi 5, 2026-11-17). Unmounted, it is safe. Does
+# nothing once partition and file system fill the card; a power cut half way is finished on the
+# next boot (each step checks what is still to do).
+set -eu
+
+part=$(readlink -f "${1:?usage: grow-persistent <partition device>}")
+name=$(basename "$part")
+disk=/dev/$(lsblk -n -o PKNAME "$part")
+number=$(cat "/sys/class/block/$name/partition")
+mib=$(( 1024 * 1024 ))
+
+# Partition: sizes in 512-byte sectors; leave GPT's backup header and a little slack alone.
+disk_size=$(cat "/sys/class/block/$(basename "$disk")/size")
+part_end=$(( $(cat "/sys/class/block/$name/start") + $(cat "/sys/class/block/$name/size") ))
+if [ $(( (disk_size - part_end) * 512 )) -gt $(( 16 * mib )) ]; then
+    echo "growing partition $part to the end of $disk"
+    # The image's backup GPT header sits where the image ended; move it to the card's end.
+    sfdisk --no-reread --no-tell-kernel --relocate gpt-bak-std "$disk"
+    echo ', +' | sfdisk --no-reread --no-tell-kernel --quiet -N "$number" "$disk"
+    # Tell the kernel the new size of this one (unmounted) partition only.
+    partx --update --nr "$number" "$disk"
+    udevadm settle
+fi
+
+# File system: grow it to the partition if it is smaller (also after a power cut above).
+part_bytes=$(blockdev --getsize64 "$part")
+blocks=$(dumpe2fs -h "$part" 2>/dev/null | sed -n 's/^Block count: *//p')
+block_size=$(dumpe2fs -h "$part" 2>/dev/null | sed -n 's/^Block size: *//p')
+if [ $(( part_bytes - blocks * block_size )) -gt $(( 16 * mib )) ]; then
+    echo "growing the file system on $part to $(( part_bytes / mib )) MiB"
+    # resize2fs wants a freshly checked file system; 0 and 1 mean clean or fixed.
+    e2fsck -f -p "$part" || [ $? -le 1 ]
+    resize2fs "$part"
+fi

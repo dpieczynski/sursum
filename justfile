@@ -120,7 +120,9 @@ image version: (app-bundle version)
     test -f "$key" || { echo "no SSH public key at $key (set SURSUM_SSH_PUBKEY)" >&2; exit 1; }
     mkdir -p target/image/work
     cp "$key" target/image/admin.pub
-    podman build -q -t localhost/sursum-image-builder \
+    # The build host runs natively (rpi-image-gen emulates only the arm64 root file system), so
+    # pin it to this machine's architecture: an arm64 base image pulled earlier must not win.
+    podman build -q -t localhost/sursum-image-builder --platform "linux/$(podman info --format '{{{{.Host.Arch}}')" \
         --build-arg RIG_COMMIT="$(cut -d' ' -f2 image/rpi-image-gen.ref)" -f image/build.Containerfile image
     podman run --rm --privileged -v "$PWD:/src" localhost/sursum-image-builder \
         /opt/rpi-image-gen/rpi-image-gen build -S /src/image -c sursum.yaml -B /src/target/image/work -- \

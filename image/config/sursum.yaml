@@ -17,9 +17,9 @@ image:
   boot_part_size: 128M
   # cage, Wayland and Chromium need far more than the base image's 512M.
   system_part_size: 1500M
-  # The data partition does not grow on first boot, so this is its final size: database and
-  # backups, up to 2 GB of pictures, application releases and a 64M journal.
-  data_part_size: 4G
+  # Small in the image: sursum-grow-persistent grows it to fill the card before its first mount
+  # (rpi-image-gen itself does not). Holds the first release, the journal and both slots' /var.
+  data_part_size: 512M
 
 locale:
   # Both churches are in Poland; the base default is Europe/London.

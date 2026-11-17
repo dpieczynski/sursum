@@ -3,7 +3,8 @@
 # X-Env-Layer-Version: 0.1.0
 # X-Env-Layer-Category: app
 # X-Env-Layer-Desc: The sursum server and the device around it (ADR 0013): the server user and
-#  unit, the first application release, /var/lib/sursum shared by both system slots, mDNS
+#  unit, the first application release, /var/lib/sursum shared by both system slots, the
+#  persistent partition grown to fill the card, mDNS
 #  (sursum.local), a local-network-only firewall, the hardware watchdog, a small persistent
 #  journal, a silent black boot and Ethernet only. Hooks run in the image source directory
 #  (image/), so ../deploy is the repository's deploy folder: one copy of every unit.
@@ -23,6 +24,9 @@ mmdebstrap:
   packages:
     - avahi-daemon
     - nftables
+    # sfdisk, partx and resize2fs for growing /persistent to fill the card (not in minbase).
+    - fdisk
+    - e2fsprogs
   customize-hooks:
     # The server's user owns /var/lib/sursum (a system user: /etc is read-only on the device).
     - chroot $1 useradd --system --home-dir /var/lib/sursum --shell /usr/sbin/nologin sursum
@@ -43,4 +47,4 @@ mmdebstrap:
         bundle install /tmp/sursum-first-release/first.sursum-app
       chroot $1 chown -R sursum:sursum /var/lib/sursum
       rm -rf "$work"
-    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables
+    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables sursum-grow-persistent

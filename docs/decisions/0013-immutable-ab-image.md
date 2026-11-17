@@ -114,8 +114,10 @@ remote and `just deploy` over SSH.
 `image/` holds the build (see `image/README.md`), checked against rpi-image-gen v2.9.0 (pinned in
 `image/rpi-image-gen.ref`):
 - `trixie-minbase-ab` + `image-rota` as decided; system slots 1500M (cage, Wayland and Chromium do
-  not fit the base 512M), data partition 4G. rpi-image-gen does not grow the data partition on
-  first boot, so 4G is final for now (16 GB cards and larger).
+  not fit the base 512M), data partition 512M in the image. rpi-image-gen does not grow it, so
+  `sursum-grow-persistent` does, at every boot before `/persistent` is checked and mounted
+  (`sfdisk`, `partx`, `e2fsck`, `resize2fs`; a no-op once it fills the card). Growing it while
+  mounted was tried first and made systemd stop everything bound to the re-probed disk.
 - Two layers: `sursum-device` (server user and unit, first release, slot-shared `/var/lib/sursum`,
   Avahi, nftables, watchdog, 64M journal, silent boot, Ethernet only) and `sursum-kiosk`. Units,
   Chromium policies and the cursor generator are installed from `deploy/` (one copy, shared with
