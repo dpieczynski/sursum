@@ -110,7 +110,8 @@ pub fn TopBar(
             >
                 <span
                     class="status-dot"
-                    class:connected=connected
+                    class:offline=move || !connected()
+                    class:live=move || connected() && content()
                     data-testid=move || if connected() { "status-connected" } else { "status-offline" }
                 ></span>
                 <span class="status-chip-text long">{chip_text}</span>

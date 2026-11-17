@@ -174,15 +174,23 @@
 .status-chip-text.short {
   display: none;
 }
+/* One meaning per colour, as everywhere in the remote: green is what the congregation sees.
+   Hollow grey: black, logo, a gap or nothing on screen. Red: no connection (the red banner says
+   more). A working connection needs no sign of its own. */
 .status-dot {
   flex: none;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--danger);
+  border: 2px solid var(--muted);
 }
-.status-dot.connected {
+.status-dot.live {
+  border-color: var(--live);
   background: var(--live);
+}
+.status-dot.offline {
+  border-color: var(--danger);
+  background: var(--danger);
 }
 @media (max-width: 599px) {
   .tab {

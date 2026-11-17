@@ -157,6 +157,11 @@ async fn black_turns_into_show_text_and_a_tapped_item_lifts_it() -> anyhow::Resu
         })
         .await
         .context("the button must offer to show the text again")?;
+        // Green means "the congregation sees this": not while black.
+        anyhow::ensure!(
+            remote.find(By::Css("[data-testid=screen-status] .status-dot.live")).await.is_err(),
+            "the status dot stays green over black"
+        );
         // "Dalej" moves on under black…
         let key = attribute(screen, SCREEN_ROOT, "data-slide-key").await;
         remote.find(By::Css("[data-testid=next]")).await?.click().await?;
@@ -172,6 +177,11 @@ async fn black_turns_into_show_text_and_a_tapped_item_lifts_it() -> anyhow::Resu
         })
         .await
         .context("tapping an item must lift black")?;
+        wait_until(Duration::from_secs(5), || async {
+            remote.find(By::Css("[data-testid=screen-status] .status-dot.live")).await.is_ok()
+        })
+        .await
+        .context("the status dot must turn green when the text is back")?;
         Ok(())
     })
     .await

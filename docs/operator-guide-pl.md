@@ -20,9 +20,11 @@ kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia 
    się okno **Ekran** z przyciskiem **Włącz ekran**, jeśli sursum steruje zasilaniem projektora lub
    monitora. Projektor rozgrzewa się do minuty. Jeśli zasilanie nie jest skonfigurowane, włącz
    projektor jego własnym pilotem.
-2. **Otwórz pilota** (zakładka w przeglądarce lub skrót na ekranie tabletu). Zielona kropka obok
-   napisu stanu oznacza połączenie. Za pierwszym razem pilot poprosi o **PIN** i nazwę urządzenia,
-   np. „Tablet organisty”; potem pamięta połączenie.
+2. **Otwórz pilota** (zakładka w przeglądarce lub skrót na ekranie tabletu). Kropka obok
+   napisu stanu w prawym górnym rogu mówi, co widzą wierni: **zielona** – tekst lub obraz,
+   **szara pusta** – ekran wygaszony, logo albo przerwa, **czerwona** – pilot nie ma połączenia.
+   Za pierwszym razem pilot poprosi o **PIN** i nazwę urządzenia, np. „Tablet organisty”; potem
+   pamięta połączenie.
 3. **Przygotuj zestaw** w zakładce **Zestaw**:
    - **Zmień zestaw** pokazuje zestawy od najnowszego i pozwala utworzyć **Nowy zestaw**;
      **Zmień nazwę** poprawia nazwę bieżącego. **Usuń zestaw** trzeba przytrzymać; zaraz potem

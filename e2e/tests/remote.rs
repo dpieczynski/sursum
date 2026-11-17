@@ -31,7 +31,7 @@ async fn buttons_on_the_remote_drive_the_screen() -> anyhow::Result<()> {
             next.wait_until().clickable().await?;
             // Wait for the connection before clicking.
             wait_until(Duration::from_secs(10), || async {
-                remote.find(By::Css(".status-dot.connected")).await.is_ok()
+                remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
             })
             .await?;
             next.click().await?;
@@ -286,7 +286,7 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         remote.find(By::Css(".pairing button[type=submit]")).await?.click().await?;
         // After pairing the page reloads into the remote, which connects.
         wait_until(Duration::from_secs(10), || async {
-            remote.find(By::Css(".status-dot.connected")).await.is_ok()
+            remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
         })
         .await?;
         // An operator sees no setup tools until admin mode is unlocked with the PIN again.
@@ -337,7 +337,7 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
         form.find(By::Css("button[type=submit]")).await?.click().await?;
         // The page reloads into the remote, already in admin mode to go on with the setup.
         wait_until(Duration::from_secs(10), || async {
-            remote.find(By::Css(".status-dot.connected")).await.is_ok()
+            remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
         })
         .await?;
         open_tab(remote, "ustawienia").await?;
@@ -364,7 +364,7 @@ async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> any
         with_engine(Browser::Chromium, 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             wait_until(Duration::from_secs(10), || async {
-                remote.find(By::Css(".status-dot.connected")).await.is_ok()
+                remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
             })
             .await?;
             // Calibration is in Ustawienia and asks first ("only outside Mass").
@@ -470,7 +470,7 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
         with_engine(Browser::Chromium, 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             wait_until(Duration::from_secs(10), || async {
-                remote.find(By::Css(".status-dot.connected")).await.is_ok()
+                remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
             })
             .await?;
             // The default page-turner key moves on.
