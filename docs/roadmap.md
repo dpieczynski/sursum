@@ -29,6 +29,7 @@ test passes in Chromium and WPE; CI is green.
 
 - [x] `sursum-protocol`: messages and snapshots with `insta` JSON snapshots
 - [x] core: song model, slide compiler, program state machine (next/prev/goto/overlay, Stale rule, frozen deck), PD + synthetic demo songs
+- [x] Public-domain starter library: 215 Polish and Latin hymn texts from Mioduszewski's *Śpiewnik kościelny* (1838–1849) and *Pastorałki i kolędy* (1843) in `library/public-domain/` (OpenSong, license in `<copyright>` and hidden `;` comments, `LICENSES.md`, `REJECTED.md`), `just library-zip` for the remote import; doubtful readings listed for a human check
 - [x] core: `content_region` (exclusion zones) and `ScreenLayout` in the snapshot; profile from `config.toml`
 - [x] server: state actor, `watch` fan-out, `/ws/screen`, `/ws/remote`, Origin check, local-network guard, `runtime_state` with `boot_id` (migrations hand-rolled with `PRAGMA user_version`: `rusqlite_migration` 2.7 requires rusqlite 0.41)
 - [x] `sursum-slide`: `Stage`, `LayeredStage` (A/B + overlay + masks), `fit_deck` (pure algorithm + DOM measuring), local fonts

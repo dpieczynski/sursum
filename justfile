@@ -92,6 +92,13 @@ lint:
 cross-pi: build-web
     cargo zigbuild --release -p sursum-server --target aarch64-unknown-linux-gnu.2.36
 
+# ZIP of the public-domain hymn library (library/public-domain) for Ustawienia → Import z OpenSong.
+library-zip:
+    rm -f target/biblioteka-domena-publiczna.zip
+    mkdir -p target
+    cd library/public-domain && zip -qr -X ../../target/biblioteka-domena-publiczna.zip Songs
+    @echo "target/biblioteka-domena-publiczna.zip"
+
 # Signed application bundle for the Pi (ADR 0013): needs SURSUM_BUNDLE_KEY (public, compiled in)
 # and SURSUM_BUNDLE_SIGNING_KEY (path of the secret key file, never in the repository).
 app-bundle version: cross-pi
