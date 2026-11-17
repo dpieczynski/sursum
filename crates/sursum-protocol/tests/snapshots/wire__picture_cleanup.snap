@@ -1,0 +1,13 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: "(PictureCleanupRequest { dry_run: true }, PictureCleanup\n{ pictures: 12, bytes: 36_700_160 })"
+---
+[
+  {
+    "dry_run": true
+  },
+  {
+    "pictures": 12,
+    "bytes": 36700160
+  }
+]

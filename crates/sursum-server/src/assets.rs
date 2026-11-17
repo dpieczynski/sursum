@@ -172,6 +172,37 @@ pub fn list(data_dir: &Path) -> std::io::Result<Vec<(String, PathBuf)>> {
     Ok(pictures)
 }
 
+/// Uploads younger than this are never removed as unused: the remote adds a picture to the set
+/// right after uploading it, and a clean-up in between must not take it away.
+pub const FRESH_UPLOAD: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// Removes stored pictures that are not in `in_use` and older than `keep_newer_than` (or, with
+/// `dry_run`, only counts them). Pictures are only ever removed on request (ADR 0018).
+pub fn remove_unused(
+    data_dir: &Path,
+    in_use: &std::collections::HashSet<AssetId>,
+    keep_newer_than: std::time::Duration,
+    dry_run: bool,
+) -> std::io::Result<sursum_protocol::PictureCleanup> {
+    let mut cleanup = sursum_protocol::PictureCleanup { pictures: 0, bytes: 0 };
+    for (id, path) in list(data_dir)? {
+        if in_use.contains(&AssetId::from(id.as_str())) {
+            continue;
+        }
+        let metadata = std::fs::metadata(&path)?;
+        let age = metadata.modified().ok().and_then(|time| time.elapsed().ok());
+        if age.is_none_or(|age| age < keep_newer_than) {
+            continue;
+        }
+        if !dry_run {
+            std::fs::remove_file(&path)?;
+        }
+        cleanup.pictures += 1;
+        cleanup.bytes += metadata.len();
+    }
+    Ok(cleanup)
+}
+
 /// True if a picture with this id is stored.
 pub fn exists(data_dir: &Path, id: &AssetId) -> bool {
     locate(data_dir, id.as_str()).is_some()
@@ -206,5 +237,23 @@ mod tests {
         let webp = b"RIFF\x10\x00\x00\x00WEBPVP8 ";
         assert!(store(dir.path(), webp).unwrap().as_str().ends_with(".webp"));
         assert!(store(dir.path(), &[0xff, 0xd8, 0xff, 0xe0]).unwrap().as_str().ends_with(".jpg"));
+    }
+
+    #[test]
+    fn only_unused_pictures_that_are_not_fresh_uploads_are_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let used = store(dir.path(), PNG).unwrap();
+        let unused = store(dir.path(), b"\x89PNG\r\n\x1a\nleft behind").unwrap();
+        let in_use = std::collections::HashSet::from([used.clone()]);
+        let fresh = remove_unused(dir.path(), &in_use, FRESH_UPLOAD, false).unwrap();
+        assert_eq!(fresh.pictures, 0, "a fresh upload may be about to join a set");
+
+        let counted = remove_unused(dir.path(), &in_use, std::time::Duration::ZERO, true).unwrap();
+        assert_eq!(counted, sursum_protocol::PictureCleanup { pictures: 1, bytes: 19 });
+        assert!(exists(dir.path(), &unused), "a dry run removes nothing");
+        let removed = remove_unused(dir.path(), &in_use, std::time::Duration::ZERO, false).unwrap();
+        assert_eq!(removed, counted);
+        assert!(!exists(dir.path(), &unused));
+        assert!(exists(dir.path(), &used));
     }
 }

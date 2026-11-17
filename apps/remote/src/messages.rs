@@ -255,6 +255,13 @@ pub enum Msg {
     BackupNewerVersion,
     BackupTooLarge,
     BackupFailed,
+    PictureCleanup,
+    PictureCleanupTitle,
+    PictureCleanupChecking,
+    PictureCleanupNone,
+    PictureCleanupKept,
+    PictureCleanupConfirm,
+    PictureCleanupFailed,
 }
 
 /// The Polish text for a message.
@@ -524,7 +531,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::UpdateOnTrial => {
             "Nowa wersja jest sprawdzana. Jeśli nie zadziała, urządzenie samo wróci do poprzedniej."
         }
-        Msg::SectionBackup => "Kopia zapasowa urządzenia",
+        Msg::SectionBackup => "Dane urządzenia",
         Msg::BackupHint => {
             "Pełna kopia: pieśni z historią zmian, zestawy, logo, obrazy, kalibracja i ustawienia \
              (bez PIN-u i sparowanych pilotów). Trzymaj ją poza urządzeniem, np. na komputerze."
@@ -548,6 +555,16 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::BackupFailed => {
             "Przywracanie nie powiodło się (np. brak miejsca). Dane urządzenia się nie zmieniły."
         }
+        Msg::PictureCleanup => "Usuń nieużywane obrazy",
+        Msg::PictureCleanupTitle => "Nieużywane obrazy",
+        Msg::PictureCleanupChecking => "Sprawdzanie…",
+        Msg::PictureCleanupNone => "Nie ma nieużywanych obrazów.",
+        Msg::PictureCleanupKept => {
+            "Obrazy z zestawów, logo, to, co jest na ekranie, i obrazy przesłane w ostatnich \
+             10 minutach zostają. Usuniętych obrazów nie da się przywrócić (chyba że z kopii)."
+        }
+        Msg::PictureCleanupConfirm => "Usuń obrazy",
+        Msg::PictureCleanupFailed => "Nie udało się sprawdzić ani usunąć obrazów.",
     }
 }
 
@@ -561,6 +578,14 @@ pub fn restore_refusal(reason: sursum_protocol::RestoreRefusal) -> Msg {
         RestoreRefusal::TooLarge => Msg::BackupTooLarge,
         RestoreRefusal::Failed => Msg::BackupFailed,
     }
+}
+
+/// "Nieużywane obrazy: 12 (35,0 MB)" before removing, "Usunięto obrazy: 12 (35,0 MB)" after.
+pub fn picture_cleanup_line(cleanup: &sursum_protocol::PictureCleanup, removed: bool) -> String {
+    let what = if removed { "Usunięto obrazy" } else { "Nieużywane obrazy" };
+    #[allow(clippy::cast_precision_loss, reason = "one decimal of megabytes is enough")]
+    let megabytes = cleanup.bytes as f64 / (1024.0 * 1024.0);
+    format!("{what}: {} ({} MB)", cleanup.pictures, format!("{megabytes:.1}").replace('.', ","))
 }
 
 /// "Kopia z 17.11.2026, 9:05" and "Pieśni: 254, zestawy: 12, obrazy: 3". The date parts come
@@ -719,5 +744,12 @@ mod tests {
             backup_summary_lines(&summary, [7, 3, 2026, 9, 5]),
             ["Kopia z 7.03.2026, 9:05", "Pieśni: 254, zestawy: 12, obrazy: 3"]
         );
+    }
+
+    #[test]
+    fn a_picture_cleanup_reads_in_megabytes_with_a_decimal_comma() {
+        let cleanup = sursum_protocol::PictureCleanup { pictures: 12, bytes: 36_700_160 };
+        assert_eq!(picture_cleanup_line(&cleanup, false), "Nieużywane obrazy: 12 (35,0 MB)");
+        assert_eq!(picture_cleanup_line(&cleanup, true), "Usunięto obrazy: 12 (35,0 MB)");
     }
 }

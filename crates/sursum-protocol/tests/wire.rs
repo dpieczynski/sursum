@@ -219,3 +219,11 @@ fn backup() {
     ];
     insta::assert_json_snapshot!(outcomes);
 }
+
+#[test]
+fn picture_cleanup() {
+    insta::assert_json_snapshot!((
+        PictureCleanupRequest { dry_run: true },
+        PictureCleanup { pictures: 12, bytes: 36_700_160 }
+    ));
+}

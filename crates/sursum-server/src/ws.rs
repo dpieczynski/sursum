@@ -252,4 +252,17 @@ mod tests {
     fn missing_origin_is_allowed() {
         assert!(origin_allowed(&headers(None, "localhost:8080"), &[]));
     }
+
+    #[test]
+    fn sets_are_created_and_deleted_by_operators_alike() {
+        let set_id = sursum_protocol::SetId::from("set-1");
+        let commands = [
+            Command::NewSet { name: "Niedziela".into() },
+            Command::RenameSet { set_id: set_id.clone(), name: "Niedziela 10:00".into() },
+            Command::DeleteSet { set_id },
+            Command::UndoDeleteSet,
+        ];
+        assert!(commands.iter().all(|command| !needs_admin(command)));
+        assert!(needs_admin(&Command::SetLogo { asset_id: None }));
+    }
 }

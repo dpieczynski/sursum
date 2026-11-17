@@ -97,6 +97,7 @@ pub fn router(
                 .layer(axum::extract::DefaultBodyLimit::disable())
                 .layer(middleware::from_fn(require_upload_header)),
         )
+        .route("/api/assets/cleanup", axum::routing::post(clean_up_pictures))
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
         .route_layer(middleware::from_fn_with_state(app.clone(), require_admin));
@@ -407,6 +408,17 @@ async fn upload_asset(State(app): State<App>, body: axum::body::Bytes) -> Respon
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `POST /api/assets/cleanup` (admin): removes pictures nothing uses (or counts them first).
+async fn clean_up_pictures(
+    State(app): State<App>,
+    axum::Json(request): axum::Json<sursum_protocol::PictureCleanupRequest>,
+) -> Response {
+    match app.state.clean_up_pictures(request.dry_run).await {
+        Some(cleanup) => axum::Json(cleanup).into_response(),
+        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 

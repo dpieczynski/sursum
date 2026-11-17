@@ -8,6 +8,7 @@ mod backup;
 mod device;
 mod display;
 mod library;
+mod pictures;
 mod screen;
 mod update;
 

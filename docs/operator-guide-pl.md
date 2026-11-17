@@ -25,7 +25,10 @@ kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia 
    np. „Tablet organisty”; potem pamięta połączenie.
 3. **Przygotuj zestaw** w zakładce **Zestaw**:
    - **Zmień zestaw** pokazuje zestawy od najnowszego i pozwala utworzyć **Nowy zestaw**;
-     **Zmień nazwę** poprawia nazwę bieżącego.
+     **Zmień nazwę** poprawia nazwę bieżącego. **Usuń zestaw** trzeba przytrzymać; zaraz potem
+     można go przywrócić przyciskiem **Cofnij** w dymku na dole. Nie da się usunąć zestawu, którego
+     pozycja jest właśnie na ekranie. Tworzenie i usuwanie zestawów nie wymaga trybu
+     administratora.
    - W polu wyszukiwania wpisz numer, początek tytułu albo kilka słów z tekstu. Polskie znaki nie
      są potrzebne („zdrowas” znajdzie „Zdrowaś”). **+ Dodaj** dopisuje pieśń na koniec zestawu i
      wyszukiwanie zostaje otwarte, więc można dodać kilka pieśni po kolei. Pieśni, które już są
@@ -149,8 +152,8 @@ spróbuj za chwilę”). To normalne.
   przeglądarki), **Pedał i klawisze**.
 - **Baza pieśni**: **Eksport bazy** (same pieśni, do wymiany z drugim kościołem), **Scal bazę
   z pliku** 🔒, **Import z OpenSong (ZIP)** 🔒.
-- **Kopia zapasowa urządzenia**: **Pobierz kopię** (wszystko: pieśni, zestawy, logo, obrazy,
-  kalibracja i ustawienia) i **Przywróć z kopii** 🔒.
+- **Dane urządzenia**: **Pobierz kopię** (wszystko: pieśni, zestawy, logo, obrazy, kalibracja
+  i ustawienia), **Przywróć z kopii** 🔒 i **Usuń nieużywane obrazy** 🔒.
 - **Urządzenia** 🔒 i **O programie** (wersja, **Zainstaluj aktualizację** 🔒).
 
 ### Dla administratora (🔒)
@@ -181,7 +184,7 @@ przyciskiem **Zakończ tryb administratora**.
   pół minuty jest „na próbę”: jeśli się nie uruchomi albo zawiesza, urządzenie samo wraca do
   poprzedniej wersji, a w **O programie** pojawia się informacja, że aktualizacja nie zadziałała.
   Plik bez właściwego podpisu jest odrzucany i nic się nie zmienia.
-- **Przywróć z kopii** (w **Kopia zapasowa urządzenia**): wybierz plik `.sursum-backup` i
+- **Przywróć z kopii** (w **Dane urządzenia**): wybierz plik `.sursum-backup` i
   potwierdź. **Nigdy w czasie mszy.** Wszystkie pieśni, zestawy, logo, obrazy i ustawienia
   zostają zastąpione zawartością kopii; program uruchamia się ponownie, a ekran na kilka sekund
   gaśnie. PIN i sparowane piloty się nie zmieniają, więc tablet, z którego przywracasz, zostaje
@@ -189,9 +192,11 @@ przyciskiem **Zakończ tryb administratora**.
   wypadek pomyłki. Kopię warto pobierać co jakiś czas i trzymać poza urządzeniem, np. na
   komputerze w kancelarii: po awarii karty wystarczy sparować tablet z nowym urządzeniem i
   przywrócić kopię.
-- **Usuń zestaw** (przytrzymaj, w oknie **Zmień zestaw**): zaraz potem można go przywrócić
-  przyciskiem **Cofnij** w komunikacie na dole. Nie da się usunąć zestawu, którego pozycja jest
-  właśnie na ekranie.
+- **Usuń nieużywane obrazy** (w **Dane urządzenia**): plakaty zostają na urządzeniu także po
+  usunięciu ich z zestawu. Przycisk najpierw pokazuje, ile obrazów nic już nie używa i ile
+  miejsca zajmują; usuwa je dopiero przytrzymanie **Usuń obrazy**. Obrazy z zestawów, logo, to,
+  co jest na ekranie, i obrazy przesłane w ostatnich 10 minutach zawsze zostają. Program nigdy
+  nie usuwa obrazów sam.
 
 **Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,
 który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy). To urządzenie

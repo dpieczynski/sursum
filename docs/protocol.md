@@ -18,7 +18,7 @@ same Rust types, so they cannot drift apart within one build.
 |---|---|
 | anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/licenses` |
 | paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `POST /api/assets`, `/api/library/export`, `GET /api/backup`, `GET /api/update/status`, `POST/DELETE /api/admin` |
-| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `POST /api/update`, `POST /api/backup/restore`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
+| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `POST /api/update`, `POST /api/backup/restore`, `POST /api/assets/cleanup`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
 
 Without a PIN nobody may control the screen: `/api/session` says `setup_needed`, and
 `POST /api/setup { pin, name }` sets the PIN once (`invalid_pin` → 400, `already_set` → 409) and
@@ -40,6 +40,8 @@ Whole-device backups (ADR 0018): `GET /api/backup` streams a `.sursum-backup` fi
 `restored { summary: BackupSummary { created_unix, build, songs, sets, pictures } }`, after which
 the server restarts and the next start puts the backup in place, or `refused { reason }` with
 `not_supervised`, `not_a_backup`, `newer_version`, `too_large` or `failed` (nothing changed).
+`POST /api/assets/cleanup` (admin mode) takes `PictureCleanupRequest { dry_run }` and answers
+`PictureCleanup { pictures, bytes }`: what is (or would be) removed.
 
 JSON text frames (`serde_json` on both sides, readable in browser dev tools); serde enums tagged
 with `"t"`; default Rust (snake_case) field names, since no JavaScript consumes them.

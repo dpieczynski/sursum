@@ -11,6 +11,7 @@ mod ids;
 mod layout;
 mod message;
 mod pairing;
+mod pictures;
 mod slide;
 mod state;
 mod update;
@@ -27,6 +28,7 @@ pub use message::{
     ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, PowerAction, Role, ServerMsg,
 };
 pub use pairing::{AdminRequest, DeviceView, PairOutcome, PairRequest, SessionInfo};
+pub use pictures::{PictureCleanup, PictureCleanupRequest};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
     DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SectionJump,

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Kopia zapasowa urządzenia (ADR 0018): downloading a whole-device backup (any paired remote) and
+//! Dane urządzenia (ADR 0018): downloading a whole-device backup (any paired remote) and
 //! restoring one (admin). The server checks the file, answers what it holds, and restarts with
-//! it; the remote reloads once the sheet is closed, so nothing it shows is from before.
+//! it; the remote reloads once the sheet is closed, so nothing it shows is from before. Removing
+//! unused pictures lives here too ([`super::pictures`]).
 
 use leptos::prelude::*;
 use sursum_protocol::RestoreOutcome;
@@ -36,6 +37,11 @@ pub fn BackupSection() -> impl IntoView {
             <div class="setting-row">
                 <AdminOnly label=Msg::BackupRestore>
                     <RestoreButton />
+                </AdminOnly>
+            </div>
+            <div class="setting-row">
+                <AdminOnly label=Msg::PictureCleanup>
+                    <super::pictures::PictureCleanupButton />
                 </AdminOnly>
             </div>
         </Section>

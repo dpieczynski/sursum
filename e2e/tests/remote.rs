@@ -548,7 +548,7 @@ async fn about_tells_when_an_update_was_undone_and_hides_installing_where_it_can
 
 #[tokio::test]
 #[ignore = "needs a browser; run with `just e2e`"]
-async fn settings_offer_a_whole_device_backup_that_downloads_as_a_zip() -> anyhow::Result<()> {
+async fn settings_offer_a_whole_device_backup_and_count_unused_pictures_first() -> anyhow::Result<()> {
     let server = Server::start().await?;
     with_engine(Browser::Chromium, 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
@@ -571,6 +571,14 @@ async fn settings_offer_a_whole_device_backup_that_downloads_as_a_zip() -> anyho
         let head = head.json();
         anyhow::ensure!(head["status"] == 200 && head["magic"] == "PK", "{head}");
         anyhow::ensure!(head["size"].as_u64().unwrap_or(0) > 1000, "{head}");
+        // Removing unused pictures counts first; a fresh device has none.
+        remote.find(By::Css("[data-testid=picture-cleanup]")).await?.click().await?;
+        let answer = remote.query(By::Css("[data-testid=picture-cleanup-answer]")).first().await?;
+        wait_until(Duration::from_secs(5), || async {
+            answer.text().await.is_ok_and(|text| text.contains("Nie ma nieużywanych obrazów"))
+        })
+        .await?;
+        anyhow::ensure!(remote.find(By::Css("[data-testid=picture-cleanup-confirm]")).await.is_err());
         Ok(())
     })
     .await

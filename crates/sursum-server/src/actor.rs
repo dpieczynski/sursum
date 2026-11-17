@@ -134,6 +134,13 @@ impl StateHandle {
         bytes.await.ok().flatten()
     }
 
+    /// Removes pictures nothing uses any more (or, with `dry_run`, counts them).
+    pub async fn clean_up_pictures(&self, dry_run: bool) -> Option<sursum_protocol::PictureCleanup> {
+        let (reply, cleanup) = oneshot::channel();
+        self.requests.send(Request::CleanUpPictures { dry_run, reply }).await.ok()?;
+        cleanup.await.ok().flatten()
+    }
+
     /// Merges a `.sursum` file (or only reports what would happen, with `dry_run`).
     pub async fn merge_library(
         &self,
@@ -183,6 +190,10 @@ enum Request {
         songs: Vec<crate::library::BundleSong>,
         dry_run: bool,
         reply: oneshot::Sender<Option<sursum_protocol::MergeReport>>,
+    },
+    CleanUpPictures {
+        dry_run: bool,
+        reply: oneshot::Sender<Option<sursum_protocol::PictureCleanup>>,
     },
     SetPin {
         pin: crate::auth::PinHash,
@@ -298,6 +309,19 @@ pub fn spawn(
                             tracing::error!(?error, "could not export the library");
                         }
                         let _ = reply.send(bytes.ok());
+                    }
+                    Request::CleanUpPictures { dry_run, reply } => {
+                        let in_use = state.pictures_in_use();
+                        let cleanup = crate::assets::remove_unused(
+                            &state.data_dir,
+                            &in_use,
+                            crate::assets::FRESH_UPLOAD,
+                            dry_run,
+                        );
+                        if let Err(error) = &cleanup {
+                            tracing::error!(?error, "could not clean up pictures");
+                        }
+                        let _ = reply.send(cleanup.ok());
                     }
                     Request::Merge { songs, dry_run, reply } => {
                         let report = state.merge(&songs, dry_run);
@@ -419,6 +443,17 @@ struct AppState {
 }
 
 impl AppState {
+    /// Pictures that must stay: the logo, every picture in a set (also one whose deletion can
+    /// still be undone) and what is on screen (a frozen copy may outlive its item).
+    fn pictures_in_use(&self) -> std::collections::HashSet<sursum_protocol::AssetId> {
+        let live = self.program.live.iter().flat_map(|live| &live.deck.slides);
+        let on_screen = live.filter_map(|slide| match &slide.body {
+            sursum_protocol::SlideBody::Image { asset_id, .. } => Some(asset_id),
+            _ => None,
+        });
+        self.logo.iter().chain(self.sets.pictures()).chain(on_screen).cloned().collect()
+    }
+
     /// Applies one command; returns its outcome and whether the state changed.
     fn handle_command(&mut self, actor: &ClientId, base_rev: Rev, command: &Command) -> (CmdOutcome, bool) {
         let result = match command {
