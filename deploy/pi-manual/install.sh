@@ -52,13 +52,37 @@ EOF
     chown sursum:sursum "$data/kiosk.env"
 fi
 
+echo "== invisible cursor"
+# cage has no option to hide its cursor and draws it in the middle of the screen even without a
+# mouse; the page hides it only once a pointer enters. A cursor theme whose only image is one
+# transparent pixel hides it everywhere. Xcursor file, little endian: header (magic, header size
+# 16, version 1.0, one table entry), table entry (image, nominal size 24, at byte 28), image
+# chunk (header size 36, image, size 24, version 1, 1 x 1 pixels, hotspot 0,0, no delay) and one
+# fully transparent ARGB pixel.
+cursors=/usr/share/icons/sursum-blank/cursors
+install -d -m 0755 "$cursors"
+{
+    printf 'Xcur\020\000\000\000\000\000\001\000\001\000\000\000'
+    printf '\002\000\375\377\030\000\000\000\034\000\000\000'
+    printf '\044\000\000\000\002\000\375\377\030\000\000\000\001\000\000\000'
+    printf '\001\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000'
+    printf '\000\000\000\000'
+} > "$cursors/default"
+chmod 0644 "$cursors/default"
+for name in left_ptr text pointer hand2 xterm; do
+    ln -sf default "$cursors/$name"
+done
+printf '[Icon Theme]\nName=sursum-blank\n' > /usr/share/icons/sursum-blank/index.theme
+
 echo "== services"
 install -m 0644 "$here/../systemd/sursum.service" /etc/systemd/system/sursum.service
 install -m 0644 "$here/sursum-kiosk.service" /etc/systemd/system/sursum-kiosk.service
 systemctl daemon-reload
 systemctl disable --now getty@tty1.service 2>/dev/null || true
 systemctl enable --now seatd.service sursum.service
-systemctl enable --now sursum-kiosk.service
+systemctl enable sursum-kiosk.service
+# Restart so a changed unit or cursor theme takes effect when the script is run again.
+systemctl restart sursum-kiosk.service
 
 echo "== waiting for the server"
 for _ in $(seq 30); do

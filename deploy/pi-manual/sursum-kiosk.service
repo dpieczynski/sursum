@@ -18,6 +18,8 @@ TTYPath=/dev/tty1
 RuntimeDirectory=sursum-kiosk
 RuntimeDirectoryMode=0700
 Environment=XDG_RUNTIME_DIR=/run/sursum-kiosk
+# A transparent cursor (installed by install.sh): cage cannot hide its own cursor otherwise.
+Environment=XCURSOR_THEME=sursum-blank
 EnvironmentFile=/var/lib/sursum/kiosk.env
 # $KIOSK_APP (unbraced) is split into words by systemd.
 ExecStart=/usr/bin/cage -- $KIOSK_APP

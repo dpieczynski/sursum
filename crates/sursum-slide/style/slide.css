@@ -114,6 +114,9 @@
   justify-content: center;
   opacity: 0;
   transition: opacity 250ms linear;
+  /* Composited from the start, so the first black does not promote it mid-fade (suspected cause
+     of a one-frame flash of full-brightness text on a Pi 5 driving 4K). */
+  will-change: opacity;
 }
 .sursum-overlay.visible {
   opacity: 1;
