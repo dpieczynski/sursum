@@ -10,7 +10,7 @@ set -eu
 [ "${IGconf_sursum_diagnostic_boot:-n}" = y ] || exit 0
 
 mkdir -p "$LAYER_WORKDIR/for/linux-base/cmdline.d" "$LAYER_WORKDIR/for/rpi-boot-firmware/config.txt.d"
-echo "consoleblank=0 systemd.show_status=1" > "$LAYER_WORKDIR/for/linux-base/cmdline.d/90-sursum"
+echo "consoleblank=0 systemd.show_status=1 video=HDMI-A-1:1920x1080@60D" > "$LAYER_WORKDIR/for/linux-base/cmdline.d/90-sursum"
 cat > "$LAYER_WORKDIR/for/rpi-boot-firmware/config.txt.d/90-sursum" <<'FRAGMENT'
 [all]
 # Diagnostic boot: the rainbow screen and firmware messages stay.

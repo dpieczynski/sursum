@@ -20,8 +20,8 @@ setup (`deploy/windows/`).
 - **Silent boot**: from power-on the HDMI output may show only black, logo or content. Any change
   to `cmdline.txt`, `config.txt`, the splash screen or the kiosk unit must be verified on a real
   Pi (ideally with an HDMI capture) before merging.
-- HDMI mode: the image currently uses the screen's preferred mode; forcing 1080p60
-  (`video=HDMI-A-1:1920x1080@60D`) versus native resolution is an open question (roadmap, M4).
+- HDMI mode is forced (`video=HDMI-A-1:1920x1080@60D`, decided 2026-11-17, ADR 0013 amendment);
+  do not rely on hotplug or EDID. Native or another forced mode only if an installation needs it.
 - The display is connected directly to the Pi's **HDMI0** port (`/dev/cec0` for HDMI-CEC power
   control, ADR 0012). The `sursum` user gets access to `/dev/cec0` via a udev rule in the image;
   PJLink passwords live only in `/var/lib/sursum/config.toml`.

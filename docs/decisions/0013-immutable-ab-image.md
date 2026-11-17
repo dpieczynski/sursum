@@ -127,8 +127,16 @@ remote and `just deploy` over SSH.
   exactly like a later install, and goes on trial on first boot.
 - Maintainer decisions (2026-11-17): administration by **SSH key only** (user `admin`, key passed
   at build time, never in the repository; no password); **Ethernet only** (Wi-Fi and Bluetooth off
-  in `config.txt`; the base's systemd-networkd does DHCP); the **screen's preferred resolution**
-  until the 1080p60 question is decided; **black** from power-on to the page (no splash image).
+  in `config.txt`; the base's systemd-networkd does DHCP); **black** from power-on to the page (no splash image).
+- Resolution (decided later the same day): HDMI0 is **forced to 1920×1080 at 60 Hz**
+  (`video=HDMI-A-1:1920x1080@60D`). The pilot on a 4K TV came up at the TV's preferred
+  3840×2160 at 30 Hz, which halves the frames of a fade and quadruples the pixels every full-screen
+  layer blends. A forced mode also brings the screen up when the projector is switched on after
+  the Pi or sits behind an extender with a broken EDID. The screen draws a fixed 1920×1080 stage
+  anyway, a 4K display upscales 1080p exactly 2×, and lyrics are read from metres away, so native
+  resolution would add little. Native or another forced mode (e.g. a 1920×1200 projector) only if
+  an installation needs it; the mode lives in the read-only boot partition, so changing it per
+  device waits for system updates (M7).
 - Networking stays with the base's systemd-networkd: rpi-image-gen allows only one
   `network-activator`, and NetworkManager is not needed for Ethernet.
 - Builds run in a privileged Debian trixie podman container (`image/build.Containerfile`,

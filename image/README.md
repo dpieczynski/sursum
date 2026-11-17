@@ -50,7 +50,8 @@ kernel for it).
   30 s of healthy running), the server starts, and the first remote that opens
   `http://sursum.local/` sets the PIN.
 - **Screen**: black from power-on (no rainbow, kernel logo, console or cursor) until the page shows
-  the parish logo. The resolution is the screen's preferred mode (open question in the roadmap).
+  the parish logo. HDMI0 is forced to 1920×1080 at 60 Hz (`video=HDMI-A-1:1920x1080@60D` in the
+  kernel command line), whatever the display's EDID says or whether it is on yet.
 - **Network**: Ethernet with DHCP; Wi-Fi and Bluetooth are switched off in `config.txt`. The
   firewall accepts HTTP and SSH from private addresses only, plus mDNS, DHCP and ping. The kiosk
   itself may reach localhost only.
