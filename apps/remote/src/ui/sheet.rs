@@ -8,14 +8,23 @@ use leptos::prelude::*;
 
 use crate::messages::{Msg, pl};
 
-/// A sheet with `title`; `on_close` runs when it is closed (button, Esc, tap outside).
+/// A sheet with `title`; `on_close` runs when it is closed (button, Esc, tap outside). While
+/// `locked` is true it cannot be closed and has no close button (e.g. while the device writes
+/// a system update and restarts: nothing else should look usable meanwhile).
 #[component]
 pub fn Sheet(
     title: String,
     on_close: impl Fn() + Copy + Send + Sync + 'static,
     #[prop(optional)] testid: &'static str,
+    #[prop(optional, into)] locked: MaybeProp<bool>,
     children: Children,
 ) -> impl IntoView {
+    let locked = move || locked.get().unwrap_or(false);
+    let on_close = move || {
+        if !locked() {
+            on_close();
+        }
+    };
     let escape = window_event_listener(ev::keydown, move |event| {
         if event.key() == "Escape" {
             on_close();
@@ -38,9 +47,11 @@ pub fn Sheet(
             <div class="sheet" role="dialog" aria-modal="true" aria-label=label data-testid=testid>
                 <header class="sheet-header">
                     <h2>{title}</h2>
-                    <button class="btn btn--quiet btn--sm" on:click=move |_| on_close()>
-                        {pl(Msg::Close)}
-                    </button>
+                    <Show when=move || !locked()>
+                        <button class="btn btn--quiet btn--sm" on:click=move |_| on_close()>
+                            {pl(Msg::Close)}
+                        </button>
+                    </Show>
                 </header>
                 <div class="sheet-body">{children()}</div>
             </div>

@@ -9,5 +9,6 @@ Description=Write a system update to the other slot and try it
 Type=oneshot
 ExecStartPre=/usr/bin/rm -f /run/sursum/system-update
 ExecStart=/usr/lib/sursum/sursum-server --data-dir /var/lib/sursum system apply
-ExecStartPost=/usr/bin/systemctl reboot "0 tryboot"
+# systemd 257 takes the firmware argument as an option ("systemctl reboot ARG" is refused).
+ExecStartPost=/usr/bin/systemctl reboot --reboot-argument="0 tryboot"
 TimeoutStartSec=15min

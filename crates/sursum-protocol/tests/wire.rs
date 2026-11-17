@@ -199,6 +199,7 @@ fn update() {
         system: Some(SystemStatus {
             version: "v0.1.0-34-g980afa5".into(),
             on_trial: false,
+            installing: false,
             last: Some(LastSystemUpdate::RolledBack { failed: "v0.1.0-40-g1a2b3c4".into() }),
             can_install: true,
         }),

@@ -55,5 +55,15 @@ Our own small updater on the Raspberry Pi firmware's **tryboot** (`autoboot.txt`
   the SD card. Never during Mass; the remote warns.
 - The first image with this updater must still be flashed once; every later system arrives over
   the network.
-- ⚠ Not yet run on a Pi: writing a real slot, `systemctl reboot "0 tryboot"`, the commit after a
-  healthy trial, and the rollback after a deliberately broken system.
+- Run on a Pi 5 (2026-11-17/18): uploading v0.1.0-37 from the remote, writing the other slot,
+  starting it through tryboot, and the commit 40 s after boot all worked; slot 3 became the default
+  and `[tryboot]` points back at slot 2. One bug: systemd 257 refuses `systemctl reboot "0
+  tryboot"` ("Too many arguments"), so the restart was done by hand; the unit now uses
+  `--reboot-argument="0 tryboot"`. A system that still has the old unit needs that one manual
+  restart for the update that replaces it.
+- The remote follows an accepted system update in a locked sheet with a progress indicator
+  (writing, restarting, checking, then the result), so nothing looks usable while the device is
+  about to restart; the status tells "installing" (written, restart pending) from "on trial" (the
+  new system runs) by the active slot, which the unprivileged server can read.
+- ⚠ Still to run on a Pi: a fully automatic update with the fixed unit, and the rollback after a
+  deliberately broken system.

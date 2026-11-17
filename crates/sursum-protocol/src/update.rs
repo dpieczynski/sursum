@@ -31,6 +31,10 @@ pub struct SystemStatus {
     /// The running system was just installed and is not yet confirmed: if it does not come up
     /// healthy, the device restarts into the previous system by itself.
     pub on_trial: bool,
+    /// A system update is being written to the other slot, or written and about to restart into
+    /// it: the device will restart any moment.
+    #[serde(default)]
+    pub installing: bool,
     /// How the most recent system update ended, if any.
     pub last: Option<LastSystemUpdate>,
     /// Whether a system update can be uploaded now.

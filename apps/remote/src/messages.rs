@@ -247,6 +247,12 @@ pub enum Msg {
     SystemUpdateWarning,
     SystemUpdateInstalled,
     SystemUpdateOnTrial,
+    SystemUpdateWriting,
+    SystemUpdateRestarting,
+    SystemUpdateChecking,
+    SystemUpdateDontSwitchOff,
+    SystemUpdateCommitted,
+    SystemUpdateRolledBack,
     SectionBackup,
     BackupHint,
     BackupDownload,
@@ -551,6 +557,14 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::SystemUpdateOnTrial => {
             "Nowy system jest sprawdzany. Jeśli nie zadziała, urządzenie samo wróci do poprzedniego."
         }
+        Msg::SystemUpdateWriting => "Zapisywanie nowego systemu…",
+        Msg::SystemUpdateRestarting => "Urządzenie uruchamia się ponownie…",
+        Msg::SystemUpdateChecking => "Nowy system jest sprawdzany (do 3 minut)…",
+        Msg::SystemUpdateDontSwitchOff => {
+            "Nie wyłączaj urządzenia. To okno zamknie się, gdy aktualizacja się skończy."
+        }
+        Msg::SystemUpdateCommitted => "Nowy system działa.",
+        Msg::SystemUpdateRolledBack => "Nowy system nie zadziałał – urządzenie wróciło do poprzedniego.",
         Msg::SectionBackup => "Dane urządzenia",
         Msg::BackupHint => {
             "Pełna kopia: pieśni z historią zmian, zestawy, logo, obrazy, kalibracja i ustawienia \
@@ -662,6 +676,11 @@ pub fn last_update(last: &sursum_protocol::LastUpdate) -> String {
 pub fn system_lines(system: &sursum_protocol::SystemStatus) -> Vec<String> {
     use sursum_protocol::LastSystemUpdate;
     let mut lines = vec![format!("System: {}", system.version)];
+    if system.installing {
+        lines.push(
+            "Trwa instalowanie aktualizacji systemu – urządzenie za chwilę uruchomi się ponownie.".to_owned(),
+        );
+    }
     if system.on_trial {
         lines.push(pl(Msg::SystemUpdateOnTrial).to_owned());
     }

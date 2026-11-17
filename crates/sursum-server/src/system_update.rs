@@ -243,8 +243,10 @@ fn write_images(path: &Path, manifest: &SystemManifest, boot: &Path, system: &Pa
 pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::Result<String> {
     let dir = data_dir.join(DIR);
     let ready = dir.join(READY);
+    let mut version = None;
     let result = (|| {
         let manifest = verify(&ready, trusted)?;
+        version = Some(manifest.version.clone());
         let (active, _) = slots.boot_partition("active")?;
         let (other, label) = slots.boot_partition("other")?;
         write_images(
@@ -259,7 +261,8 @@ pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::
     })();
     let _ = std::fs::remove_file(&ready);
     if result.is_err() {
-        write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed: "the uploaded update".into() })?;
+        let failed = version.unwrap_or_else(|| "the uploaded update".into());
+        write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed })?;
     }
     result
 }
@@ -310,6 +313,8 @@ pub struct SystemUpdates {
     pub version: Option<String>,
     pub supervised: bool,
     pub request: PathBuf,
+    /// The device's slots, to tell an update about to restart from one running on trial.
+    pub slots: Slots,
 }
 
 impl SystemUpdates {
@@ -322,6 +327,7 @@ impl SystemUpdates {
             version: version.filter(|version| !version.is_empty()),
             supervised,
             request: request.to_owned(),
+            slots: Slots::device(),
         }
     }
 
@@ -329,13 +335,17 @@ impl SystemUpdates {
     pub fn status(&self, data_dir: &Path) -> Option<SystemStatus> {
         let version = self.version.clone()?;
         let dir = data_dir.join(DIR);
-        let on_trial = dir.join(TRIAL).exists();
-        let busy = on_trial || dir.join(READY).exists();
+        let trial = read_json::<Trial>(&dir, TRIAL).ok().flatten();
+        // Reading the by-slot links needs no privileges.
+        let active = self.slots.boot_partition("active").ok().map(|(_, label)| label);
+        let on_trial = trial.as_ref().is_some_and(|trial| active.as_deref() == Some(trial.slot.as_str()));
+        let installing = dir.join(READY).exists() || (trial.is_some() && !on_trial);
         Some(SystemStatus {
             version,
             on_trial,
+            installing,
             last: read_json(&dir, OUTCOME).ok().flatten(),
-            can_install: self.key.is_some() && self.supervised && !busy,
+            can_install: self.key.is_some() && self.supervised && !installing && !on_trial,
         })
     }
 
@@ -477,12 +487,13 @@ mod tests {
         path
     }
 
-    fn uploaded(data: &Path, file: &Path, key: &SigningKey) -> SystemUpdates {
+    fn uploaded(data: &Path, file: &Path, key: &SigningKey, slots: &Slots) -> SystemUpdates {
         let updates = SystemUpdates {
             key: Some(key.verifying_key()),
             version: Some("v1".into()),
             supervised: true,
             request: data.join("request"),
+            slots: slots.clone(),
         };
         let incoming = updates.incoming(data).unwrap();
         std::fs::copy(file, &incoming).unwrap();
@@ -495,7 +506,7 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let mut device = Device::new('a');
         let file = update(data.path(), &key, "v2");
-        let updates = uploaded(data.path(), &file, &key);
+        let updates = uploaded(data.path(), &file, &key, &device.slots);
         let incoming = updates.incoming(data.path()).unwrap();
         assert_eq!(updates.stage(data.path(), &incoming).unwrap(), "v2");
         assert!(data.path().join("request").exists(), "the root unit is asked");
@@ -506,9 +517,12 @@ mod tests {
         assert_eq!(device.partition(5, 10), b"new system");
         assert_eq!(device.partition(4, 3), b"old", "the running system is untouched");
         assert!(device.autoboot().contains("boot_partition=2\n[tryboot]\nboot_partition=3"));
-        assert!(updates.status(data.path()).unwrap().on_trial);
+        let status = updates.status(data.path()).unwrap();
+        assert!(status.installing && !status.on_trial, "written, the restart is still to come");
 
         device.boot_into('b');
+        let status = updates.status(data.path()).unwrap();
+        assert!(status.on_trial && !status.installing && !status.can_install);
         assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::OnTrial("v2".into()));
         assert_eq!(commit(data.path(), &device.slots).unwrap(), "v2");
         assert!(device.autoboot().contains("boot_partition=3\n[tryboot]\nboot_partition=2"));
@@ -524,7 +538,7 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let device = Device::new('a');
         let file = update(data.path(), &key, "v2");
-        let updates = uploaded(data.path(), &file, &key);
+        let updates = uploaded(data.path(), &file, &key, &device.slots);
         updates.stage(data.path(), &updates.incoming(data.path()).unwrap()).unwrap();
         apply(data.path(), &key.verifying_key(), &device.slots).unwrap();
         // The trial boot failed: the firmware started slot A again.
@@ -542,12 +556,12 @@ mod tests {
         let device = Device::new('a');
 
         let foreign = update(data.path(), &self::key(), "v2");
-        let updates = uploaded(data.path(), &foreign, &key);
+        let updates = uploaded(data.path(), &foreign, &key, &device.slots);
         let incoming = updates.incoming(data.path()).unwrap();
         assert!(matches!(updates.stage(data.path(), &incoming), Err(SystemUpdateError::BadFile(_))));
 
         let current = update(data.path(), &key, "v1");
-        let updates = uploaded(data.path(), &current, &key);
+        let updates = uploaded(data.path(), &current, &key, &device.slots);
         assert!(matches!(updates.stage(data.path(), &incoming), Err(SystemUpdateError::AlreadyCurrent)));
 
         // A file whose system image was swapped after signing.
@@ -561,7 +575,7 @@ mod tests {
         zip.start_file(SYSTEM, zip::write::SimpleFileOptions::default()).unwrap();
         zip.write_all(b"evil system").unwrap();
         zip.finish().unwrap();
-        let updates = uploaded(data.path(), &tampered, &key);
+        let updates = uploaded(data.path(), &tampered, &key, &device.slots);
         assert!(matches!(updates.stage(data.path(), &incoming), Err(SystemUpdateError::BadFile(_))));
 
         assert!(!data.path().join("request").exists());
