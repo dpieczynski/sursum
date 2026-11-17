@@ -136,6 +136,7 @@ spróbuj za chwilę”). To normalne.
 | Żółty pasek „Ekran nie jest połączony z sursum” | Ekran w kościele nie odpowiada; urządzenie spróbuje go uruchomić ponownie. Jeśli to trwa, sprawdź zasilanie urządzenia przy projektorze. |
 | Żółty pasek „Ekran jest uśpiony” | Dotknij **Włącz** na pasku. |
 | Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. |
+| Adres `http://sursum.local/` się nie otwiera | Wpisz adres IP urządzenia (np. `http://192.168.1.50/`; najlepiej ustawić go na stałe w routerze parafii). Nazwę `sursum.local` blokują często aplikacje VPN (np. Tailscale) – wyłącz je na tablecie – oraz Firefox zainstalowany jako Flatpak na Linuksie; Chrome i Chromium radzą sobie z nią. |
 | Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę. Wpisz PIN parafii. |
 | Przy przycisku jest kłódka „wymaga trybu administratora” | Dotknij go i wpisz PIN; tryb administratora działa 15 minut. |
 | Tablet gaśnie w trakcie mszy | W ustawieniach Androida wydłuż czas wygaszania ekranu. |
