@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The sursum device image for a Raspberry Pi 5 (ADR 0013): rpi-image-gen's trixie-minbase-ab with
+# the image-rota layout (read-only A/B system slots, everything writable on /persistent) plus our
+# layers. Build it with `just image <version>`, which also passes the first release and the
+# administrator's SSH key (never kept in the repository).
+include:
+  file: trixie-minbase-ab.yaml
+
+device:
+  hostname: sursum
+  # The administrator logs in with an SSH key only (no password, sudo without one).
+  user1: admin
+  user1sudo: nopasswd
+
+image:
+  name: sursum
+  boot_part_size: 128M
+  # cage, Wayland and Chromium need far more than the base image's 512M.
+  system_part_size: 1500M
+  # The data partition does not grow on first boot, so this is its final size: database and
+  # backups, up to 2 GB of pictures, application releases and a 64M journal.
+  data_part_size: 4G
+
+layer:
+  server: sursum-device
+  app: sursum-kiosk
+
+ssh:
+  pubkey_only: y

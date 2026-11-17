@@ -1,0 +1,28 @@
+# METABEGIN
+# X-Env-Layer-Name: sursum-kiosk
+# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: The screen (ADR 0009): Chromium in kiosk mode under cage on tty1, run by
+#  its own user, after the rpi-image-gen webkiosk example but without waiting for time sync.
+#  Chromium's managed policies, the transparent cursor themes and the unit (localhost-only
+#  network) come from ../deploy/kiosk, shared with the hand-installed pilot.
+# X-Env-Layer-Requires: sursum-device
+# METAEND
+---
+# SPDX-License-Identifier: GPL-3.0-or-later
+mmdebstrap:
+  packages:
+    - cage
+    - chromium
+    - seatd
+  customize-hooks:
+    - chroot $1 useradd --system --create-home --home-dir /var/lib/sursum-kiosk --shell /usr/sbin/nologin sursum-kiosk
+    # seatd hands the display to the video group; render and input for the GPU and devices.
+    - chroot $1 usermod -a -G video,render,input sursum-kiosk
+    - install -d -m 0755 $1/etc/chromium/policies/managed
+    - install -m 0644 ../deploy/kiosk/chromium-policies.json $1/etc/chromium/policies/managed/sursum.json
+    - sh ../deploy/kiosk/blank-cursors.sh $1
+    - install -m 0644 ../deploy/kiosk/sursum-kiosk.service $1/etc/systemd/system/sursum-kiosk.service
+    # tty1 belongs to the screen: no login prompt there.
+    - rm -f $1/etc/systemd/system/getty.target.wants/getty@tty1.service
+    - $BDEBSTRAP_HOOKS/enable-units "$1" seatd sursum-kiosk

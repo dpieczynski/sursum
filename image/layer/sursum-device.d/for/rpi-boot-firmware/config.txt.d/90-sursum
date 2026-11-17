@@ -1,0 +1,6 @@
+[all]
+# No rainbow screen at power-on.
+disable_splash=1
+# Ethernet only: Wi-Fi and Bluetooth radios off.
+dtoverlay=disable-wifi
+dtoverlay=disable-bt

@@ -109,3 +109,27 @@ The maintainer decided that application updates from a USB stick are not needed:
 uploads the same signed `.sursum-app` file from any tablet or PC, with the same trial and
 rollback. The image therefore gets no automount or udev rule for updates; the two paths are the
 remote and `just deploy` over SSH.
+
+## Amendment (2026-11-17): the first image, as built
+`image/` holds the build (see `image/README.md`), checked against rpi-image-gen v2.9.0 (pinned in
+`image/rpi-image-gen.ref`):
+- `trixie-minbase-ab` + `image-rota` as decided; system slots 1500M (cage, Wayland and Chromium do
+  not fit the base 512M), data partition 4G. rpi-image-gen does not grow the data partition on
+  first boot, so 4G is final for now (16 GB cards and larger).
+- Two layers: `sursum-device` (server user and unit, first release, slot-shared `/var/lib/sursum`,
+  Avahi, nftables, watchdog, 64M journal, silent boot, Ethernet only) and `sursum-kiosk`. Units,
+  Chromium policies and the cursor generator are installed from `deploy/` (one copy, shared with
+  the hand-installed pilot); the kiosk's default browser command lives in its unit, because files
+  seeded into slot-shared `/var/lib/sursum` are never overwritten by a later image.
+- The first release is installed at build time by the bundle's own binary (through QEMU on x86),
+  exactly like a later install, and goes on trial on first boot.
+- Maintainer decisions (2026-11-17): administration by **SSH key only** (user `admin`, key passed
+  at build time, never in the repository; no password); **Ethernet only** (Wi-Fi and Bluetooth off
+  in `config.txt`; the base's systemd-networkd does DHCP); the **screen's preferred resolution**
+  until the 1080p60 question is decided; **black** from power-on to the page (no splash image).
+- Networking stays with the base's systemd-networkd: rpi-image-gen allows only one
+  `network-activator`, and NetworkManager is not needed for Ethernet.
+- Builds run in a privileged Debian trixie podman container (`image/build.Containerfile`,
+  `just image <version>`); on x86_64 through QEMU, which rpi-image-gen calls unsupported but
+  working. The repository is private, so GitHub's free arm64 runners are not available; CI builds
+  wait.

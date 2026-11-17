@@ -5,7 +5,8 @@ immutable A/B image** built with rpi-image-gen from `image/` (ADR 0013). Also a 
 setup (`deploy/windows/`).
 
 - **Never assume a stock OS with `apt install`.** Packages and system configuration belong in the
-  image layers under `image/layer/`; the device's root filesystem is read-only (A/B slots). The one
+  image layers under `image/layer/` (they install units and kiosk files from `deploy/`, so there is
+  one copy of each); the device's root filesystem is read-only (A/B slots). The one
   exception is `deploy/pi-manual/`, an interim hand install on Raspberry Pi OS Lite for piloting
   until the image exists; keep it small and never let the image depend on it.
 - Everything that must persist lives in **`/var/lib/sursum`**, which is slot-shared on the
@@ -19,7 +20,8 @@ setup (`deploy/windows/`).
 - **Silent boot**: from power-on the HDMI output may show only black, logo or content. Any change
   to `cmdline.txt`, `config.txt`, the splash screen or the kiosk unit must be verified on a real
   Pi (ideally with an HDMI capture) before merging.
-- HDMI mode is forced (`video=HDMI-A-1:1920x1080@60D`); do not rely on hotplug or EDID.
+- HDMI mode: the image currently uses the screen's preferred mode; forcing 1080p60
+  (`video=HDMI-A-1:1920x1080@60D`) versus native resolution is an open question (roadmap, M4).
 - The display is connected directly to the Pi's **HDMI0** port (`/dev/cec0` for HDMI-CEC power
   control, ADR 0012). The `sursum` user gets access to `/dev/cec0` via a udev rule in the image;
   PJLink passwords live only in `/var/lib/sursum/config.toml`.

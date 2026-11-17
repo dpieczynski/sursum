@@ -1,0 +1,46 @@
+# METABEGIN
+# X-Env-Layer-Name: sursum-device
+# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: The sursum server and the device around it (ADR 0013): the server user and
+#  unit, the first application release, /var/lib/sursum shared by both system slots, mDNS
+#  (sursum.local), a local-network-only firewall, the hardware watchdog, a small persistent
+#  journal, a silent black boot and Ethernet only. Hooks run in the image source directory
+#  (image/), so ../deploy is the repository's deploy folder: one copy of every unit.
+#
+# X-Env-VarPrefix: sursum
+#
+# X-Env-Var-bundle:
+# X-Env-Var-bundle-Desc: Path of the signed .sursum-app installed as the first release
+#  (`just image` passes it). Later releases come from the remote, on trial (ADR 0013).
+# X-Env-Var-bundle-Required: y
+# X-Env-Var-bundle-Valid: string
+# X-Env-Var-bundle-Set: y
+# METAEND
+---
+# SPDX-License-Identifier: GPL-3.0-or-later
+mmdebstrap:
+  packages:
+    - avahi-daemon
+    - nftables
+  customize-hooks:
+    # The server's user owns /var/lib/sursum (a system user: /etc is read-only on the device).
+    - chroot $1 useradd --system --home-dir /var/lib/sursum --shell /usr/sbin/nologin sursum
+    - install -m 0644 ../deploy/systemd/sursum.service $1/etc/systemd/system/sursum.service
+    # The first release, installed by the bundle's own binary (run through QEMU), exactly as on a
+    # running device; /var/lib/sursum is copied to the persistent partition on first boot.
+    - |
+      set -eu
+      bundle="${IGconf_sursum_bundle}"
+      test -f "$bundle" || { echo "sursum: no bundle at $bundle" >&2; exit 1; }
+      work=$1/tmp/sursum-first-release
+      mkdir -p "$work"
+      cp "$bundle" "$work/first.sursum-app"
+      unzip -q -o "$work/first.sursum-app" sursum-server -d "$work"
+      chmod 0755 "$work/sursum-server"
+      install -d -m 0750 $1/var/lib/sursum
+      chroot $1 /tmp/sursum-first-release/sursum-server --data-dir /var/lib/sursum \
+        bundle install /tmp/sursum-first-release/first.sursum-app
+      chroot $1 chown -R sursum:sursum /var/lib/sursum
+      rm -rf "$work"
+    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables

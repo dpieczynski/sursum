@@ -44,76 +44,30 @@ else
     runuser -u sursum -- "$work/bin/sursum-server" --data-dir "$data" bundle install "$work/bundle.sursum-app"
 fi
 
-echo "== screen browser"
-# What Chromium must not do on a screen (translate, sign in, phone home, update components, ...)
-# is set by managed policies, Chromium's supported mechanism; the command line keeps only what
-# has no policy. --disable-background-networking stops the background requests no policy covers
-# (e.g. push messaging registration).
+echo "== screen"
+# Shared with the device image: deploy/kiosk/ holds the kiosk unit (with the browser command),
+# Chromium's managed policies and the transparent cursor themes.
+kiosk=$here/../kiosk
 install -d -m 0755 /etc/chromium/policies/managed
-install -m 0644 "$here/chromium-policies.json" /etc/chromium/policies/managed/sursum.json
-# kiosk.env is ours to update while it carries the marker line; delete that line to keep a
-# command of your own (ADR 0009: the engine can be changed without rebuilding).
-marker="# Managed by deploy/pi-manual/install.sh; delete this line to keep your own command."
-# The first version of this script wrote this command without the marker; it is ours too.
-first="KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-features=Translate --disable-pinch --overscroll-history-navigation=0 --check-for-update-interval=31536000 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/"
-if [ ! -e "$data/kiosk.env" ] || grep -qxF -e "$marker" -e "$first" "$data/kiosk.env"; then
-    cat > "$data/kiosk.env" <<EOF
-$marker
-# The browser cage starts (ADR 0009). Restart with: sudo systemctl restart sursum-kiosk
-KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-background-networking --disable-pinch --overscroll-history-navigation=0 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/
-EOF
-    chown sursum:sursum "$data/kiosk.env"
-else
-    echo "keeping your own $data/kiosk.env"
-fi
-
-echo "== invisible cursor"
-# cage has no option to hide its cursor and draws it in the middle of the screen even without a
-# mouse; the page hides it only once a pointer moves over it, which never happens without one.
-# After a page reload Chromium sets its own cursor too (e.g. "progress"), from whatever theme it
-# picks. The kiosk therefore gets a private cursor path (XCURSOR_PATH, see sursum-kiosk.service)
-# in which the themes sursum-blank, default and Adwaita all hold only a transparent cursor under
-# every known name. The rest of the system keeps its cursors.
-#
-# The cursor is an Xcursor file, little endian: header (magic, header size 16, version 1.0, one
-# table entry), table entry (image, nominal size 24, at byte 28), image chunk (header size 36,
-# image, size 24, version 1, 1 x 1 pixels, hotspot 0,0, no delay) and one transparent pixel.
+install -m 0644 "$kiosk/chromium-policies.json" /etc/chromium/policies/managed/sursum.json
 rm -rf /usr/share/icons/sursum-blank # left by an earlier version of this script
-themes=/usr/share/sursum/cursors
-cursors=$themes/sursum-blank/cursors
-install -d -m 0755 "$cursors"
-{
-    printf 'Xcur\020\000\000\000\000\000\001\000\001\000\000\000'
-    printf '\002\000\375\377\030\000\000\000\034\000\000\000'
-    printf '\044\000\000\000\002\000\375\377\030\000\000\000\001\000\000\000'
-    printf '\001\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000'
-    printf '\000\000\000\000'
-} > "$cursors/default"
-chmod 0644 "$cursors/default"
-# CSS and legacy X11 names, plus every name the installed Adwaita theme has.
-names="alias all-resize all-scroll arrow bd_double_arrow bottom_left_corner bottom_right_corner
-bottom_side cell center_ptr circle closedhand col-resize color-picker context-menu copy cross
-crosshair cross_reverse diamond_cross dnd-ask dnd-copy dnd-link dnd-move dnd-no-drop dnd-none
-dotbox e-resize ew-resize fd_double_arrow fleur grab grabbing half-busy hand1 hand2 help ibeam
-left_ptr left_ptr_watch left_side link move n-resize ne-resize nesw-resize no-drop not-allowed
-ns-resize nw-resize nwse-resize openhand pencil pirate plus pointer progress question_arrow
-right_ptr right_side row-resize s-resize sb_h_double_arrow sb_v_double_arrow se-resize
-size_all size_bdiag size_fdiag size_hor size_ver split_h split_v sw-resize target tcross text
-top_left_arrow top_left_corner top_right_corner top_side vertical-text w-resize wait watch
-whats_this X_cursor xterm zoom-in zoom-out"
-if [ -d /usr/share/icons/Adwaita/cursors ]; then
-    names="$names $(ls /usr/share/icons/Adwaita/cursors)"
+sh "$kiosk/blank-cursors.sh" /
+# The browser command now lives in the kiosk unit; kiosk.env only overrides it. Earlier versions
+# of this script wrote kiosk.env themselves (with a marker line, or the very first command):
+# remove those, keep one you wrote.
+marker="# Managed by deploy/pi-manual/install.sh; delete this line to keep your own command."
+first="KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-features=Translate --disable-pinch --overscroll-history-navigation=0 --check-for-update-interval=31536000 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/"
+if [ -e "$data/kiosk.env" ]; then
+    if grep -qxF -e "$marker" -e "$first" "$data/kiosk.env"; then
+        rm "$data/kiosk.env"
+    else
+        echo "keeping your own $data/kiosk.env (it overrides the kiosk unit's command)"
+    fi
 fi
-for name in $names; do
-    [ "$name" = default ] || ln -sf default "$cursors/$name"
-done
-printf '[Icon Theme]\nName=sursum-blank\n' > "$themes/sursum-blank/index.theme"
-ln -sfn sursum-blank "$themes/default"
-ln -sfn sursum-blank "$themes/Adwaita"
 
 echo "== services"
 install -m 0644 "$here/../systemd/sursum.service" /etc/systemd/system/sursum.service
-install -m 0644 "$here/sursum-kiosk.service" /etc/systemd/system/sursum-kiosk.service
+install -m 0644 "$here/../kiosk/sursum-kiosk.service" /etc/systemd/system/sursum-kiosk.service
 systemctl daemon-reload
 systemctl disable --now getty@tty1.service 2>/dev/null || true
 systemctl enable --now seatd.service sursum.service

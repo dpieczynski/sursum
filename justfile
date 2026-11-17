@@ -109,6 +109,25 @@ app-bundle version: cross-pi
     # accept no update after it. Checking with the same key catches that and a mismatched secret.
     cargo run -q -p sursum-server -- bundle verify target/sursum-{{version}}.sursum-app
 
+# Device image for a Raspberry Pi 5 (ADR 0013, image/) with release <version> as its first
+# application. Needs the bundle keys (see app-bundle) and the administrator's SSH public key
+# (SURSUM_SSH_PUBKEY, default ~/.ssh/id_ed25519.pub; never kept in the repository). Builds with
+# the pinned rpi-image-gen in a privileged podman container; on x86_64 through QEMU (slow).
+image version: (app-bundle version)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    key="${SURSUM_SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
+    test -f "$key" || { echo "no SSH public key at $key (set SURSUM_SSH_PUBKEY)" >&2; exit 1; }
+    mkdir -p target/image/work
+    cp "$key" target/image/admin.pub
+    podman build -q -t localhost/sursum-image-builder \
+        --build-arg RIG_COMMIT="$(cut -d' ' -f2 image/rpi-image-gen.ref)" -f image/build.Containerfile image
+    podman run --rm --privileged -v "$PWD:/src" localhost/sursum-image-builder \
+        /opt/rpi-image-gen/rpi-image-gen build -S /src/image -c sursum.yaml -B /src/target/image/work -- \
+        IGconf_sursum_bundle=/src/target/sursum-{{version}}.sursum-app \
+        IGconf_ssh_pubkey_user1=/src/target/image/admin.pub
+    ls -lh target/image/work/deploy-*/ 2>/dev/null || true
+
 # The release goes on trial; the device goes back by itself if it does not run (ADR 0013).
 # Install a bundle on a device over SSH (developers only, never during a service).
 deploy host version: (app-bundle version)

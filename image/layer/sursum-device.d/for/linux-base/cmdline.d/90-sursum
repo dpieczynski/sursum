@@ -1,0 +1,1 @@
+-console=tty1 console=tty3 quiet loglevel=0 logo.nologo vt.global_cursor_default=0 consoleblank=0
