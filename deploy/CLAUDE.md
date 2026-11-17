@@ -5,14 +5,16 @@ immutable A/B image** built with rpi-image-gen from `image/` (ADR 0013). Also a 
 setup (`deploy/windows/`).
 
 - **Never assume a stock OS with `apt install`.** Packages and system configuration belong in the
-  image layers under `image/layer/`; the device's root filesystem is read-only (A/B slots).
+  image layers under `image/layer/`; the device's root filesystem is read-only (A/B slots). The one
+  exception is `deploy/pi-manual/`, an interim hand install on Raspberry Pi OS Lite for piloting
+  until the image exists; keep it small and never let the image depend on it.
 - Everything that must persist lives in **`/var/lib/sursum`**, which is slot-shared on the
   `/persistent` partition: database, backups, assets, `config.toml`, `kiosk.env`, and the app in
   `releases/<version>/` with a `current` symlink. Anything else written at runtime is lost on a
   slot change, by design.
-- **Application updates** are signed `.sursum-app` bundles (Ed25519): browser upload, USB stick,
-  or `just deploy` for developers. Always: DB snapshot before migration, `/healthz` check,
-  automatic rollback. Never deploy during a service.
+- **Application updates** are signed `.sursum-app` bundles (Ed25519): upload from the remote or
+  `just deploy` for developers (no USB stick: ADR 0013 amendment of 2026-11-17). Always: DB
+  snapshot before migration, trial with automatic rollback. Never deploy during a service.
 - **System updates** (M7) go through the A/B slots with a trial boot and automatic rollback.
 - **Silent boot**: from power-on the HDMI output may show only black, logo or content. Any change
   to `cmdline.txt`, `config.txt`, the splash screen or the kiosk unit must be verified on a real
