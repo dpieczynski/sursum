@@ -105,6 +105,9 @@ app-bundle version: cross-pi
     test -n "$SURSUM_BUNDLE_KEY" && test -n "$SURSUM_BUNDLE_SIGNING_KEY"
     cargo run -q -p sursum-server -- bundle create --key "$SURSUM_BUNDLE_SIGNING_KEY" --version {{version}} \
         target/aarch64-unknown-linux-gnu/release/sursum-server target/sursum-{{version}}.sursum-app
+    # A malformed SURSUM_BUNDLE_KEY compiles in no key: the device would install the bundle but
+    # accept no update after it. Checking with the same key catches that and a mismatched secret.
+    cargo run -q -p sursum-server -- bundle verify target/sursum-{{version}}.sursum-app
 
 # The release goes on trial; the device goes back by itself if it does not run (ADR 0013).
 # Install a bundle on a device over SSH (developers only, never during a service).

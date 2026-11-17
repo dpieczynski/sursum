@@ -41,3 +41,9 @@ the public key is printed. The secret lives only in the CI secret and in the mai
 `~/.config/sursum/`; it never goes into the repository. Devices trust the key their running
 binary was built with, so changing keys needs one release signed with the old key that carries
 the new public key.
+
+Locally, `~/.config/sursum/bundle-key.pub` holds the line `SURSUM_BUNDLE_KEY=<hex>`: load it
+with `set -a; . ~/.config/sursum/bundle-key.pub; set +a` rather than exporting the file's
+contents, and point `SURSUM_BUNDLE_SIGNING_KEY` at `~/.config/sursum/bundle-signing.key`.
+`just app-bundle` verifies the result, so a malformed key fails the build instead of producing a
+release that would accept no later update.
