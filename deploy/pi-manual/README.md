@@ -24,9 +24,13 @@ firewall or kiosk watchdog. Use it to try the release, the remote and the screen
 4. **Install**: `ssh <user>@sursum.local`, then
    `sudo sh deploy/pi-manual/install.sh sursum-0.1.0.sursum-app`.
    The script installs `cage`, `chromium` and `seatd`, creates the users `sursum` (server) and
-   `sursum-kiosk` (screen), installs the release into `/var/lib/sursum`, writes
-   `/var/lib/sursum/kiosk.env`, installs `sursum.service` (from `deploy/systemd/`) and
-   `sursum-kiosk.service`, and starts both. It ends with the address for the remote.
+   `sursum-kiosk` (screen), installs the release into `/var/lib/sursum`, sets Chromium's managed
+   policies (`chromium-policies.json` → `/etc/chromium/policies/managed/sursum.json`: no
+   translation, sign-in, sync, metrics, component updates and the like), writes
+   `/var/lib/sursum/kiosk.env` (the short command line; kept if you removed its first line),
+   installs a transparent cursor theme for the kiosk, installs `sursum.service` (from
+   `deploy/systemd/`) and `sursum-kiosk.service`, and starts both. It ends with the address for
+   the remote.
 5. **Pair**: open `http://sursum.local/` on the tablet. The first remote sets the PIN.
 
 The script is safe to run again. Once a release is installed it leaves it alone: later versions go

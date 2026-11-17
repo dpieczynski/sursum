@@ -41,3 +41,11 @@ guarantee; without tests the screen would drift into Chromium-only behavior.
 - Some conveniences are off-limits on the screen (e.g. `requestIdleCallback`); the remote is not
   bound by this contract (it targets Blink) but should follow it where cheap.
 - The exact WPEWebDriver capability for browser options is verified in the M0 spike.
+
+## Amendment (2026-11-17): no cog image variant
+Point 3 is withdrawn: cog is legacy (no stable releases beyond 0.18.x, ADR 0009 amendment), so the
+image gets no `kiosk.engine = cog` variant and CI builds none. The planned WPE engine is a small
+Rust launcher on WPEPlatform's DRM platform once the base ships WPE WebKit ≥ 2.54. Points 1 and 2
+stay: the screen keeps its API contract and its blocking WPE tests. Those tests still start WPE
+through cog (`--automation --platform=headless`) because WPEWebDriver needs a launcher and trixie
+has nothing newer; they move to a WPEPlatform launcher together with the engine.

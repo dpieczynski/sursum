@@ -83,10 +83,11 @@ parts (sheet, toast, banner, hold button, PIN field) are in `ui/`.
 
 ## Display engine portability (ADRs 0009, 0015)
 
-Chromium under cage is the default. The screen follows an API contract that WPE WebKit (cog) also
-supports, and the screen subset of the WebDriver tests runs blocking on WPE in CI, so switching to
-`cog --platform=drm` stays a configuration change in the image (`kiosk.engine`), decided by
-hardware measurements.
+Chromium under cage is the engine, tamed by managed policies and a transparent cursor theme. The
+screen follows an API contract that WPE WebKit also supports, and the screen subset of the
+WebDriver tests runs blocking on WPE in CI. The planned switch is to a small Rust launcher on
+WPEPlatform's DRM platform (no compositor) once the image's base ships WPE WebKit ≥ 2.54, decided
+by hardware measurements; cog is legacy and not used on devices (ADR 0009 amendment).
 
 ## Exclusion zones (ADR 0008)
 

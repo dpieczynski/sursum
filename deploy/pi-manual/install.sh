@@ -44,12 +44,27 @@ else
     runuser -u sursum -- "$work/bin/sursum-server" --data-dir "$data" bundle install "$work/bundle.sursum-app"
 fi
 
-if [ ! -e "$data/kiosk.env" ]; then
-    cat > "$data/kiosk.env" <<'EOF'
+echo "== screen browser"
+# What Chromium must not do on a screen (translate, sign in, phone home, update components, ...)
+# is set by managed policies, Chromium's supported mechanism; the command line keeps only what
+# has no policy. --disable-background-networking stops the background requests no policy covers
+# (e.g. push messaging registration).
+install -d -m 0755 /etc/chromium/policies/managed
+install -m 0644 "$here/chromium-policies.json" /etc/chromium/policies/managed/sursum.json
+# kiosk.env is ours to update while it carries the marker line; delete that line to keep a
+# command of your own (ADR 0009: the engine can be changed without rebuilding).
+marker="# Managed by deploy/pi-manual/install.sh; delete this line to keep your own command."
+# The first version of this script wrote this command without the marker; it is ours too.
+first="KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-features=Translate --disable-pinch --overscroll-history-navigation=0 --check-for-update-interval=31536000 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/"
+if [ ! -e "$data/kiosk.env" ] || grep -qxF -e "$marker" -e "$first" "$data/kiosk.env"; then
+    cat > "$data/kiosk.env" <<EOF
+$marker
 # The browser cage starts (ADR 0009). Restart with: sudo systemctl restart sursum-kiosk
-KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-features=Translate --disable-pinch --overscroll-history-navigation=0 --check-for-update-interval=31536000 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/
+KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-background-networking --disable-pinch --overscroll-history-navigation=0 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/
 EOF
     chown sursum:sursum "$data/kiosk.env"
+else
+    echo "keeping your own $data/kiosk.env"
 fi
 
 echo "== invisible cursor"

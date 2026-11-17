@@ -29,3 +29,42 @@ pages opt out (`<html translate="no">`, `<meta name="google" content="notranslat
 the first-frame e2e test); in the device image, Chromium **managed policies** (e.g.
 `TranslateEnabled: false`) rather than flags. The spike's checklist adds: "any browser UI ever
 appears over the page" — a point in favour of cog, which has no browser UI at all.
+
+## Amendment (2026-11-17): Chromium for now, a WPEPlatform launcher later; cog is out
+The pilot Pi 5 (Raspberry Pi OS, cage 0.3.1, Chromium 154) needed one workaround after another:
+translation, cage's cursor in the middle of the screen (also after every page reload, when
+Chromium sets its own), and background requests to Google services. The maintainer asked whether
+WPE would be simpler. Findings:
+
+- **cog is legacy.** The WPE FAQ: "Cog is the launcher built on the legacy API (pre-2.54). It is
+  kept for existing deployments, but new projects do not need it"; the 2.52 release notes: no
+  stable releases beyond 0.18.x. cog is therefore rejected, also as an interim engine.
+- **The WPE way forward is WPEPlatform** (default since WPE WebKit 2.54): a launcher of a few
+  dozen lines, with a DRM/KMS platform that draws without any compositor (no cage, no cursor, no
+  browser UI).
+- **Rust can drive it**, but nothing ready exists: no maintained crates for WPE WebKit 2.0 /
+  WPEPlatform (webkit6-rs covers WebKitGTK), and Debian builds WPE with
+  `-DENABLE_INTROSPECTION=OFF`, so bindings cannot be generated from distribution packages. The
+  launcher would be a small hand-written FFI module (about ten C functions) plus the `glib` crate
+  for the main loop and signals; that module would need `unsafe`, an exception to record then.
+- **The blocker is the version, not the language.** Debian trixie (our base) has WPE WebKit
+  2.48.3, and Debian does not move WPE to new upstream versions within a stable release
+  (bookworm stayed at 2.38.6); 2.54.2 is in forky/sid. Building WebKit ourselves in the image
+  would mean hours of arm64 builds and our own security updates; Raspberry Pi keeps Chromium
+  current.
+
+Decision:
+1. **Chromium under cage stays the engine for now.** Its workarounds live in one documented
+   place: Chromium **managed policies** for everything a policy covers (translation, component
+   updates, metrics, Safe Browsing, search suggestions, sign-in, sync, passwords, spellcheck,
+   notifications, background mode, developer tools, printing; names and values checked against
+   the policy definitions in Chromium's source), a short command line for what no policy covers
+   (`--disable-background-networking` for the remaining background requests, crash bubbles,
+   first run, pinch and overscroll), and a transparent cursor theme for cage. The pilot hand
+   install (`deploy/pi-manual/`) does exactly this; the image's `sursum-kiosk` layer will too.
+2. **Target: a small Rust launcher on WPEPlatform's DRM platform**, once the image's base ships
+   WPE WebKit ≥ 2.54 (expected with Debian 14 "forky"). Before switching, the measurements from
+   the Consequences above run on the Pi 5 (including 4K), and a new ADR records the result and the
+   FFI exception.
+3. Until then the screen stays engine-portable (ADR 0015): its e2e tests keep running on WPE
+   WebKit in CI, so the switch stays cheap.

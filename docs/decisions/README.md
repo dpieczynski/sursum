@@ -14,7 +14,7 @@ supersedes the old one instead of editing it.
 | [0006](0006-in-memory-search.md) | In-memory search with explicit Polish folding, not FTS5 |
 | [0007](0007-http-first.md) | Plain HTTP in the MVP; optional device CA later |
 | [0008](0008-exclusion-zones.md) | Screen profile with exclusion zones (pillar in Tulce) |
-| [0009](0009-display-engine-chromium.md) | Chromium under cage as the display engine |
+| [0009](0009-display-engine-chromium.md) | Chromium under cage as the display engine (amended: policies now, a Rust WPEPlatform launcher once Debian ships WPE ≥ 2.54; cog rejected) |
 | [0010](0010-license-gpl3.md) | GPL-3.0-or-later and dependency license policy |
 | [0011](0011-github-and-dco.md) | GitHub hosting, DCO for contributions |
 | [0012](0012-display-power-cec-pjlink.md) | Display power control via HDMI-CEC, PJLink fallback |

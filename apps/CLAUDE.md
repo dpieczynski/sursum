@@ -26,7 +26,7 @@ is our own axum app, not a Leptos SSR server). No Node, npm or TypeScript. Appli
   only computation done here (it needs font metrics).
 - Components ≲150 lines; logic outside `view!`; format with `leptosfmt`; `web-sys` instead of
   hand-written `wasm_bindgen` externs; no `unsafe`.
-- **Screen API contract (ADR 0015)**: the screen must keep working on WPE WebKit (cog), and CI
+- **Screen API contract (ADR 0015)**: the screen must keep working on WPE WebKit, and CI
   checks that. Allowed: WebAssembly, WebSocket, Web Animations, `document.fonts`, `img.decode()`,
   WOFF2 fonts, CSS transforms/opacity/flexbox/grid, `white-space: pre`, CSS variables,
   `ResizeObserver`. Forbidden on the screen: `requestIdleCallback` (use `setTimeout` chunks),

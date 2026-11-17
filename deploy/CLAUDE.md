@@ -26,8 +26,10 @@ setup (`deploy/windows/`).
 - After an OS reboot the screen starts with the logo and the set position restored; after a
   process restart the screen is fully restored (ADR 0003).
 - The kiosk command line is read from `/var/lib/sursum/kiosk.env`, so the display engine can be
-  changed without rebuilding (ADR 0009). The image layer supports `kiosk.engine = chromium | cog`
-  (ADR 0015). For cog always pass `--bg-color=black` (default is white) and
-  `--webprocess-failure=exit` (default shows an error page); prefer `--platform=drm` (no cage).
+  changed without rebuilding (ADR 0009). The engine is Chromium under cage; what Chromium must not
+  do goes into **managed policies** (`/etc/chromium/policies/managed/`), the command line keeps
+  only what no policy covers, and cage gets a transparent cursor theme (see `deploy/pi-manual/`).
+  cog is legacy and not used on devices; the planned WPE engine is a small Rust launcher on
+  WPEPlatform's DRM platform once the base ships WPE WebKit ≥ 2.54 (ADR 0009 amendment).
 - Pin the rpi-image-gen version. Never commit secrets (PINs, signing keys, certificates); the
   bundle signing key lives outside the repo (CI secret).

@@ -36,7 +36,7 @@ test passes in Chromium and WPE; CI is green.
 - [x] `sursum-client`: WebSocket with reconnect (backoff + jitter), heartbeat, Hello/Welcome, build-id reload. No stale-`rev` dropping: messages arrive in order per connection and server revisions restart after a server restart, so clients apply every snapshot
 - [x] remote: current/next preview, next/prev, item prev/next, section chips (now slide tiles, ADR 0017), set list, BLACK/LOGO, pedal keys (PgDn/PgUp/arrows/space/B). UI texts via a compile-time message enum (`apps/remote/src/messages.rs`); `leptos_i18n` deferred until a second language is needed
 - [ ] On-site display power spike: `cec-ctl` on both displays (on / standby / power status), projector LAN (PJLink) and RS-232 check in Tulce; record result in ADR 0012
-- [ ] Hardware spike on a Pi 5: cage + Chromium (flags ⚠, cursor ⚠, white flash ⚠), crossfade smoothness; WPE/cog comparison (`--platform=drm`, `--bg-color=black`, `--webprocess-failure=exit`); first look at the Tulce pillar
+- [ ] Hardware spike on a Pi 5: cage + Chromium (flags ⚠, cursor ✓ transparent theme, white flash ⚠), crossfade smoothness; first look at the Tulce pillar. The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)
 - [x] Screen WebDriver tests pass on WPE locally; cross-engine fit test (WPE screen vs Chromium remote) passes. Blocking in CI once CI runs
 
 **Done when:** WebDriver tests pass (black first frame; last slide stays on disconnect; reconnect
@@ -101,7 +101,8 @@ no data loss; the pillar zone can be set from the remote in < 2 minutes.
 - [ ] Bundles on the device, still open: unit and paths in the image (first release shipped with the image), `just deploy` against a real Pi (no USB stick path: ADR 0013 amendment of 2026-11-17)
 - [x] Interim hand install for a pilot Pi 5 on Raspberry Pi OS Lite ([deploy/pi-manual](../deploy/pi-manual/README.md)): script, kiosk unit after the rpi-image-gen `webkiosk` example ⚠ not yet run on a Pi
 - [x] Kiosk cursor: cage (0.3.1 on Raspberry Pi OS) draws its cursor in the middle of the screen even without a mouse and has no option to hide it; and Chromium sets its own cursor after every page reload (from the default/Adwaita theme, e.g. `progress`); the pilot gives the kiosk a private `XCURSOR_PATH` whose `sursum-blank`, `default` and `Adwaita` themes hold one transparent pixel under every cursor name; confirmed on the pilot Pi 5 (no cursor after kiosk start and after two page reloads, 2026-11-17). Still to do: carry it into the `sursum-kiosk` image layer. The black overlay is composited from page load (`will-change: opacity`); the one-frame flash of full-brightness text at the first black did not recur on the Pi afterwards
-- [ ] `kiosk.engine = chromium | cog` in the `sursum-kiosk` layer; weekly CI build of the cog image variant
+- [ ] `sursum-kiosk` layer: Chromium managed policies, short command line, transparent cursor theme (as in `deploy/pi-manual/`)
+- [ ] Later (ADR 0009 amendment): Rust launcher on WPEPlatform's DRM platform once the base ships WPE WebKit ≥ 2.54 (Debian 14); measurements on the Pi 5 first, new ADR for the FFI module
 - [ ] PoE evaluation
 - [x] Display power, PJLink part (ADR 0012 amendment): codec checked against the JBMIA 1.04 example, background task with polling, state indicator, "on" tap and 1.5 s standby hold in the remote, tested against a fake projector (integration + e2e)
 - [ ] Display power, CEC part: `cec_linux` backend, udev rule for `/dev/cec0` (needs the hardware spike)
