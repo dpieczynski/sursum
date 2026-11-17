@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The set's name and the ways to change it: pick another set (newest first), create one,
-//! rename it, delete it (hold).
+//! rename it, delete it (hold, then undo from the toast).
 
 use leptos::prelude::*;
 use sursum_protocol::{Command, RemoteState, SetId, SetSummary};
 
 use crate::Commands;
-use crate::messages::{Msg, pl};
-use crate::ui::{HoldButton, Sheet};
+use crate::messages::{Msg, pl, removed};
+use crate::ui::{HoldButton, Sheet, Toasts};
 
 /// Which sheet is open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +107,13 @@ fn set_row(
         commands.send(Command::ActivateSet { set_id: pick_id.clone() });
         open.set(None);
     };
-    let delete = move || commands.send(Command::DeleteSet { set_id: delete_id.clone() });
+    let toasts = expect_context::<Toasts>();
+    let deleted_name = set.name.clone();
+    let delete = move || {
+        if commands.try_send(Command::DeleteSet { set_id: delete_id.clone() }) {
+            toasts.show_with_undo(removed(&deleted_name), Command::UndoDeleteSet);
+        }
+    };
     view! {
         <li class="picker-row" class:chosen=chosen>
             <button class="picker-pick tappable" data-testid="pick-set" on:click=pick>

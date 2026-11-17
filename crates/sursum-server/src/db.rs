@@ -295,7 +295,7 @@ impl Database {
     pub fn load_sets(&self) -> anyhow::Result<Vec<ServiceSet>> {
         let mut sets_statement = self
             .connection
-            .prepare("SELECT id, name FROM sets WHERE deleted_at IS NULL ORDER BY created_at, id")?;
+            .prepare("SELECT id, name FROM sets WHERE deleted_at IS NULL ORDER BY created_at, rowid")?;
         let sets: Vec<(String, String)> =
             sets_statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?.collect::<Result<_, _>>()?;
         let mut items_statement = self
@@ -348,6 +348,12 @@ impl Database {
             "UPDATE sets SET deleted_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL",
             [id],
         )?;
+        Ok(())
+    }
+
+    /// Undoes [`Database::delete_set`].
+    pub fn restore_set(&self, id: &str) -> anyhow::Result<()> {
+        self.connection.execute("UPDATE sets SET deleted_at = NULL WHERE id = ?1", [id])?;
         Ok(())
     }
 

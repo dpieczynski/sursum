@@ -98,6 +98,14 @@ expression: messages
     "seq": 10,
     "base_rev": 7,
     "cmd": {
+      "cmd": "undo_delete_set"
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 10,
+    "base_rev": 7,
+    "cmd": {
       "cmd": "set_end_of_item",
       "mode": "continue"
     }

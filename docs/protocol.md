@@ -53,6 +53,7 @@ Command = Next | Prev | NextItem | PrevItem                // relative: subject 
         | RemoveItem { item_id } | MoveItem { item_id, to_index } | UndoRemove
         | NewSet { name } | ActivateSet { set_id } | RenameSet { set_id, name }
         | DeleteSet { set_id }          // refused with `set_on_screen` while one of its items is live
+        | UndoDeleteSet                 // brings back the set deleted last, in its place
         | SetEndOfItem { mode: "gap"|"continue" }   // what Next does after an item's last slide
         | AddImage { title, asset_id } | AddBlank { title }      // pictures (POST /api/assets) and pauses
         | DisplayPower { action: "on"|"standby" }              // ADR 0012, runs outside the actor

@@ -179,8 +179,9 @@ przyciskiem **Zakończ tryb administratora**.
   pół minuty jest „na próbę”: jeśli się nie uruchomi albo zawiesza, urządzenie samo wraca do
   poprzedniej wersji, a w **O programie** pojawia się informacja, że aktualizacja nie zadziałała.
   Plik bez właściwego podpisu jest odrzucany i nic się nie zmienia.
-- **Usuń zestaw** (przytrzymaj, w oknie **Zmień zestaw**): nie da się usunąć zestawu, którego
-  pozycja jest właśnie na ekranie.
+- **Usuń zestaw** (przytrzymaj, w oknie **Zmień zestaw**): zaraz potem można go przywrócić
+  przyciskiem **Cofnij** w komunikacie na dole. Nie da się usunąć zestawu, którego pozycja jest
+  właśnie na ekranie.
 
 **Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,
 który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy). To urządzenie

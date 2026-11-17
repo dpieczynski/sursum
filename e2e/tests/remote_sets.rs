@@ -148,6 +148,13 @@ async fn sets_are_created_renamed_switched_and_deleted() -> anyhow::Result<()> {
         })
         .await
         .context("the set was not deleted")?;
+        // The toast offers to bring it back.
+        remote.find(By::Css("[data-testid=toast-undo]")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            picker.find_all(By::Css(".picker-row")).await.map(|rows| rows.len()).unwrap_or(0) == 2
+        })
+        .await
+        .context("undo did not bring the set back")?;
         anyhow::ensure!(attribute(screen, SCREEN_ROOT, "data-slide-key").await == key, "the screen changed");
         Ok(())
     })

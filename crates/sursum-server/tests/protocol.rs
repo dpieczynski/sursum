@@ -1091,7 +1091,27 @@ async fn sets_can_be_renamed_and_deleted_but_not_while_on_screen() {
     command(&mut remote, 4, Rev(0), Command::NewSet { name: "Stary".into() }).await;
     let old = last_remote_state(&mut observer).await.active_set.unwrap().set_id;
     command(&mut remote, 5, Rev(0), Command::NewSet { name: "Następna".into() }).await;
-    let outcome = command(&mut remote, 6, Rev(0), Command::DeleteSet { set_id: old }).await;
+    let outcome = command(&mut remote, 6, Rev(0), Command::DeleteSet { set_id: old.clone() }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    // One tap brings it back, in its place, and it is stored again.
+    assert!(matches!(
+        command(&mut remote, 60, Rev(0), Command::UndoDeleteSet).await,
+        CmdOutcome::Applied { .. }
+    ));
+    let names: Vec<String> =
+        last_remote_state(&mut observer).await.sets.into_iter().map(|set| set.name).collect();
+    assert_eq!(names, ["Następna", "Stary", "Niedziela"]);
+    let outcome = command(&mut remote, 61, Rev(0), Command::UndoDeleteSet).await;
+    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::NotFound }, "only once");
+    drop((remote, observer));
+    server.stop().await.unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut observer = connect(&server, Role::Remote, "observer").await;
+    let names: Vec<String> =
+        next_remote_state(&mut observer).await.sets.into_iter().map(|set| set.name).collect();
+    assert_eq!(names, ["Następna", "Stary", "Niedziela"], "the restored set is stored");
+    let outcome = command(&mut remote, 62, Rev(0), Command::DeleteSet { set_id: old }).await;
     assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
     let outcome = command(&mut remote, 7, Rev(0), Command::DeleteSet { set_id: "nope".into() }).await;
     assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::NotFound });

@@ -73,7 +73,7 @@ pub fn Toast(toasts: Toasts, send: impl Fn(Command) + Copy + Send + Sync + 'stat
                     toasts.hide();
                 };
                 view! {
-                    <button class="btn btn--sm btn--primary" on:click=run>
+                    <button class="btn btn--sm btn--primary" data-testid="toast-undo" on:click=run>
                         {pl(Msg::UndoShort)}
                     </button>
                 }

@@ -83,6 +83,8 @@ pub enum Command {
     RenameSet { set_id: SetId, name: String },
     /// Delete a set (not the one whose item is on screen).
     DeleteSet { set_id: SetId },
+    /// Bring back the set deleted last (the remote offers it right after deleting).
+    UndoDeleteSet,
     /// What "next" does after an item's last slide (a device setting).
     SetEndOfItem { mode: EndOfItem },
     /// Replace this device's screen profile (safe area and exclusion zones, ADR 0008). The server

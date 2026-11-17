@@ -15,12 +15,21 @@ struct Removed {
     item: SetItem,
 }
 
+/// The last deleted set, so one tap can bring it back where it was.
+#[derive(Debug, Clone)]
+struct Deleted {
+    index: usize,
+    set: ServiceSet,
+    was_active: bool,
+}
+
 /// The sets kept by the server.
 #[derive(Debug, Default)]
 pub struct SetStore {
     sets: Vec<ServiceSet>,
     active: Option<SetId>,
     last_removed: Option<Removed>,
+    last_deleted: Option<Deleted>,
 }
 
 impl SetStore {
@@ -30,7 +39,7 @@ impl SetStore {
         let active = active
             .filter(|id| sets.iter().any(|set| &set.id == id))
             .or_else(|| sets.last().map(|set| set.id.clone()));
-        SetStore { sets, active, last_removed: None }
+        SetStore { sets, active, last_removed: None, last_deleted: None }
     }
 
     /// The active set.
@@ -91,14 +100,29 @@ impl SetStore {
     /// becomes active.
     pub fn delete(&mut self, set_id: &SetId) -> bool {
         let Some(index) = self.sets.iter().position(|set| &set.id == set_id) else { return false };
-        self.sets.remove(index);
+        let set = self.sets.remove(index);
         if self.last_removed.as_ref().is_some_and(|removed| &removed.set_id == set_id) {
             self.last_removed = None;
         }
-        if self.active.as_ref() == Some(set_id) {
+        let was_active = self.active.as_ref() == Some(set_id);
+        if was_active {
             self.active = self.sets.last().map(|set| set.id.clone());
         }
+        self.last_deleted = Some(Deleted { index, set, was_active });
         true
+    }
+
+    /// Brings the last deleted set back at its place (active again if it was); returns it, or
+    /// `None` if there is nothing to bring back.
+    pub fn undo_delete(&mut self) -> Option<&ServiceSet> {
+        let Deleted { index, set, was_active } = self.last_deleted.take()?;
+        let id = set.id.clone();
+        let index = index.min(self.sets.len());
+        self.sets.insert(index, set);
+        if was_active {
+            self.active = Some(id);
+        }
+        self.sets.get(index)
     }
 
     /// Creates an empty set and makes it active.
@@ -171,6 +195,20 @@ mod tests {
 
     fn ids(set: &ServiceSet) -> Vec<&str> {
         set.items.iter().map(|item| item.id.as_str()).collect()
+    }
+
+    #[test]
+    fn a_deleted_set_comes_back_at_its_place_and_active_again() {
+        let mut store = SetStore::default();
+        let first = store.create(SetId::from("a"), "Niedziela").id.clone();
+        let second = store.create(SetId::from("b"), "Środa").id.clone();
+        assert!(store.delete(&second));
+        assert_eq!(store.active_id(), Some(&first));
+        assert_eq!(store.undo_delete().map(|set| set.name.as_str()), Some("Środa"));
+        assert_eq!(store.active_id(), Some(&second));
+        let order: Vec<SetId> = store.summaries().into_iter().map(|set| set.set_id).collect();
+        assert_eq!(order, [second, first]);
+        assert!(store.undo_delete().is_none(), "only once");
     }
 
     #[test]

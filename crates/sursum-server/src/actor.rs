@@ -460,6 +460,7 @@ impl AppState {
                 self.sets.rename(set_id, name).cloned().ok_or(ErrorCode::NotFound).map(Some)
             }
             Command::DeleteSet { set_id } => self.delete_set(set_id),
+            Command::UndoDeleteSet => self.undo_delete_set(),
             Command::SetEndOfItem { mode } => {
                 if let Err(error) = self.database.set_setting(END_OF_ITEM_KEY, mode) {
                     tracing::error!(?error, "could not store the end-of-item setting");
@@ -569,6 +570,15 @@ impl AppState {
         self.sets.delete(set_id);
         tracing::info!(%set_id, "set deleted");
         Ok(None)
+    }
+
+    fn undo_delete_set(&mut self) -> Result<Option<ServiceSet>, ErrorCode> {
+        let set = self.sets.undo_delete().cloned().ok_or(ErrorCode::NotFound)?;
+        if let Err(error) = self.database.restore_set(set.id.as_str()) {
+            tracing::error!(?error, "could not restore a set");
+        }
+        tracing::info!(set_id = %set.id, "set restored");
+        Ok(Some(set))
     }
 
     fn add_song(&mut self, song_id: &SongId) -> Result<Option<ServiceSet>, ErrorCode> {
