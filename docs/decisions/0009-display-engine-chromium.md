@@ -60,7 +60,10 @@ Decision:
    notifications, background mode, developer tools, printing; names and values checked against
    the policy definitions in Chromium's source), a short command line for what no policy covers
    (`--disable-background-networking` for the remaining background requests, crash bubbles,
-   first run, pinch and overscroll), and a transparent cursor theme for cage. The pilot hand
+   first run, pinch and overscroll), and a transparent cursor theme for cage. Network access is
+   not left to the browser: the kiosk unit allows only localhost (`IPAddressAllow=localhost`,
+   `IPAddressDeny=any`), because Debian's Chromium carries Google API keys and kept registering
+   for push messaging on the Pi despite the flag. The pilot hand
    install (`deploy/pi-manual/`) does exactly this; the image's `sursum-kiosk` layer will too.
 2. **Target: a small Rust launcher on WPEPlatform's DRM platform**, once the image's base ships
    WPE WebKit ≥ 2.54 (expected with Debian 14 "forky"). Before switching, the measurements from

@@ -22,6 +22,12 @@ Environment=XDG_RUNTIME_DIR=/run/sursum-kiosk
 # Chromium sets one after every page reload. The private path keeps other programs' cursors.
 Environment=XCURSOR_PATH=/usr/share/sursum/cursors
 Environment=XCURSOR_THEME=sursum-blank
+# The screen talks to the server on this machine only (CLAUDE.md rule 3: no network resources).
+# Enforced by systemd for every process of the kiosk, whatever the browser tries: Debian's
+# Chromium ships Google API keys, and with them registers for push messaging in the background
+# despite --disable-background-networking.
+IPAddressAllow=localhost
+IPAddressDeny=any
 EnvironmentFile=/var/lib/sursum/kiosk.env
 # $KIOSK_APP (unbraced) is split into words by systemd.
 ExecStart=/usr/bin/cage -- $KIOSK_APP
