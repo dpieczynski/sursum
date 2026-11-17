@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song>
+  <title>In natali Domini</title>
+  <author>pieśń łacińska (średniowieczna, anonimowa)</author>
+  <copyright>Domena publiczna – średniowieczna pieśń łacińska; tekst wg wyd. Kraków 1838</copyright>
+  <presentation>V1 C V2 C V3 C V4 C V5 C</presentation>
+  <hymn_number></hymn_number>
+  <capo print="false"></capo>
+  <aka></aka>
+  <key></key>
+  <lyrics>;Źródło: M. M. Mioduszewski, Śpiewnik kościelny, Kraków 1838, Pieśni na Boże Narodzenie, pieśń XV, s. 53–54 (skan 59–60) – https://pl.wikisource.org/wiki/Śpiewnik_kościelny/In_natali_Domini
+;Autor: pieśń łacińska (średniowieczna, anonimowa)
+;Licencja: domena publiczna – średniowieczny tekst łaciński, drukowany w 1838 r.
+;Zmiany: pisownia uwspółcześniona (cœli → coeli, Quæ → Quae); ligatury œ, æ zapisano jako oe, ae; refren oznaczony w druku „Virgo Deum etc.” zapisany raz jako [C]
+;Skan: https://commons.wikimedia.org/wiki/File:Śpiewnik_kościelny_czyli_pieśni_nabożne_z_melodyjami_w_kościele_katolickim_używane_(Mioduszewski).djvu
+;Transkrypcja Wikiźródeł: strony uwierzytelnione (poziom 4)
+[V1]
+ In natali Domini,
+ Gaudent omnes Angeli,
+ Et cantant cum jubilo:
+ Gloria uni Deo.
+[C]
+ Virgo Deum genuit,
+ Virgo Christum peperit,
+ Virgo manens intacta.
+[V2]
+ Nuntiavit Angelus
+ Gaudium pastoribus,
+ Christi nativitatem,
+ Magnam jucunditatem.
+[V3]
+ Tres Magi advenerunt,
+ Munera obtulerunt,
+ Christo nato Domino,
+ Salvatori humano.
+[V4]
+ Stella coeli fulgida,
+ Apparuit splendida,
+ Quae Magos conducebat,
+ Ubi Christus jacebat.
+[V5]
+ De natali Domini,
+ Laudes demus Numini,
+ Cantantes assiduo:
+ Gloria uni Deo.</lyrics>
+</song>
