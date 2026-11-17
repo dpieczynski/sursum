@@ -110,10 +110,10 @@ app-bundle version: cross-pi
     cargo run -q -p sursum-server -- bundle verify target/sursum-{{version}}.sursum-app
 
 # Device image for a Raspberry Pi 5 (ADR 0013, image/) with release <version> as its first
-# application. Needs the bundle keys (see app-bundle) and the administrator's SSH public key
+# application; `just image <version> y` makes a diagnostic image (boot messages instead of black). Needs the bundle keys (see app-bundle) and the administrator's SSH public key
 # (SURSUM_SSH_PUBKEY, default ~/.ssh/id_ed25519.pub; never kept in the repository). Builds with
 # the pinned rpi-image-gen in a privileged podman container; on x86_64 through QEMU (slow).
-image version: (app-bundle version)
+image version diagnostic="n": (app-bundle version)
     #!/usr/bin/env bash
     set -euo pipefail
     key="${SURSUM_SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
@@ -127,7 +127,8 @@ image version: (app-bundle version)
     podman run --rm --privileged -v "$PWD:/src" localhost/sursum-image-builder \
         /opt/rpi-image-gen/rpi-image-gen build -S /src/image -c sursum.yaml -B /src/target/image/work -- \
         IGconf_sursum_bundle=/src/target/sursum-{{version}}.sursum-app \
-        IGconf_ssh_pubkey_user1=/src/target/image/admin.pub
+        IGconf_ssh_pubkey_user1=/src/target/image/admin.pub \
+        IGconf_sursum_diagnostic_boot={{diagnostic}}
     ls -lh target/image/work/deploy-*/ 2>/dev/null || true
 
 # The release goes on trial; the device goes back by itself if it does not run (ADR 0013).

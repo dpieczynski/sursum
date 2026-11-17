@@ -17,6 +17,14 @@
 # X-Env-Var-bundle-Required: y
 # X-Env-Var-bundle-Valid: string
 # X-Env-Var-bundle-Set: y
+#
+# X-Env-Var-diagnostic_boot: n
+# X-Env-Var-diagnostic_boot-Desc: y shows kernel and systemd messages and the firmware's rainbow
+#  screen instead of a black boot, for diagnosing a device that never shows the screen
+#  (`just image <version> y`). Never for a device in a church.
+# X-Env-Var-diagnostic_boot-Required: n
+# X-Env-Var-diagnostic_boot-Valid: bool
+# X-Env-Var-diagnostic_boot-Set: y
 # METAEND
 ---
 # SPDX-License-Identifier: GPL-3.0-or-later

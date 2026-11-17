@@ -57,3 +57,17 @@ kernel for it).
 - **Administration**: `ssh admin@sursum.local` with the key given at build time; no password
   login. Application updates come from the remote (on trial, ADR 0013) or `just deploy`.
 - **Logs**: `journalctl` is persistent across reboots (64M).
+
+## Diagnosing a device
+
+- **The screen stays black and nothing answers on the network**: count the green LED's blinks.
+  Seven short blinks mean "kernel not found", e.g. this image (Raspberry Pi 5 only) in a Pi 4;
+  the [Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#led-warning-flash-codes)
+  lists the other codes.
+- **Read the journal from the card**: the journal is persistent, so it holds every boot that
+  reached systemd. Put the card into a Linux laptop, mount the `persistent` partition read-only
+  and run `journalctl -D <mount>/log/journal --list-boots`, then `-b -1` and so on.
+- **A diagnostic image**: `just image <version> y` builds an image that shows the firmware's rainbow
+  screen and the kernel's and systemd's messages on the screen (until the kiosk takes it) instead
+  of a black boot (layer variable `sursum.diagnostic_boot`). It is otherwise identical; never ship
+  it to a church.

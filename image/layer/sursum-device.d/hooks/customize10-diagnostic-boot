@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Diagnostic boot (`just image <version> y`, sursum.diagnostic_boot=y): replaces the static
+# silent-boot fragments of this layer (for/.../90-sursum) with ones that show what happens, so a
+# device that stays black can be diagnosed on its own screen. The kernel keeps the base's
+# console on tty1 and its messages, systemd prints its status lines until the kiosk takes tty1,
+# and the firmware's rainbow screen stays. Wi-Fi and Bluetooth stay off as in a normal image.
+set -eu
+
+[ "${IGconf_sursum_diagnostic_boot:-n}" = y ] || exit 0
+
+mkdir -p "$LAYER_WORKDIR/for/linux-base/cmdline.d" "$LAYER_WORKDIR/for/rpi-boot-firmware/config.txt.d"
+echo "consoleblank=0 systemd.show_status=1" > "$LAYER_WORKDIR/for/linux-base/cmdline.d/90-sursum"
+cat > "$LAYER_WORKDIR/for/rpi-boot-firmware/config.txt.d/90-sursum" <<'FRAGMENT'
+[all]
+# Diagnostic boot: the rainbow screen and firmware messages stay.
+dtoverlay=disable-wifi
+dtoverlay=disable-bt
+FRAGMENT
