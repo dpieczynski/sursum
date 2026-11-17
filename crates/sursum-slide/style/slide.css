@@ -63,6 +63,12 @@
   position: absolute;
   inset: 0;
 }
+/* The two content layers stay invisible until the transition loop sets their opacity, and are
+   composited from page load, so a first crossfade cannot flash or promote them mid-animation. */
+.sursum-content {
+  opacity: 0;
+  will-change: opacity;
+}
 
 /* The text box: one block per line, never re-flowed (fit.rs chooses a size that avoids wrapping). */
 .sursum-lines {

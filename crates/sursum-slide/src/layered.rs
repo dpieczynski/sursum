@@ -19,7 +19,7 @@ use crate::calibration::{CalibrationPattern, rect_style};
 use crate::dom;
 use crate::fit::{Fit, fit_deck};
 use crate::slide_view::asset_url;
-use crate::slide_view::{SlideView, background_style};
+use crate::slide_view::{SlideView, background_value};
 use crate::stage::Stage;
 
 /// What one content layer shows.
@@ -207,18 +207,16 @@ impl Parts {
 }
 
 /// One content layer; its opacity and stacking are set by the transition loop, not by Leptos.
+/// Leptos sets only the `background` property: replacing the whole `style` attribute wiped the
+/// loop's opacity, so a new slide showed at full brightness for a frame before its fade
+/// (seen on the Pi at the first song after boot). Hidden until the loop shows it (CSS).
 fn layer_view(shown: RwSignal<Option<Shown>>, node_ref: NodeRef<Div>) -> impl IntoView {
+    let background = move || {
+        shown
+            .with(|shown| shown.as_ref().map(|shown| background_value(&shown.background)).unwrap_or_default())
+    };
     view! {
-        <div
-            class="sursum-layer"
-            node_ref=node_ref
-            style=move || {
-                shown
-                    .with(|shown| {
-                        shown.as_ref().map(|shown| background_style(&shown.background)).unwrap_or_default()
-                    })
-            }
-        >
+        <div class="sursum-layer sursum-content" node_ref=node_ref style:background=background>
             {move || {
                 shown
                     .get()

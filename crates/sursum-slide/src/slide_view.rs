@@ -33,8 +33,14 @@ pub fn text_box_style(theme: &Theme, content: Rect, font_px: u32) -> String {
 
 /// CSS for an opaque layer background.
 pub fn background_style(background: &Background) -> String {
+    format!("background:{};", background_value(background))
+}
+
+/// The value of the `background` property alone, for an element whose other inline styles
+/// (opacity, stacking) are set elsewhere and must not be replaced.
+pub fn background_value(background: &Background) -> String {
     match background {
-        Background::Color { css } => format!("background:{css};"),
+        Background::Color { css } => css.clone(),
     }
 }
 
