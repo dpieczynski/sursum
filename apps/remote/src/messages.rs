@@ -248,6 +248,10 @@ pub enum Msg {
     SystemUpdateInstalled,
     SystemUpdateOnTrial,
     SystemUpdateWriting,
+    ProgramUpdateRestarting,
+    ProgramUpdateChecking,
+    ProgramUpdateCommitted,
+    ProgramUpdateRolledBack,
     SystemUpdateRestarting,
     SystemUpdateChecking,
     SystemUpdateDontSwitchOff,
@@ -558,6 +562,10 @@ pub fn pl(msg: Msg) -> &'static str {
             "Nowy system jest sprawdzany. Jeśli nie zadziała, urządzenie samo wróci do poprzedniego."
         }
         Msg::SystemUpdateWriting => "Zapisywanie nowego systemu…",
+        Msg::ProgramUpdateRestarting => "Program uruchamia się ponownie…",
+        Msg::ProgramUpdateChecking => "Nowa wersja programu jest sprawdzana (około pół minuty)…",
+        Msg::ProgramUpdateCommitted => "Nowa wersja programu działa.",
+        Msg::ProgramUpdateRolledBack => "Nowa wersja programu nie zadziałała – działa poprzednia.",
         Msg::SystemUpdateRestarting => "Urządzenie uruchamia się ponownie…",
         Msg::SystemUpdateChecking => "Nowy system jest sprawdzany (do 3 minut)…",
         Msg::SystemUpdateDontSwitchOff => {

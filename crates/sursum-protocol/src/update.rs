@@ -35,6 +35,10 @@ pub struct SystemStatus {
     /// it: the device will restart any moment.
     #[serde(default)]
     pub installing: bool,
+    /// The version being installed or on trial, so a remote that (re)connects meanwhile can
+    /// follow it to its end.
+    #[serde(default)]
+    pub target: Option<String>,
     /// How the most recent system update ended, if any.
     pub last: Option<LastSystemUpdate>,
     /// Whether a system update can be uploaded now.

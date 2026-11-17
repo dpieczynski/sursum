@@ -6,11 +6,12 @@
 //! and reconnects (or reloads) by itself after the restart.
 
 use leptos::prelude::*;
-use sursum_protocol::{InstallOutcome, LastSystemUpdate, UpdateStatus};
+use sursum_protocol::{InstallOutcome, UpdateStatus};
 use wasm_bindgen::JsCast;
 
 use super::AdminOnly;
 use crate::api::{get_json, post_file};
+use crate::maintenance::{Maintenance, UpdateKind};
 use crate::messages::{Msg, install_refusal, installed_version, last_update, pl, system_lines};
 use crate::ui::Sheet;
 
@@ -24,9 +25,8 @@ struct Kind {
     warning: Msg,
     installed: Msg,
     testid: &'static str,
-    /// After the upload, follow the device through writing, restarting and the trial (system
-    /// updates), with the sheet locked until it ends.
-    follow: bool,
+    /// Which progress the maintenance sheet follows after an accepted upload.
+    update: UpdateKind,
 }
 
 const PROGRAM: Kind = Kind {
@@ -37,7 +37,7 @@ const PROGRAM: Kind = Kind {
     warning: Msg::UpdateWarning,
     installed: Msg::UpdateInstalled,
     testid: "update",
-    follow: false,
+    update: UpdateKind::Program,
 };
 
 const SYSTEM: Kind = Kind {
@@ -48,7 +48,7 @@ const SYSTEM: Kind = Kind {
     warning: Msg::SystemUpdateWarning,
     installed: Msg::SystemUpdateInstalled,
     testid: "system-update",
-    follow: true,
+    update: UpdateKind::System,
 };
 
 /// Where an install is.
@@ -60,55 +60,6 @@ enum Step {
     Installing,
     /// The server's answer, or `None` when the upload did not get through.
     Done(Option<InstallOutcome>),
-    /// A system update was accepted; the device is somewhere between writing it and its trial.
-    Following(String, Phase),
-}
-
-/// Where an accepted system update is, as far as the remote can tell.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Phase {
-    Writing,
-    /// No answer from the server: the device is restarting.
-    Restarting,
-    Checking,
-    Committed,
-    RolledBack,
-}
-
-impl Phase {
-    fn finished(self) -> bool {
-        matches!(self, Phase::Committed | Phase::RolledBack)
-    }
-}
-
-/// The phase of the system update `version` from a status answer (`None`: no answer).
-fn phase_of(status: Option<&UpdateStatus>, version: &str) -> Phase {
-    let Some(system) = status.and_then(|status| status.system.as_ref()) else { return Phase::Restarting };
-    if system.installing {
-        return Phase::Writing;
-    }
-    if system.on_trial {
-        return Phase::Checking;
-    }
-    match &system.last {
-        Some(LastSystemUpdate::Committed { version: done }) if done == version => Phase::Committed,
-        Some(LastSystemUpdate::RolledBack { failed }) if failed == version => Phase::RolledBack,
-        // Between the restart and the trial check, or an older outcome: keep waiting.
-        _ => Phase::Restarting,
-    }
-}
-
-/// Asks for the state every 3 s until the update `version` has ended.
-async fn follow(step: RwSignal<Step>, version: String) {
-    loop {
-        gloo_timers::future::sleep(std::time::Duration::from_secs(3)).await;
-        let status: Option<UpdateStatus> = get_json("/api/update/status").await;
-        let phase = phase_of(status.as_ref(), &version);
-        step.set(Step::Following(version.clone(), phase));
-        if phase.finished() {
-            return;
-        }
-    }
 }
 
 /// The update state and, where this device can take them, the install buttons.
@@ -169,6 +120,7 @@ fn status_lines(status: &UpdateStatus) -> Vec<String> {
 /// A file picker; the chosen file is installed only after the warning was confirmed.
 #[component]
 fn InstallButton(kind: Kind) -> impl IntoView {
+    let maintenance = expect_context::<Maintenance>();
     let step = RwSignal::new(Step::Idle);
     // `web_sys::File` is not `Send`, so it lives in a local store.
     let chosen = StoredValue::new_local(None::<web_sys::File>);
@@ -187,22 +139,19 @@ fn InstallButton(kind: Kind) -> impl IntoView {
         let Some(file) = chosen.get_value() else { return };
         step.set(Step::Installing);
         leptos::task::spawn_local(async move {
-            let outcome = post_file::<InstallOutcome>(kind.url, &file).await;
-            match outcome {
-                Some(InstallOutcome::Installed { version }) if kind.follow => {
-                    step.set(Step::Following(version.clone(), Phase::Writing));
-                    follow(step, version).await;
+            match post_file::<InstallOutcome>(kind.url, &file).await {
+                // The maintenance sheet follows it from here, over every view.
+                Some(InstallOutcome::Installed { version }) => {
+                    chosen.set_value(None);
+                    step.set(Step::Idle);
+                    maintenance.start(kind.update, version);
                 }
                 outcome => step.set(Step::Done(outcome)),
             }
         });
     };
     // Nothing else should look usable while an upload runs or the device updates its system.
-    let locked = move || match step.get() {
-        Step::Installing => true,
-        Step::Following(_, phase) => !phase.finished(),
-        _ => false,
-    };
+    let locked = move || step.get() == Step::Installing;
     let close = move || {
         if !locked() {
             chosen.set_value(None);
@@ -264,56 +213,5 @@ fn sheet_lines(kind: Kind, step: &Step) -> Vec<String> {
         }
         Step::Done(Some(InstallOutcome::Refused { reason })) => vec![pl(install_refusal(*reason)).to_owned()],
         Step::Done(None) => vec![pl(Msg::UpdateSendFailed).to_owned()],
-        Step::Following(version, phase) => {
-            let now = match phase {
-                Phase::Writing => Msg::SystemUpdateWriting,
-                Phase::Restarting => Msg::SystemUpdateRestarting,
-                Phase::Checking => Msg::SystemUpdateChecking,
-                Phase::Committed => Msg::SystemUpdateCommitted,
-                Phase::RolledBack => Msg::SystemUpdateRolledBack,
-            };
-            let mut lines = vec![installed_version(version), pl(now).to_owned()];
-            if !phase.finished() {
-                lines.push(pl(Msg::SystemUpdateDontSwitchOff).to_owned());
-            }
-            lines
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use sursum_protocol::SystemStatus;
-
-    use super::*;
-
-    fn status(installing: bool, on_trial: bool, last: Option<LastSystemUpdate>) -> UpdateStatus {
-        UpdateStatus {
-            build: "b".into(),
-            release: None,
-            on_trial: false,
-            last: None,
-            can_install: true,
-            system: Some(SystemStatus {
-                version: "v1".into(),
-                on_trial,
-                installing,
-                last,
-                can_install: false,
-            }),
-        }
-    }
-
-    #[test]
-    fn a_system_update_is_followed_from_writing_to_its_end() {
-        assert_eq!(phase_of(Some(&status(true, false, None)), "v2"), Phase::Writing);
-        assert_eq!(phase_of(None, "v2"), Phase::Restarting);
-        assert_eq!(phase_of(Some(&status(false, true, None)), "v2"), Phase::Checking);
-        let older = Some(LastSystemUpdate::Committed { version: "v1".into() });
-        assert_eq!(phase_of(Some(&status(false, false, older)), "v2"), Phase::Restarting);
-        let done = Some(LastSystemUpdate::Committed { version: "v2".into() });
-        assert_eq!(phase_of(Some(&status(false, false, done)), "v2"), Phase::Committed);
-        let failed = Some(LastSystemUpdate::RolledBack { failed: "v2".into() });
-        assert_eq!(phase_of(Some(&status(false, false, failed)), "v2"), Phase::RolledBack);
     }
 }

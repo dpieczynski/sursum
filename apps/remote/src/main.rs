@@ -17,6 +17,7 @@ mod import;
 mod key_settings;
 mod keys;
 mod live;
+mod maintenance;
 mod messages;
 mod pairing;
 mod picture;
@@ -145,6 +146,8 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     provide_context(calibrating);
     let current = CurrentView(RwSignal::new(View::from_location()));
     provide_context(current);
+    let maintenance = maintenance::Maintenance::new();
+    provide_context(maintenance);
 
     let open = calibrating.0;
     let calibration_view =
@@ -195,6 +198,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
             </section>
         </main>
         <ui::Toast toasts send=move |command| commands.send(command) />
+        <maintenance::MaintenanceSheet connection=status maintenance />
         {search_sheet}
         {screen_sheet}
     }

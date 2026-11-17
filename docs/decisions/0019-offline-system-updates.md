@@ -61,9 +61,12 @@ Our own small updater on the Raspberry Pi firmware's **tryboot** (`autoboot.txt`
   tryboot"` ("Too many arguments"), so the restart was done by hand; the unit now uses
   `--reboot-argument="0 tryboot"`. A system that still has the old unit needs that one manual
   restart for the update that replaces it.
-- The remote follows an accepted system update in a locked sheet with a progress indicator
-  (writing, restarting, checking, then the result), so nothing looks usable while the device is
-  about to restart; the status tells "installing" (written, restart pending) from "on trial" (the
+- The remote follows an accepted update, program or system, in a locked sheet over every view
+  with a progress indicator (writing, restarting, checking, then the result), so nothing looks
+  usable while the device is about to restart. The sheet also appears by itself whenever a remote
+  loads or reconnects while an update is in progress (a program update reloads the page; other
+  remotes may connect mid-update), which is why the status names the system version being
+  installed (`target`); the status tells "installing" (written, restart pending) from "on trial" (the
   new system runs) by the active slot, which the unprivileged server can read.
 - ⚠ Still to run on a Pi: a fully automatic update with the fixed unit, and the rollback after a
   deliberately broken system.

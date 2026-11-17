@@ -44,6 +44,8 @@ const FORMAT: u32 = 1;
 const DIR: &str = "system-update";
 const INCOMING: &str = "incoming.part";
 const READY: &str = "ready.sursum-system";
+/// The ready update's version, written next to it so the status can name it cheaply.
+const READY_VERSION: &str = "ready.version";
 const TRIAL: &str = "trial.json";
 const OUTCOME: &str = "outcome.json";
 const MANIFEST: &str = "manifest.json";
@@ -260,6 +262,7 @@ pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::
         Ok(manifest.version)
     })();
     let _ = std::fs::remove_file(&ready);
+    let _ = std::fs::remove_file(dir.join(READY_VERSION));
     if result.is_err() {
         let failed = version.unwrap_or_else(|| "the uploaded update".into());
         write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed })?;
@@ -340,10 +343,15 @@ impl SystemUpdates {
         let active = self.slots.boot_partition("active").ok().map(|(_, label)| label);
         let on_trial = trial.as_ref().is_some_and(|trial| active.as_deref() == Some(trial.slot.as_str()));
         let installing = dir.join(READY).exists() || (trial.is_some() && !on_trial);
+        let target = match &trial {
+            Some(trial) => Some(trial.version.clone()),
+            None => std::fs::read_to_string(dir.join(READY_VERSION)).ok().map(|text| text.trim().to_owned()),
+        };
         Some(SystemStatus {
             version,
             on_trial,
             installing,
+            target: target.filter(|_| installing || on_trial),
             last: read_json(&dir, OUTCOME).ok().flatten(),
             can_install: self.key.is_some() && self.supervised && !installing && !on_trial,
         })
@@ -364,6 +372,7 @@ impl SystemUpdates {
         if self.version.as_deref() == Some(manifest.version.as_str()) {
             return Err(SystemUpdateError::AlreadyCurrent);
         }
+        std::fs::write(data_dir.join(DIR).join(READY_VERSION), &manifest.version).map_err(failed)?;
         std::fs::rename(incoming, data_dir.join(DIR).join(READY)).map_err(failed)?;
         std::fs::write(&self.request, b"").map_err(failed)?;
         Ok(manifest.version)
@@ -510,7 +519,9 @@ mod tests {
         let incoming = updates.incoming(data.path()).unwrap();
         assert_eq!(updates.stage(data.path(), &incoming).unwrap(), "v2");
         assert!(data.path().join("request").exists(), "the root unit is asked");
-        assert!(!updates.status(data.path()).unwrap().can_install, "one update at a time");
+        let status = updates.status(data.path()).unwrap();
+        assert!(!status.can_install, "one update at a time");
+        assert_eq!(status.target.as_deref(), Some("v2"), "a remote that connects now can follow it");
 
         assert_eq!(apply(data.path(), &key.verifying_key(), &device.slots).unwrap(), "v2");
         assert_eq!(device.partition(3, 3000), vec![0x42; 3000], "other boot written");
@@ -523,6 +534,7 @@ mod tests {
         device.boot_into('b');
         let status = updates.status(data.path()).unwrap();
         assert!(status.on_trial && !status.installing && !status.can_install);
+        assert_eq!(status.target.as_deref(), Some("v2"));
         assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::OnTrial("v2".into()));
         assert_eq!(commit(data.path(), &device.slots).unwrap(), "v2");
         assert!(device.autoboot().contains("boot_partition=3\n[tryboot]\nboot_partition=2"));
