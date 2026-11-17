@@ -151,7 +151,12 @@ async fn black_turns_into_show_text_and_a_tapped_item_lifts_it() -> anyhow::Resu
             attribute(screen, SCREEN_ROOT, "data-overlay").await == "black"
         })
         .await?;
-        anyhow::ensure!(cover.text().await? == "Pokaż tekst", "the button must offer to show the text again");
+        // The remote gets its snapshot independently of the screen.
+        wait_until(Duration::from_secs(5), || async {
+            cover.text().await.is_ok_and(|text| text == "Pokaż tekst")
+        })
+        .await
+        .context("the button must offer to show the text again")?;
         // "Dalej" moves on under black…
         let key = attribute(screen, SCREEN_ROOT, "data-slide-key").await;
         remote.find(By::Css("[data-testid=next]")).await?.click().await?;
@@ -185,13 +190,19 @@ async fn next_shows_a_gap_before_the_next_song_and_says_so() -> anyhow::Result<(
                 .map_err(anyhow::Error::from)
         };
         let next = remote.find(By::Css("[data-testid=next]")).await?;
+        // One tap, then wait until the remote shows the new state (the caption always changes).
+        let step = async || -> anyhow::Result<()> {
+            let before = caption().await?;
+            next.click().await?;
+            wait_until(Duration::from_secs(5), || async { caption().await.is_ok_and(|now| now != before) })
+                .await
+                .context("the caption did not change after a tap")
+        };
         // Walk to the last slide of the first song.
         while !caption().await?.contains("przerwa") {
-            next.click().await?;
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            step().await?;
         }
-        next.click().await?;
-        wait_for_slide(screen, "").await?;
+        step().await?;
         wait_until(Duration::from_secs(5), || async {
             attribute(screen, SCREEN_ROOT, "data-slide-key").await.ends_with("~gap")
         })
@@ -206,11 +217,14 @@ async fn next_shows_a_gap_before_the_next_song_and_says_so() -> anyhow::Result<(
         control.command(Command::SetEndOfItem { mode: EndOfItem::Continue }).await?;
         control.command(Command::GoToItemNumber { number: 3 }).await?;
         wait_for_slide(screen, "t#").await?;
-        let slides = remote.find_all(By::Css(".slide-tile")).await?.len();
-        for _ in 0..slides {
-            next.click().await?;
-            tokio::time::sleep(Duration::from_millis(200)).await;
+        // Walk to the last slide of item 3, which now leads straight to item 4.
+        for _ in 0..10 {
+            if caption().await?.starts_with("→ 4.") {
+                break;
+            }
+            step().await?;
         }
+        next.click().await?;
         wait_for_slide(screen, "v1#").await.context("no gap expected when turned off")?;
         Ok(())
     })
