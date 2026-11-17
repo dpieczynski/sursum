@@ -18,6 +18,34 @@ pub struct UpdateStatus {
     /// Whether this server can take an update from the remote at all (signed builds under a
     /// service manager only), so the remote does not offer what would be refused.
     pub can_install: bool,
+    /// The device's system (the read-only A/B image, ADR 0019), on devices built from the image.
+    #[serde(default)]
+    pub system: Option<SystemStatus>,
+}
+
+/// The read-only system of an imaged device and its updates (`.sursum-system`, ADR 0019).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SystemStatus {
+    /// The running system's version (the image's build id).
+    pub version: String,
+    /// The running system was just installed and is not yet confirmed: if it does not come up
+    /// healthy, the device restarts into the previous system by itself.
+    pub on_trial: bool,
+    /// How the most recent system update ended, if any.
+    pub last: Option<LastSystemUpdate>,
+    /// Whether a system update can be uploaded now.
+    pub can_install: bool,
+}
+
+/// How the most recent system update ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum LastSystemUpdate {
+    /// The new system came up healthy and is now the one the device starts.
+    Committed { version: String },
+    /// The new system did not come up healthy (or could not be written); the device runs the
+    /// system it had before.
+    RolledBack { failed: String },
 }
 
 /// How the most recent update ended.
@@ -60,4 +88,6 @@ pub enum InstallRefusal {
     AlreadyCurrent,
     /// Writing the release failed (e.g. a full disk); the old release keeps running.
     Failed,
+    /// Another update is being installed or is on trial; try again once it has ended.
+    Busy,
 }

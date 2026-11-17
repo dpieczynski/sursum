@@ -25,6 +25,7 @@ pub mod platform;
 pub mod screen_guard;
 pub mod service;
 pub mod sets;
+pub mod system_update;
 pub mod update;
 pub mod ws;
 
@@ -101,6 +102,12 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         supervised: platform.supervised(),
         restart: std::sync::Arc::default(),
         installing: std::sync::Arc::default(),
+        system: system_update::SystemUpdates::detect(
+            config.bundle_key,
+            platform.supervised(),
+            &config.system_release,
+            &config.system_request,
+        ),
     };
     let restart = updates.restart.clone();
     spawn_trial_commit(state.clone(), config.data_dir.clone());

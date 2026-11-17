@@ -38,6 +38,11 @@ pub struct Config {
     /// The key application updates must be signed with: the one compiled in from
     /// `SURSUM_BUNDLE_KEY`. Never read from `config.toml`; tests set their own.
     pub bundle_key: Option<ed25519_dalek::VerifyingKey>,
+    /// The running system's version file and the file that asks the root unit to install a
+    /// system update (ADR 0019); the device's paths, never read from `config.toml`; tests set
+    /// their own.
+    pub system_release: PathBuf,
+    pub system_request: PathBuf,
 }
 
 /// `[display_power]` in `config.toml`.
@@ -72,6 +77,8 @@ impl Config {
             display_power: DisplayPowerConfig::None,
             screen_guard: None,
             bundle_key: crate::bundle::trusted_key(),
+            system_release: crate::system_update::SYSTEM_RELEASE.into(),
+            system_request: crate::system_update::REQUEST.into(),
         }
     }
 

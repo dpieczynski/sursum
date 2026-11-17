@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Writes the staged system update to the other slot with the read-only system's own copy of the
+# server (which verifies it again), then restarts into that slot once ("0 tryboot"). If writing
+# fails, nothing restarts: the outcome is recorded and the device keeps running (ADR 0019).
+[Unit]
+Description=Write a system update to the other slot and try it
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/rm -f /run/sursum/system-update
+ExecStart=/usr/lib/sursum/sursum-server --data-dir /var/lib/sursum system apply
+ExecStartPost=/usr/bin/systemctl reboot "0 tryboot"
+TimeoutStartSec=15min

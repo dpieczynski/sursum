@@ -248,17 +248,17 @@ pub fn rollback(_: &Path, _: i64) -> anyhow::Result<PathBuf> {
 }
 
 /// Versions become folder names: no separators, no leading dot.
-fn valid_version(version: &str) -> bool {
+pub(crate) fn valid_version(version: &str) -> bool {
     (1..=64).contains(&version.len())
         && !version.starts_with('.')
         && version.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'-'))
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn from_hex<const N: usize>(text: &str) -> Option<[u8; N]> {
+pub(crate) fn from_hex<const N: usize>(text: &str) -> Option<[u8; N]> {
     if text.len() != N * 2 {
         return None;
     }

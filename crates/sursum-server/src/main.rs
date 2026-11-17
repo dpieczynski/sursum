@@ -62,6 +62,42 @@ enum Task {
     /// Signed application bundles (`.sursum-app`, ADR 0013).
     #[command(subcommand)]
     Bundle(BundleTask),
+    /// Signed system updates (`.sursum-system`, ADR 0019).
+    #[command(subcommand)]
+    System(SystemTask),
+}
+
+/// Making and installing system updates; `apply` and `finish-trial` run as root on the device,
+/// from the read-only system's copy of this binary.
+#[derive(Debug, Subcommand)]
+enum SystemTask {
+    /// Sign an image build's partition images into a `.sursum-system`.
+    Create {
+        #[arg(long)]
+        key: PathBuf,
+        #[arg(long)]
+        version: String,
+        /// The boot partition image (`boot.vfat` of the image build).
+        #[arg(long)]
+        boot: PathBuf,
+        /// The system partition image (`system.erofs` of the image build).
+        #[arg(long)]
+        system: PathBuf,
+        output: PathBuf,
+    },
+    /// Check a `.sursum-system` against this build's key.
+    Verify { update: PathBuf },
+    /// Write the update the server staged in DATA_DIR to the other slot and point tryboot at it
+    /// (the caller then reboots with "0 tryboot").
+    Apply,
+    /// At boot: end a system update's trial. Back in the old slot it is recorded as rolled back;
+    /// in the new one, wait until the server and the kiosk are healthy and make it the default,
+    /// or reboot into the old slot.
+    FinishTrial {
+        /// The server's address for /healthz.
+        #[arg(long, default_value = "127.0.0.1:80")]
+        server: String,
+    },
 }
 
 /// Making, installing and rolling back application bundles.
@@ -129,6 +165,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(Task::Bundle(task)) = &args.command {
         return run_bundle_task(task, &args.data_dir);
     }
+    if let Some(Task::System(task)) = &args.command {
+        return run_system_task(task, &args.data_dir);
+    }
 
     // The device image's defaults (screen guard, display power); the unit names the file, so an
     // older binary after an application rollback simply ignores it.
@@ -189,6 +228,84 @@ fn run_bundle_task(task: &BundleTask, data_dir: &std::path::Path) -> anyhow::Res
         BundleTask::Guard => guard(data_dir)?,
     }
     Ok(())
+}
+
+fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Result<()> {
+    use sursum_server::system_update::{self, Slots, TrialState};
+    let trusted = || {
+        sursum_server::bundle::trusted_key()
+            .ok_or_else(|| anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no updates"))
+    };
+    match task {
+        SystemTask::Create { key, version, boot, system, output } => {
+            let key = sursum_server::bundle::signing_key(&std::fs::read_to_string(key)?)?;
+            let manifest =
+                system_update::create(boot, system, version, &key, std::fs::File::create(output)?)?;
+            println!(
+                "wrote {} (boot {} bytes, system {} bytes)",
+                output.display(),
+                manifest.boot_bytes,
+                manifest.system_bytes
+            );
+        }
+        SystemTask::Verify { update } => {
+            let manifest = system_update::verify(update, &trusted()?)?;
+            println!("{} is genuine: system {}", update.display(), manifest.version);
+        }
+        SystemTask::Apply => {
+            let version = system_update::apply(data_dir, &trusted()?, &Slots::device())?;
+            println!("system {version} written to the other slot; reboot with \"0 tryboot\"");
+        }
+        SystemTask::FinishTrial { server } => match system_update::trial_state(data_dir, &Slots::device())? {
+            TrialState::None => {}
+            TrialState::RolledBack(version) => {
+                println!("system {version} did not come up; running the previous one");
+            }
+            TrialState::OnTrial(version) => {
+                if healthy_for_a_while(server) {
+                    system_update::commit(data_dir, &Slots::device())?;
+                    println!("system {version} is healthy and now the default");
+                } else {
+                    println!("system {version} is not healthy; rebooting into the previous system");
+                    std::process::Command::new("systemctl").arg("reboot").status()?;
+                }
+            }
+        },
+    }
+    Ok(())
+}
+
+/// Up to three minutes for the server to answer /healthz and the kiosk to run, then both must
+/// stay so for 30 s (six checks 5 s apart).
+fn healthy_for_a_while(server: &str) -> bool {
+    let healthy = || {
+        let answers = (|| -> std::io::Result<bool> {
+            use std::io::{Read as _, Write as _};
+            let address = server.parse().map_err(std::io::Error::other)?;
+            let mut stream =
+                std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_secs(3))?;
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(3)))?;
+            stream.write_all(b"GET /healthz HTTP/1.0\r\nHost: localhost\r\n\r\n")?;
+            let mut answer = String::new();
+            stream.read_to_string(&mut answer)?;
+            Ok(answer.starts_with("HTTP/1.0 200") || answer.starts_with("HTTP/1.1 200"))
+        })()
+        .unwrap_or(false);
+        let kiosk = std::process::Command::new("systemctl")
+            .args(["is-active", "--quiet", "sursum-kiosk.service"])
+            .status()
+            .is_ok_and(|status| status.success());
+        answers && kiosk
+    };
+    let mut in_a_row = 0;
+    for _ in 0..36 {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        in_a_row = if healthy() { in_a_row + 1 } else { 0 };
+        if in_a_row >= 6 {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(unix)]

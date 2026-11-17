@@ -34,4 +34,4 @@ pub use state::{
     DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SectionJump,
     SetItemKind, SetItemView, SetSummary, SetView, SongSummary, TextAlign, Theme,
 };
-pub use update::{InstallOutcome, InstallRefusal, LastUpdate, UpdateStatus};
+pub use update::{InstallOutcome, InstallRefusal, LastSystemUpdate, LastUpdate, SystemStatus, UpdateStatus};

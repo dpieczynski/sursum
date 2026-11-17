@@ -110,7 +110,9 @@ app-bundle version: cross-pi
     cargo run -q -p sursum-server -- bundle verify target/sursum-{{version}}.sursum-app
 
 # Device image for a Raspberry Pi 5 (ADR 0013, image/) with release <version> as its first
-# application; `just image <version> y` makes a diagnostic image (boot messages instead of black). Needs the bundle keys (see app-bundle) and the administrator's SSH public key
+# application; `just image <version> y` makes a diagnostic image (boot messages instead of black).
+# Also writes the matching system update target/sursum-system-<system version>.sursum-system
+# (ADR 0019), for devices already running an image; the system version is `git describe`. Needs the bundle keys (see app-bundle) and the administrator's SSH public key
 # (SURSUM_SSH_PUBKEY, default ~/.ssh/id_ed25519.pub; never kept in the repository). Builds with
 # the pinned rpi-image-gen in a privileged podman container; on x86_64 through QEMU (slow).
 image version diagnostic="n": (app-bundle version)
@@ -120,6 +122,7 @@ image version diagnostic="n": (app-bundle version)
     test -f "$key" || { echo "no SSH public key at $key (set SURSUM_SSH_PUBKEY)" >&2; exit 1; }
     mkdir -p target/image/work
     cp "$key" target/image/admin.pub
+    system_version="$(git describe --always --dirty)"
     # The build host runs natively (rpi-image-gen emulates only the arm64 root file system), so
     # pin it to this machine's architecture: an arm64 base image pulled earlier must not win.
     podman build -q -t localhost/sursum-image-builder --platform "linux/$(podman info --format '{{{{.Host.Arch}}')" \
@@ -128,8 +131,14 @@ image version diagnostic="n": (app-bundle version)
         /opt/rpi-image-gen/rpi-image-gen build -S /src/image -c sursum.yaml -B /src/target/image/work -- \
         IGconf_sursum_bundle=/src/target/sursum-{{version}}.sursum-app \
         IGconf_ssh_pubkey_user1=/src/target/image/admin.pub \
-        IGconf_sursum_diagnostic_boot={{diagnostic}}
-    ls -lh target/image/work/deploy-*/ 2>/dev/null || true
+        IGconf_sursum_diagnostic_boot={{diagnostic}} \
+        IGconf_sursum_system_version="$system_version"
+    out=target/image/work/image-sursum
+    cargo run -q -p sursum-server -- system create --key "$SURSUM_BUNDLE_SIGNING_KEY" \
+        --version "$system_version" --boot "$out/boot.vfat" --system "$out/system.erofs" \
+        "target/sursum-system-$system_version.sursum-system"
+    cargo run -q -p sursum-server -- system verify "target/sursum-system-$system_version.sursum-system"
+    ls -lh "$out/sursum.img" "target/sursum-system-$system_version.sursum-system"
 
 # The release goes on trial; the device goes back by itself if it does not run (ADR 0013).
 # Install a bundle on a device over SSH (developers only, never during a service).

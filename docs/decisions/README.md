@@ -24,3 +24,4 @@ supersedes the old one instead of editing it.
 | [0016](0016-operator-and-admin-mode.md) | Operator rights by pairing, time-limited admin mode by entering the PIN again |
 | [0017](0017-remote-three-views.md) | The remote: three views (Msza, Zestaw, Ustawienia) around a fixed live area |
 | [0018](0018-whole-device-backup.md) | Whole-device backup (`.sursum-backup`) and restore from the remote, credentials stay on the device |
+| [0019](0019-offline-system-updates.md) | Offline system updates: signed `.sursum-system` from the remote, written to the other A/B slot, trial through the firmware's tryboot |

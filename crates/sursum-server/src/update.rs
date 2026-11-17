@@ -46,6 +46,8 @@ pub struct Updates {
     pub restart: std::sync::Arc<tokio::sync::Notify>,
     /// One install at a time.
     pub installing: std::sync::Arc<tokio::sync::Mutex<()>>,
+    /// System updates (ADR 0019); off unless the device runs the sursum image.
+    pub system: crate::system_update::SystemUpdates,
 }
 
 impl Updates {
@@ -193,15 +195,21 @@ pub fn commit(data_dir: &Path, own_release: &Path) -> anyhow::Result<Option<Stri
     Ok(Some(version))
 }
 
-/// The update state for the remote. `can_install` comes from the caller (key and supervision).
-pub fn status(data_dir: &Path, build: &str, can_install: bool) -> UpdateStatus {
+/// The update state for the remote. `can_install` comes from the caller (key and supervision),
+/// `system` from [`crate::system_update::SystemUpdates::status`].
+pub fn status(
+    data_dir: &Path,
+    build: &str,
+    can_install: bool,
+    system: Option<sursum_protocol::SystemStatus>,
+) -> UpdateStatus {
     let release = std::fs::read_link(data_dir.join("current")).ok().map(|path| version_of(&path));
     let on_trial = read_json::<Trial>(data_dir, TRIAL_FILE)
         .ok()
         .flatten()
         .is_some_and(|trial| release.as_deref() == Some(version_of(&trial.release).as_str()));
     let last = read_json::<LastUpdate>(data_dir, OUTCOME_FILE).ok().flatten();
-    UpdateStatus { build: build.to_owned(), release, on_trial, last, can_install }
+    UpdateStatus { build: build.to_owned(), release, on_trial, last, can_install, system }
 }
 
 /// If the failed release had already migrated the database, the previous release could not read
@@ -303,12 +311,12 @@ mod tests {
         let device = Device::new();
         device.install("0.1.0").unwrap();
         device.install("0.2.0").unwrap();
-        assert!(status(device.path(), "x", true).on_trial);
+        assert!(status(device.path(), "x", true, None).on_trial);
         assert_eq!(guard(device.path()).unwrap(), Guarded::Start(1));
         // The old server (still running until the restart) cannot commit the new release.
         assert_eq!(commit(device.path(), &device.running("0.1.0")).unwrap(), None);
         assert_eq!(commit(device.path(), &device.running("0.2.0")).unwrap().as_deref(), Some("0.2.0"));
-        let status = status(device.path(), "x", true);
+        let status = status(device.path(), "x", true, None);
         assert!(!status.on_trial);
         assert_eq!(status.release.as_deref(), Some("0.2.0"));
         assert_eq!(status.last, Some(LastUpdate::Committed { version: "0.2.0".into() }));
@@ -333,7 +341,7 @@ mod tests {
         assert_eq!(device.current(), Path::new("releases/0.1.0"));
         assert!(!device.running("0.2.0").exists(), "the failed release is removed");
         assert!(std::fs::read_link(device.path().join("previous")).is_err());
-        assert_eq!(status(device.path(), "x", true).last, Some(rolled_back));
+        assert_eq!(status(device.path(), "x", true, None).last, Some(rolled_back));
         assert_eq!(guard(device.path()).unwrap(), Guarded::NoTrial);
     }
 
@@ -405,6 +413,6 @@ mod tests {
         device.install("0.2.0").unwrap();
         bundle::rollback(device.path(), Database::schema_version(device.path()).unwrap()).unwrap();
         assert_eq!(guard(device.path()).unwrap(), Guarded::NoTrial);
-        assert!(!status(device.path(), "x", true).on_trial);
+        assert!(!status(device.path(), "x", true, None).on_trial);
     }
 }

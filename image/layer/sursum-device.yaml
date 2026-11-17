@@ -18,6 +18,13 @@
 # X-Env-Var-bundle-Valid: string
 # X-Env-Var-bundle-Set: y
 #
+# X-Env-Var-system_version:
+# X-Env-Var-system_version-Desc: The system's version (the build's git describe), written to
+#  /etc/sursum/system-release and into the matching .sursum-system (`just image` passes it).
+# X-Env-Var-system_version-Required: y
+# X-Env-Var-system_version-Valid: string
+# X-Env-Var-system_version-Set: y
+#
 # X-Env-Var-diagnostic_boot: n
 # X-Env-Var-diagnostic_boot-Desc: y shows kernel and systemd messages and the firmware's rainbow
 #  screen instead of a black boot, for diagnosing a device that never shows the screen
@@ -54,5 +61,12 @@ mmdebstrap:
       chroot $1 /tmp/sursum-first-release/sursum-server --data-dir /var/lib/sursum \
         bundle install /tmp/sursum-first-release/first.sursum-app
       chroot $1 chown -R sursum:sursum /var/lib/sursum
+      # A root-owned copy in the read-only system verifies and writes system updates (ADR 0019),
+      # so a compromised server (which can replace its own releases) cannot plant a system.
+      install -D -m 0755 "$work/sursum-server" $1/usr/lib/sursum/sursum-server
       rm -rf "$work"
-    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables sursum-grow-persistent
+    - |
+      set -eu
+      install -d -m 0755 $1/etc/sursum
+      echo "${IGconf_sursum_system_version}" > $1/etc/sursum/system-release
+    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables sursum-grow-persistent sursum-system-update.path sursum-system-finish

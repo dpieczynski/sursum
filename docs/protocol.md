@@ -18,7 +18,7 @@ same Rust types, so they cannot drift apart within one build.
 |---|---|
 | anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/licenses` |
 | paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `POST /api/assets`, `/api/library/export`, `GET /api/backup`, `GET /api/update/status`, `POST/DELETE /api/admin` |
-| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `POST /api/update`, `POST /api/backup/restore`, `POST /api/assets/cleanup`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
+| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `POST /api/update`, `POST /api/backup/restore`, `POST /api/assets/cleanup`, `POST /api/system/update`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
 
 Without a PIN nobody may control the screen: `/api/session` says `setup_needed`, and
 `POST /api/setup { pin, name }` sets the PIN once (`invalid_pin` → 400, `already_set` → 409) and
@@ -40,6 +40,12 @@ Whole-device backups (ADR 0018): `GET /api/backup` streams a `.sursum-backup` fi
 `restored { summary: BackupSummary { created_unix, build, songs, sets, pictures } }`, after which
 the server restarts and the next start puts the backup in place, or `refused { reason }` with
 `not_supervised`, `not_a_backup`, `newer_version`, `too_large` or `failed` (nothing changed).
+System updates (ADR 0019): `POST /api/system/update` (admin mode, `X-Sursum-Upload`) takes a
+`.sursum-system` file and answers `InstallOutcome` like application updates (`refused` adds
+`busy` while another update is installed or on trial); afterwards the device writes the other
+slot and restarts into it on trial. `UpdateStatus.system` is `SystemStatus { version, on_trial,
+last, can_install }` on devices running the image (`last` is `committed { version }` or
+`rolled_back { failed }`), absent elsewhere.
 `POST /api/assets/cleanup` (admin mode) takes `PictureCleanupRequest { dry_run }` and answers
 `PictureCleanup { pictures, bytes }`: what is (or would be) removed.
 

@@ -241,6 +241,12 @@ pub enum Msg {
     UpdateAlreadyCurrent,
     UpdateFailed,
     UpdateOnTrial,
+    UpdateBusy,
+    SystemUpdateInstall,
+    SystemUpdateTitle,
+    SystemUpdateWarning,
+    SystemUpdateInstalled,
+    SystemUpdateOnTrial,
     SectionBackup,
     BackupHint,
     BackupDownload,
@@ -531,6 +537,20 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::UpdateOnTrial => {
             "Nowa wersja jest sprawdzana. Jeśli nie zadziała, urządzenie samo wróci do poprzedniej."
         }
+        Msg::UpdateBusy => "Trwa już instalowanie aktualizacji. Spróbuj ponownie, gdy się zakończy.",
+        Msg::SystemUpdateInstall => "Zainstaluj aktualizację systemu",
+        Msg::SystemUpdateTitle => "Aktualizacja systemu",
+        Msg::SystemUpdateWarning => {
+            "Nie aktualizuj w czasie mszy. Urządzenie zapisze nowy system obok obecnego i uruchomi się \
+             ponownie; ekran zgaśnie na kilka minut. Jeśli nowy system nie zadziała, urządzenie samo \
+             wróci do obecnego. Pieśni, zestawy i ustawienia zostają."
+        }
+        Msg::SystemUpdateInstalled => {
+            "Urządzenie zapisuje nowy system i za chwilę uruchomi się ponownie. Pilot połączy się sam."
+        }
+        Msg::SystemUpdateOnTrial => {
+            "Nowy system jest sprawdzany. Jeśli nie zadziała, urządzenie samo wróci do poprzedniego."
+        }
         Msg::SectionBackup => "Dane urządzenia",
         Msg::BackupHint => {
             "Pełna kopia: pieśni z historią zmian, zestawy, logo, obrazy, kalibracja i ustawienia \
@@ -612,6 +632,7 @@ pub fn install_refusal(reason: sursum_protocol::InstallRefusal) -> Msg {
         InstallRefusal::BadBundle => Msg::UpdateBadBundle,
         InstallRefusal::AlreadyCurrent => Msg::UpdateAlreadyCurrent,
         InstallRefusal::Failed => Msg::UpdateFailed,
+        InstallRefusal::Busy => Msg::UpdateBusy,
     }
 }
 
@@ -635,6 +656,25 @@ pub fn last_update(last: &sursum_protocol::LastUpdate) -> String {
             )
         }
     }
+}
+
+/// The system's lines in "O programie": its version, a trial in progress, the last update.
+pub fn system_lines(system: &sursum_protocol::SystemStatus) -> Vec<String> {
+    use sursum_protocol::LastSystemUpdate;
+    let mut lines = vec![format!("System: {}", system.version)];
+    if system.on_trial {
+        lines.push(pl(Msg::SystemUpdateOnTrial).to_owned());
+    }
+    match &system.last {
+        Some(LastSystemUpdate::Committed { version }) => {
+            lines.push(format!("Ostatnia aktualizacja systemu: wersja {version} działa poprawnie."));
+        }
+        Some(LastSystemUpdate::RolledBack { failed }) => {
+            lines.push(format!("Aktualizacja systemu ({failed}) nie zadziałała – działa poprzedni system."));
+        }
+        None => {}
+    }
+    lines
 }
 
 /// What to tell the operator when the server refuses a command.

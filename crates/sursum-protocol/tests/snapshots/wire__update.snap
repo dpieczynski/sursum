@@ -13,7 +13,16 @@ expression: "(status, LastUpdate::Committed { version: \"0.2.0\".into() }, outco
       "restored": "0.2.0",
       "database_restored": true
     },
-    "can_install": true
+    "can_install": true,
+    "system": {
+      "version": "v0.1.0-34-g980afa5",
+      "on_trial": false,
+      "last": {
+        "outcome": "rolled_back",
+        "failed": "v0.1.0-40-g1a2b3c4"
+      },
+      "can_install": true
+    }
   },
   {
     "outcome": "committed",

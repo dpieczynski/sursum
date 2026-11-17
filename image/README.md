@@ -60,6 +60,12 @@ kernel for it).
   `/var/lib/sursum/config.toml` wins) switches the TV on and to standby over HDMI-CEC and lets the
   server restart the kiosk when no screen has been connected for 15 s, through
   `sursum-kiosk-restart.path` (the server itself has no privileges).
+- **System updates** (ADR 0019): `just image` also writes
+  `target/sursum-system-<version>.sursum-system`. Upload it in the remote (O programie →
+  Zainstaluj aktualizację systemu, admin mode): the device writes it to the other A/B slot,
+  restarts into it once (tryboot) and keeps it only if the server and the kiosk come up healthy;
+  otherwise the next restart brings the old system back by itself. Data and the application are
+  not touched.
 - **Administration**: `ssh admin@sursum.local` with the key given at build time; no password
   login. Application updates come from the remote (on trial, ADR 0013) or `just deploy`.
 - **Logs**: `journalctl` is persistent across reboots (64M).

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The server (unprivileged) asks for a system update to be installed by creating this file once
+# it has received and verified one (ADR 0019).
+[Unit]
+Description=Install a system update when the server asks
+
+[Path]
+PathExists=/run/sursum/system-update
+
+[Install]
+WantedBy=multi-user.target

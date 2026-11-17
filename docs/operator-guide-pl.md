@@ -177,6 +177,12 @@ przyciskiem **Zakończ tryb administratora**.
   bez tekstu, np. ciemną powierzchnię lub przeszkodę (czerwona strefa); tekst będzie ją omijał, a
   sama strefa będzie czarna. Zielona ramka pokazuje, gdzie zmieści się tekst. Pola liczbowe nie
   pozwalają wysunąć strefy poza ekran. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
+- **Zainstaluj aktualizację systemu** (w **O programie**, tylko na urządzeniu z obrazem sursum):
+  plik `.sursum-system` zmienia system urządzenia (przeglądarkę ekranu, sterowniki, ustawienia
+  ekranu). **Nigdy w czasie mszy.** Urządzenie zapisuje nowy system obok obecnego i uruchamia
+  się ponownie; ekran gaśnie na kilka minut, potem pilot łączy się sam. Jeśli nowy system nie
+  zadziała, urządzenie samo wraca do poprzedniego, a w **O programie** widać, jak się skończyło.
+  Pieśni, zestawy, ustawienia i wersja programu zostają bez zmian.
 - **Usuń pieśń z bazy** (przytrzymaj): w edytorze pieśni, np. dla duplikatów po imporcie. Pieśń
   znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca.
 - **Urządzenia**: lista sparowanych pilotów; **Odłącz** (przytrzymaj) usuwa zgubiony lub obcy

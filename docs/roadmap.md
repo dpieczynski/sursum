@@ -141,26 +141,19 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] Admin mode counts down in the remote (`SessionInfo.admin_remaining_s`, plan §8.5)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
 
-## M7 — Offline system updates (next after the first image boots)
+## M7 — Offline system updates
 
 Application bundles (`.sursum-app`) update only the server binary with its embedded pages; the
 kiosk unit, Chromium policies, cursors, `sursum.service`, Chromium, cage and the kernel are part of
 the read-only system. Until system updates exist, changing any of them on an imaged device means
 reflashing (with a device backup first). Priority right after the first image works on the Pi.
 
-- [ ] Decide the mechanism (new ADR): rpi-image-gen's own building blocks (`sursum.update.tar.zst`
-  with sparse `boot`/`system` images, `/dev/disk/by-slot/{active,other}`, `rpi-slot-tryboot`) with
-  a small applier of ours, or **RAUC** (Debian trixie) on the same A/B layout. The only ready
-  applier in rpi-image-gen is Raspberry Pi Connect's remote update, which needs the cloud: not an
-  option offline
-- [ ] Upload from the remote like application updates (admin, same signing key or a second one),
-  written to the inactive slot, trial boot through `tryboot`, commit only after the server and the
-  kiosk are healthy, otherwise the firmware falls back to the old slot by itself
+- [x] Mechanism decided and built (ADR 0019): own updater on the firmware's tryboot and rpi-image-gen's by-slot links; `.sursum-system` (signed ZIP of the raw boot and system images, `just image` writes it), upload from the remote (O programie, admin), root units with the read-only system's verifier write the other slot and reboot with `0 tryboot`, `finish-trial` commits after 30 s of healthy server and kiosk or reboots into the old slot; `panic=10`; unit and integration tests with fake slots ⚠ not yet run on a Pi
 - [ ] State shared by both slots (`/var/lib/sursum`) must stay readable by the older slot after a
   rollback (rpi-image-gen warns about this); application releases already handle their own
   database rollback
-- [ ] `just image` also publishes the update bundle; the release workflow attaches it once images
-  build in CI
+- [x] `just image` also writes the matching `.sursum-system` (and verifies it)
+- [ ] The release workflow attaches it once images build in CI
 
 **Done when:** a changed kiosk unit reaches an imaged Pi from the remote without reflashing, data
 and pairing survive, and a deliberately broken system update boots back into the old slot by

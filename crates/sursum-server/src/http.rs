@@ -97,6 +97,12 @@ pub fn router(
                 .layer(axum::extract::DefaultBodyLimit::disable())
                 .layer(middleware::from_fn(require_upload_header)),
         )
+        .route(
+            "/api/system/update",
+            axum::routing::post(install_system_update)
+                .layer(axum::extract::DefaultBodyLimit::disable())
+                .layer(middleware::from_fn(require_upload_header)),
+        )
         .route("/api/assets/cleanup", axum::routing::post(clean_up_pictures))
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
@@ -352,8 +358,12 @@ const MAX_UPDATE_BYTES: usize = 128 * 1024 * 1024;
 async fn update_status(State(app): State<App>) -> Response {
     let data_dir = app.data_dir.clone();
     let can_install = app.updates.can_install();
-    match tokio::task::spawn_blocking(move || crate::update::status(&data_dir, crate::BUILD_ID, can_install))
-        .await
+    let system = app.updates.system.clone();
+    match tokio::task::spawn_blocking(move || {
+        let system = system.status(&data_dir);
+        crate::update::status(&data_dir, crate::BUILD_ID, can_install, system)
+    })
+    .await
     {
         Ok(status) => axum::Json(status).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -406,6 +416,76 @@ async fn upload_asset(State(app): State<App>, body: axum::body::Bytes) -> Respon
         Ok(Err(error)) => {
             tracing::error!(%error, "could not store an uploaded picture");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `POST /api/system/update` (admin, ADR 0019): receives a `.sursum-system` into the data
+/// directory (streamed: it is hundreds of megabytes), verifies it and asks the root unit to write
+/// it to the other slot; the device then restarts into it on trial.
+async fn install_system_update(State(app): State<App>, body: axum::body::Body) -> Response {
+    use futures_util::StreamExt as _;
+    use sursum_protocol::{InstallOutcome, InstallRefusal};
+    let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
+    let system = app.updates.system.clone();
+    let data_dir = app.data_dir.clone();
+    match system.status(&data_dir) {
+        None => return refuse(InstallRefusal::NotSupervised),
+        Some(_) if system.key.is_none() => return refuse(InstallRefusal::NoKey),
+        Some(status) if !status.can_install && system.supervised => return refuse(InstallRefusal::Busy),
+        Some(status) if !status.can_install => return refuse(InstallRefusal::NotSupervised),
+        Some(_) => {}
+    }
+    let _installing = app.updates.installing.lock().await;
+    let incoming = match system.incoming(&data_dir) {
+        Ok(incoming) => incoming,
+        Err(error) => {
+            tracing::error!(?error, "could not receive a system update");
+            return refuse(InstallRefusal::Failed);
+        }
+    };
+    let received = async {
+        let mut file = std::fs::File::create(&incoming)?;
+        let mut total: u64 = 0;
+        let mut stream = body.into_data_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(std::io::Error::other)?;
+            total += chunk.len() as u64;
+            if total > crate::system_update::MAX_SYSTEM_BYTES {
+                return Err(std::io::Error::other("larger than any system update"));
+            }
+            std::io::Write::write_all(&mut file, &chunk)?;
+        }
+        file.sync_all()?;
+        Ok::<_, std::io::Error>(())
+    }
+    .await;
+    if let Err(error) = received {
+        tracing::warn!(%error, "system update upload failed");
+        let _ = std::fs::remove_file(&incoming);
+        return refuse(InstallRefusal::Failed);
+    }
+    let staged = {
+        let incoming = incoming.clone();
+        tokio::task::spawn_blocking(move || system.stage(&data_dir, &incoming)).await
+    };
+    let _ = std::fs::remove_file(&incoming);
+    match staged {
+        Ok(Ok(version)) => {
+            tracing::info!(%version, "system update verified; the device writes it and restarts into it");
+            axum::Json(InstallOutcome::Installed { version }).into_response()
+        }
+        Ok(Err(crate::system_update::SystemUpdateError::AlreadyCurrent)) => {
+            refuse(InstallRefusal::AlreadyCurrent)
+        }
+        Ok(Err(error @ crate::system_update::SystemUpdateError::BadFile(_))) => {
+            tracing::warn!(%error, "system update refused");
+            refuse(InstallRefusal::BadBundle)
+        }
+        Ok(Err(error)) => {
+            tracing::error!(%error, "could not stage a system update");
+            refuse(InstallRefusal::Failed)
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
