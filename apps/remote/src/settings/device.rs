@@ -41,14 +41,16 @@ pub fn DeviceSection() -> impl IntoView {
                 {side(Hand::Right, Msg::ButtonsRight, "hand-right")}
                 {side(Hand::Left, Msg::ButtonsLeft, "hand-left")}
             </fieldset>
-            <label class="choice">
-                <input
-                    type="checkbox"
-                    prop:checked=move || prefs.vibration.get()
-                    on:change=move |event| prefs.set_vibration(event_target_checked(&event))
-                />
-                {pl(Msg::Vibration)}
-            </label>
+            <Show when=crate::prefs::can_vibrate>
+                <label class="choice">
+                    <input
+                        type="checkbox"
+                        prop:checked=move || prefs.vibration.get()
+                        on:change=move |event| prefs.set_vibration(event_target_checked(&event))
+                    />
+                    {pl(Msg::Vibration)}
+                </label>
+            </Show>
             <div class="setting-row">
                 <button class="btn btn--sm" on:click=toggle_full>
                     {move || if full.get() { pl(Msg::ExitFullscreen) } else { pl(Msg::Fullscreen) }}

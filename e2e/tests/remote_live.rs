@@ -348,3 +348,30 @@ async fn the_gap_can_be_turned_off_in_the_settings() -> anyhow::Result<()> {
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn the_controls_work_in_browsers_that_cannot_vibrate() -> anyhow::Result<()> {
+    with_remote(800, 1280, async |_, screen, remote| {
+        // Safari and Firefox have no `navigator.vibrate`; calling it used to abort every press.
+        let missing = remote
+            .execute("delete Navigator.prototype.vibrate; return typeof navigator.vibrate;", Vec::new())
+            .await?;
+        anyhow::ensure!(missing.json().as_str() == Some("undefined"), "{:?}", missing.json());
+        let key = attribute(screen, SCREEN_ROOT, "data-slide-key").await;
+        remote.find(By::Css(".area-pad [data-testid=next]")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            attribute(screen, SCREEN_ROOT, "data-slide-key").await != key
+        })
+        .await
+        .context("next did nothing")?;
+        remote.find(By::Css(".area-pad [data-testid=black]")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            attribute(screen, SCREEN_ROOT, "data-overlay").await == "black"
+        })
+        .await
+        .context("black did nothing")?;
+        Ok(())
+    })
+    .await
+}

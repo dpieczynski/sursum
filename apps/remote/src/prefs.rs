@@ -61,11 +61,22 @@ impl Prefs {
     /// A short vibration as feedback for a control press (Android; ignored elsewhere).
     pub fn buzz(self) {
         if self.vibration.get_untracked()
+            && can_vibrate()
             && let Some(window) = web_sys::window()
         {
             let _ = window.navigator().vibrate_with_duration(12);
         }
     }
+}
+
+/// Whether this browser has `navigator.vibrate` (Safari and Firefox do not). The web-sys binding
+/// does not catch, so calling a missing method throws and aborts the whole click handler: the
+/// command after it would never be sent.
+pub fn can_vibrate() -> bool {
+    web_sys::window().is_some_and(|window| {
+        js_sys::Reflect::get(&window.navigator(), &wasm_bindgen::JsValue::from_str("vibrate"))
+            .is_ok_and(|vibrate| vibrate.is_function())
+    })
 }
 
 fn storage() -> Option<web_sys::Storage> {

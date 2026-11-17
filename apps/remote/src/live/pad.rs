@@ -31,9 +31,9 @@ pub fn CoverButton(
     let connection = expect_context::<Connection>();
     let covered = covered(state);
     let press = move |_| {
-        prefs.buzz();
         let overlay = if covered().is_some() { Overlay::None } else { Overlay::Black };
         commands.send(Command::SetOverlay { overlay });
+        prefs.buzz();
     };
     let label = move || if covered().is_some() { pl(Msg::ShowText) } else { pl(Msg::BlackOut) };
     view! {
@@ -65,8 +65,8 @@ pub fn NextButton(
         move || caption.with(|caption| caption.as_ref().is_some_and(|caption| caption.tone == Tone::Warn));
     let text = move || caption.with(|caption| caption.as_ref().map(|caption| caption.text.clone()));
     let press = move |_| {
-        prefs.buzz();
         commands.send(Command::Next);
+        prefs.buzz();
     };
     view! {
         <button
@@ -95,8 +95,8 @@ pub fn PrevButton(
     let connection = expect_context::<Connection>();
     let enabled = move || connection.up() && state.with(|state| state.as_ref().is_some_and(can_go_back));
     let press = move |_| {
-        prefs.buzz();
         commands.send(Command::Prev);
+        prefs.buzz();
     };
     view! {
         <button
@@ -127,8 +127,8 @@ pub fn Pad(
         state.with(|state| state.as_ref().is_some_and(|state| state.program.overlay == Overlay::Logo))
     };
     let send = move |command: Command| {
-        prefs.buzz();
         commands.send(command);
+        prefs.buzz();
     };
     let toggle_logo = move |_| {
         let overlay = if logo_up() { Overlay::None } else { Overlay::Logo };
