@@ -135,8 +135,13 @@ remote and `just deploy` over SSH.
   the Pi or sits behind an extender with a broken EDID. The screen draws a fixed 1920×1080 stage
   anyway, a 4K display upscales 1080p exactly 2×, and lyrics are read from metres away, so native
   resolution would add little. Native or another forced mode (e.g. a 1920×1200 projector) only if
-  an installation needs it; the mode lives in the read-only boot partition, so changing it per
-  device waits for system updates (M7).
+  an installation needs it.
+  On the Pi the kernel parameter alone was not enough: it sets the console's mode and keeps the
+  connector on without a display, but cage always takes the display's preferred mode (the LG TV:
+  3840×2160 at 30 Hz again). The kiosk therefore runs inside cage through `kiosk-session`, which
+  sets `SURSUM_SCREEN_MODE` (default `1920x1080@60`, `native` to leave it) with `wlr-randr`
+  before Chromium starts and checks it every 5 s, so a TV switched on later or a replugged cable
+  gets the mode back. The variable can be overridden per device in `/var/lib/sursum/kiosk.env`.
 - Networking stays with the base's systemd-networkd: rpi-image-gen allows only one
   `network-activator`, and NetworkManager is not needed for Ethernet.
 - Builds run in a privileged Debian trixie podman container (`image/build.Containerfile`,

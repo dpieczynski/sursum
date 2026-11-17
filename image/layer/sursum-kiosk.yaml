@@ -15,6 +15,8 @@ mmdebstrap:
     - cage
     - chromium
     - seatd
+    # Sets the display mode through cage (kiosk-session).
+    - wlr-randr
   customize-hooks:
     - chroot $1 useradd --system --create-home --home-dir /var/lib/sursum-kiosk --shell /usr/sbin/nologin sursum-kiosk
     # seatd hands the display to the video group; render and input for the GPU and devices.
@@ -23,6 +25,7 @@ mmdebstrap:
     - install -m 0644 ../deploy/kiosk/chromium-policies.json $1/etc/chromium/policies/managed/sursum.json
     - sh ../deploy/kiosk/blank-cursors.sh $1
     - install -m 0644 ../deploy/kiosk/sursum-kiosk.service $1/etc/systemd/system/sursum-kiosk.service
+    - install -D -m 0755 ../deploy/kiosk/kiosk-session $1/usr/lib/sursum/kiosk-session
     # The screen guard's restart requests (see /etc/sursum/config.toml).
     - install -m 0644 ../deploy/kiosk/sursum-kiosk-restart.path ../deploy/kiosk/sursum-kiosk-restart.service $1/etc/systemd/system/
     # tty1 belongs to the screen: no login prompt there.

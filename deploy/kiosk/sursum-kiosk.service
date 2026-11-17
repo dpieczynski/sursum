@@ -31,9 +31,12 @@ IPAddressDeny=any
 # (chromium-policies.json); these flags cover only what no policy does. To try another command
 # without a new image, put KIOSK_APP=... into /var/lib/sursum/kiosk.env (it wins over this line).
 Environment="KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-background-networking --disable-pinch --overscroll-history-navigation=0 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium http://localhost/screen/"
+# The display mode the kiosk session keeps (WIDTHxHEIGHT@HZ, or "native" for the display's own
+# preferred mode); cage alone would always take the preferred mode, e.g. 4K at 30 Hz on a TV.
+Environment=SURSUM_SCREEN_MODE=1920x1080@60
 EnvironmentFile=-/var/lib/sursum/kiosk.env
 # $KIOSK_APP (unbraced) is split into words by systemd.
-ExecStart=/usr/bin/cage -- $KIOSK_APP
+ExecStart=/usr/bin/cage -- /usr/lib/sursum/kiosk-session $KIOSK_APP
 Restart=always
 RestartSec=1
 StandardError=journal

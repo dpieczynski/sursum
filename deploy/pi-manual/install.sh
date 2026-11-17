@@ -19,7 +19,7 @@ data=/var/lib/sursum
 
 echo "== packages"
 apt-get update
-apt-get install -y --no-install-recommends cage chromium seatd unzip curl
+apt-get install -y --no-install-recommends cage chromium seatd wlr-randr unzip curl
 
 echo "== users and folders"
 id sursum >/dev/null 2>&1 || useradd --system --home-dir "$data" --shell /usr/sbin/nologin sursum
@@ -52,6 +52,7 @@ install -d -m 0755 /etc/chromium/policies/managed
 install -m 0644 "$kiosk/chromium-policies.json" /etc/chromium/policies/managed/sursum.json
 rm -rf /usr/share/icons/sursum-blank # left by an earlier version of this script
 sh "$kiosk/blank-cursors.sh" /
+install -D -m 0755 "$kiosk/kiosk-session" /usr/lib/sursum/kiosk-session
 # The browser command now lives in the kiosk unit; kiosk.env only overrides it. Earlier versions
 # of this script wrote kiosk.env themselves (with a marker line, or the very first command):
 # remove those, keep one you wrote.
