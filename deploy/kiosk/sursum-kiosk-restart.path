@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The screen guard (crates/sursum-server/src/screen_guard.rs) asks for a kiosk restart by creating
+# /run/sursum/restart-kiosk; this restarts it as root, so the server needs no privileges at all
+# (no polkit or sudo on the device).
+[Unit]
+Description=Restart the kiosk when the server's screen guard asks
+
+[Path]
+PathExists=/run/sursum/restart-kiosk
+
+[Install]
+WantedBy=multi-user.target

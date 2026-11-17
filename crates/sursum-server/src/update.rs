@@ -28,6 +28,7 @@ const TRIAL_FILE: &str = "trial.json";
 /// How the most recent update ended.
 const OUTCOME_FILE: &str = "update.json";
 /// Failed releases' databases are kept here after a rollback, never deleted.
+#[cfg(unix)]
 const ROLLED_BACK_DIR: &str = "rolled-back";
 /// Starts a release gets before the guard gives up on it.
 pub const MAX_STARTS: u32 = 3;

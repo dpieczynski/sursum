@@ -23,6 +23,8 @@ mmdebstrap:
     - install -m 0644 ../deploy/kiosk/chromium-policies.json $1/etc/chromium/policies/managed/sursum.json
     - sh ../deploy/kiosk/blank-cursors.sh $1
     - install -m 0644 ../deploy/kiosk/sursum-kiosk.service $1/etc/systemd/system/sursum-kiosk.service
+    # The screen guard's restart requests (see /etc/sursum/config.toml).
+    - install -m 0644 ../deploy/kiosk/sursum-kiosk-restart.path ../deploy/kiosk/sursum-kiosk-restart.service $1/etc/systemd/system/
     # tty1 belongs to the screen: no login prompt there.
     - rm -f $1/etc/systemd/system/getty.target.wants/getty@tty1.service
-    - $BDEBSTRAP_HOOKS/enable-units "$1" seatd sursum-kiosk
+    - $BDEBSTRAP_HOOKS/enable-units "$1" seatd sursum-kiosk sursum-kiosk-restart.path

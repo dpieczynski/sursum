@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Started by sursum-kiosk-restart.path. The request is removed first, so a failed restart does not
+# leave it behind to retrigger at once; the screen guard asks again after its own retry delay.
+[Unit]
+Description=Restart the kiosk for the screen guard
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/rm -f /run/sursum/restart-kiosk
+ExecStart=/usr/bin/systemctl restart sursum-kiosk.service

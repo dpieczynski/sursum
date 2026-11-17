@@ -69,6 +69,7 @@ proptest = "1.12.0"
 tempfile = "3.27.0"
 tokio-tungstenite = "0.30.0"
 futures-util = "0.3.34"
+cec_linux = "0.2.2"
 thirtyfour = "0.38.3"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 wasm-bindgen-test = "0.3.80"

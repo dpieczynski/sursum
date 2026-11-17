@@ -21,6 +21,13 @@ Group=sursum
 # previous release (first install).
 ExecStartPre=-/var/lib/sursum/previous/sursum-server --data-dir /var/lib/sursum bundle guard
 ExecStart=/var/lib/sursum/current/sursum-server --data-dir /var/lib/sursum --listen 0.0.0.0:80
+# The image's defaults (screen guard, HDMI-CEC); a missing file is ignored, and the data
+# directory's config.toml wins setting by setting.
+Environment=SURSUM_SYSTEM_CONFIG=/etc/sursum/config.toml
+# /run/sursum: where the screen guard asks for a kiosk restart (sursum-kiosk-restart.path).
+RuntimeDirectory=sursum
+# /dev/cec0 belongs to the video group (HDMI-CEC power control).
+SupplementaryGroups=video
 # A start that hangs before it is ready counts as a failed start of the release on trial.
 TimeoutStartSec=30
 # The server pings only while its state actor answers; a hung server is restarted, and the screen

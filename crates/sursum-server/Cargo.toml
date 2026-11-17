@@ -41,6 +41,10 @@ rusqlite.workspace = true
 thiserror.workspace = true
 futures-util.workspace = true
 
+# HDMI-CEC through the kernel's CEC device (ADR 0012); Linux only.
+[target.'cfg(target_os = "linux")'.dependencies]
+cec_linux.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 tokio-tungstenite.workspace = true

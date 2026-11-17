@@ -51,6 +51,9 @@ pub enum DisplayPowerConfig {
     /// default); `password` only if one is set on the projector. Kept in `config.toml` on the
     /// device only, never in the database or the repository.
     Pjlink { host: String, password: Option<String> },
+    /// A TV (or projector) on the Pi's HDMI0 port, over HDMI-CEC through the kernel's CEC device.
+    /// `device` only if it is not `/dev/cec0`. Linux only; elsewhere it reports "not configured".
+    Cec { device: Option<std::path::PathBuf> },
 }
 
 impl Config {
@@ -73,11 +76,28 @@ impl Config {
     }
 
     /// Applies `config.toml` from the data directory, if it exists.
-    pub fn load_file(mut self) -> anyhow::Result<Self> {
+    pub fn load_file(self) -> anyhow::Result<Self> {
+        self.load_files(None)
+    }
+
+    /// Applies the system's `config.toml` (on the device `/etc/sursum/config.toml`, part of the
+    /// read-only image, so system updates can change its defaults), then the data directory's
+    /// (this device's own settings, e.g. a projector's password), which wins setting by setting.
+    /// Either may be missing.
+    pub fn load_files(mut self, system: Option<&Path>) -> anyhow::Result<Self> {
+        if let Some(system) = system
+            && let Some(file) = read_file(system)?
+        {
+            self = self.apply(file);
+        }
         let path = self.data_dir.join("config.toml");
-        let Some(file) = read_file(&path)? else {
-            return Ok(self);
-        };
+        Ok(match read_file(&path)? {
+            Some(file) => self.apply(file),
+            None => self,
+        })
+    }
+
+    fn apply(mut self, file: FileConfig) -> Self {
         if let Some(listen) = file.listen {
             self.listen = listen;
         }
@@ -102,7 +122,7 @@ impl Config {
         if let Some(screen_guard) = file.screen_guard {
             self.screen_guard = Some(screen_guard);
         }
-        Ok(self)
+        self
     }
 }
 
@@ -149,6 +169,45 @@ mod tests {
             config.display_power,
             DisplayPowerConfig::Pjlink { host: "192.168.1.50".into(), password: Some("tajne".into()) }
         );
+    }
+
+    #[test]
+    fn cec_tv_is_configured_without_a_device_by_default() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("config.toml"), "[display_power]\nbackend = \"cec\"\n").unwrap();
+        let config = Config::with_data_dir(dir.path()).load_file().unwrap();
+        assert_eq!(config.display_power, DisplayPowerConfig::Cec { device: None });
+    }
+
+    #[test]
+    fn the_device_file_wins_over_the_system_file_setting_by_setting() {
+        let system = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            system.path(),
+            "transition_ms = 400\n[display_power]\nbackend = \"cec\"\n\
+             [screen_guard]\nrestart_command = [\"systemctl\", \"restart\", \"sursum-kiosk\"]\n",
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config::with_data_dir(dir.path()).load_files(Some(system.path())).unwrap();
+        assert_eq!(
+            (config.transition_ms, config.display_power.clone()),
+            (400, DisplayPowerConfig::Cec { device: None })
+        );
+        assert_eq!(config.screen_guard.unwrap().restart_command, ["systemctl", "restart", "sursum-kiosk"]);
+
+        let device = "[display_power]\nbackend = \"pjlink\"\nhost = \"10.0.0.9\"\n";
+        std::fs::write(dir.path().join("config.toml"), device).unwrap();
+        let config = Config::with_data_dir(dir.path()).load_files(Some(system.path())).unwrap();
+        assert_eq!(config.transition_ms, 400, "kept from the system file");
+        assert_eq!(
+            config.display_power,
+            DisplayPowerConfig::Pjlink { host: "10.0.0.9".into(), password: None }
+        );
+        assert!(config.screen_guard.is_some(), "kept from the system file");
+
+        let missing = dir.path().join("no-such.toml");
+        assert!(Config::with_data_dir(dir.path()).load_files(Some(&missing)).is_ok());
     }
 
     #[test]

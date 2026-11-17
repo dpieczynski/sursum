@@ -130,7 +130,10 @@ async fn main() -> anyhow::Result<()> {
         return run_bundle_task(task, &args.data_dir);
     }
 
-    let mut config = Config::with_data_dir(&args.data_dir).load_file()?;
+    // The device image's defaults (screen guard, display power); the unit names the file, so an
+    // older binary after an application rollback simply ignores it.
+    let system_config = std::env::var_os("SURSUM_SYSTEM_CONFIG").map(PathBuf::from);
+    let mut config = Config::with_data_dir(&args.data_dir).load_files(system_config.as_deref())?;
     if let Some(listen) = args.listen {
         config.listen = listen;
     }

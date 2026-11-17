@@ -55,6 +55,10 @@ kernel for it).
 - **Network**: Ethernet with DHCP; Wi-Fi and Bluetooth are switched off in `config.txt`. The
   firewall accepts HTTP and SSH from private addresses only, plus mDNS, DHCP and ping. The kiosk
   itself may reach localhost only.
+- **Display power and screen guard**: `/etc/sursum/config.toml` (image defaults; the device's own
+  `/var/lib/sursum/config.toml` wins) switches the TV on and to standby over HDMI-CEC and lets the
+  server restart the kiosk when no screen has been connected for 15 s, through
+  `sursum-kiosk-restart.path` (the server itself has no privileges).
 - **Administration**: `ssh admin@sursum.local` with the key given at build time; no password
   login. Application updates come from the remote (on trial, ADR 0013) or `just deploy`.
 - **Logs**: `journalctl` is persistent across reboots (64M).

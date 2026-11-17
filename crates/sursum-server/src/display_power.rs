@@ -4,7 +4,8 @@
 //! One background task owns the display connection: it runs power commands from remotes and asks
 //! for the power state every [`POLL`] (more often while a projector warms up or cools down). The
 //! state goes to the state actor like any other change, so remotes see it in their snapshot; the
-//! actor itself never waits for a slow projector. HDMI-CEC follows on the Pi (M4, hardware spike).
+//! actor itself never waits for a slow projector. Backends: PJLink (projectors with a network
+//! port) and, on Linux, HDMI-CEC ([`cec`], the Pi's HDMI0).
 
 use std::time::Duration;
 
@@ -19,6 +20,9 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::actor::StateHandle;
 use crate::config::DisplayPowerConfig;
+
+#[cfg(target_os = "linux")]
+pub mod cec;
 
 /// Normal interval between state queries.
 const POLL: Duration = Duration::from_secs(30);
@@ -78,7 +82,7 @@ impl From<PjLinkError> for PowerError {
 
 /// A projector or monitor whose power the server can switch (ADR 0012). The background task in
 /// [`spawn`] is written against this trait, so it is the same for every way of reaching a display
-/// and can be tested with a fake one. HDMI-CEC becomes a third implementation on the Pi.
+/// and can be tested with a fake one.
 pub trait DisplayPower: Send + Sync + 'static {
     /// Switches the display on or to standby; `Ok` once the display accepted the command.
     fn set(&self, action: PowerAction) -> impl Future<Output = Result<(), PowerError>> + Send;
@@ -207,6 +211,16 @@ pub fn spawn(config: &DisplayPowerConfig, state: StateHandle) -> PowerHandle {
         DisplayPowerConfig::None => watch(NoDisplay, changes),
         DisplayPowerConfig::Pjlink { host, password } => {
             watch(PjLinkDisplay::new(host, password.clone()), changes)
+        }
+        #[cfg(target_os = "linux")]
+        DisplayPowerConfig::Cec { device } => {
+            let path = device.clone().unwrap_or_else(|| cec::DEFAULT_DEVICE.into());
+            watch(cec::CecDisplay::new(path), changes)
+        }
+        #[cfg(not(target_os = "linux"))]
+        DisplayPowerConfig::Cec { .. } => {
+            tracing::warn!("HDMI-CEC power control works on Linux only");
+            watch(NoDisplay, changes)
         }
     }
 }

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Device defaults from the image (sursum-device layer); the server reads this file first
+# (SURSUM_SYSTEM_CONFIG in sursum.service). This device's own settings, e.g. a projector over
+# PJLink instead of the TV over CEC, go into /var/lib/sursum/config.toml, which wins setting by
+# setting.
+
+# The TV on HDMI0, switched on and to standby over HDMI-CEC (/dev/cec0, ADR 0012).
+[display_power]
+backend = "cec"
+
+# Restart the kiosk when no screen has been connected for 15 s (60 s after start): a crashed
+# renderer or a hung page that systemd's Restart=always does not see. The request file is acted
+# on by sursum-kiosk-restart.path.
+[screen_guard]
+restart_command = ["touch", "/run/sursum/restart-kiosk"]

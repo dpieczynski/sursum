@@ -46,3 +46,23 @@ operator position. Operators need to switch the display on and to standby from t
   frames are still unverified ⚠.
 - Standby uses a 1.5 s hold in the remote and warns while a slide is on screen; "on" is
   disabled while a projector cools down.
+
+## Amendment (2026-11-17): the CEC backend, as built
+- `CecDisplay` (`sursum-server::display_power::cec`, Linux only) on `cec_linux` 0.2.2 (MIT, the
+  kernel's CEC API through ioctls; libcec bindings were rejected: GPL-2.0-only and a C library).
+  Configuration: `[display_power] backend = "cec"`, optional `device` (default `/dev/cec0`, the
+  Pi's HDMI0). The server reaches the device through `SupplementaryGroups=video` (it is
+  `root:video 0660` on the Pi), so no udev rule is needed.
+- The device is opened on first use as a sender, and claims a playback-device logical address
+  named "sursum". **On** sends Image View On to the TV and then Active Source with our physical
+  address. When the TV's EDID was not read, so there is no physical address (likely with the
+  forced HDMI mode while the TV is off), the kernel still lets an unconfigured adapter send Image
+  View On from Unregistered. **Standby** sends Standby to the TV. **State** asks Give Device
+  Power Status and reads Report Power Status (`sursum_core::display_power::cec_power_status`:
+  0 on, 1 standby, 2 and 3 the transitions). Each call runs on tokio's blocking pool; the device
+  is reopened after an error.
+- The device image enables it by default in `/etc/sursum/config.toml` (system defaults, read
+  before the data directory's `config.toml`, which wins setting by setting), so a church with a
+  PJLink projector overrides it on the device.
+- ⚠ Not yet tried on a TV: waking from deep standby, Active Source switching input, the state
+  while the TV is off, and how often polling a TV every 30 s is acceptable.

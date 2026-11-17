@@ -23,7 +23,8 @@ setup (`deploy/windows/`).
 - HDMI mode is forced (`video=HDMI-A-1:1920x1080@60D`, decided 2026-11-17, ADR 0013 amendment);
   do not rely on hotplug or EDID. Native or another forced mode only if an installation needs it.
 - The display is connected directly to the Pi's **HDMI0** port (`/dev/cec0` for HDMI-CEC power
-  control, ADR 0012). The `sursum` user gets access to `/dev/cec0` via a udev rule in the image;
+  control, ADR 0012). The server unit reaches `/dev/cec0` (`root:video`) through
+  `SupplementaryGroups=video`; the image turns CEC on in `/etc/sursum/config.toml`;
   PJLink passwords live only in `/var/lib/sursum/config.toml`.
 - After an OS reboot the screen starts with the logo and the set position restored; after a
   process restart the screen is fully restored (ADR 0003).

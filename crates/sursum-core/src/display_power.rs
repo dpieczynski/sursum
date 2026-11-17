@@ -7,6 +7,10 @@
 //! `PJLINK 0` (no password) or `PJLINK 1 <8 lowercase hex digits>`; with a password, the first
 //! command is prefixed by the 32-character MD5 of `<seed><password>`; a wrong password is
 //! answered with `PJLINK ERRA`.
+//!
+//! HDMI-CEC (the Pi, through the kernel's CEC device): the TV answers "Give Device Power Status"
+//! with "Report Power Status", whose one-byte operand [`cec_power_status`] reads (HDMI 1.4 CEC,
+//! "Power Status" operand: 0 on, 1 standby, 2 standby to on, 3 on to standby).
 
 use md5::{Digest as _, Md5};
 use sursum_protocol::{DisplayPowerState, PowerAction};
@@ -109,9 +113,30 @@ pub fn parse_power_reply(line: &str) -> Result<PowerReply, PjLinkError> {
     }
 }
 
+/// The operand of a CEC "Report Power Status" message as a power state; `None` for values the
+/// standard does not define (a TV may send anything).
+pub fn cec_power_status(operand: u8) -> Option<DisplayPowerState> {
+    match operand {
+        0 => Some(DisplayPowerState::On),
+        1 => Some(DisplayPowerState::Standby),
+        2 => Some(DisplayPowerState::WarmingUp),
+        3 => Some(DisplayPowerState::CoolingDown),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cec_power_status_follows_the_standard() {
+        assert_eq!(cec_power_status(0), Some(DisplayPowerState::On));
+        assert_eq!(cec_power_status(1), Some(DisplayPowerState::Standby));
+        assert_eq!(cec_power_status(2), Some(DisplayPowerState::WarmingUp));
+        assert_eq!(cec_power_status(3), Some(DisplayPowerState::CoolingDown));
+        assert_eq!(cec_power_status(4), None);
+    }
 
     #[test]
     fn the_specification_example_gives_the_specification_digest() {
