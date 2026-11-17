@@ -154,7 +154,20 @@ fn merge_report() {
 #[test]
 fn pairing() {
     use sursum_protocol::{PairOutcome, SessionInfo};
-    let session = SessionInfo { pin_required: false, paired: false, admin: false, setup_needed: true };
+    let session = SessionInfo {
+        pin_required: false,
+        paired: false,
+        admin: false,
+        setup_needed: true,
+        admin_remaining_s: None,
+    };
+    let unlocked = SessionInfo {
+        pin_required: true,
+        paired: true,
+        admin: true,
+        setup_needed: false,
+        admin_remaining_s: Some(840),
+    };
     let outcomes = [
         PairOutcome::Paired,
         PairOutcome::Unlocked,
@@ -163,7 +176,29 @@ fn pairing() {
         PairOutcome::AlreadySet,
         PairOutcome::Locked { retry_after_s: 30 },
     ];
-    insta::assert_json_snapshot!((session, outcomes));
+    insta::assert_json_snapshot!((session, unlocked, outcomes));
     let old: SessionInfo = serde_json::from_str(r#"{"pin_required":true,"paired":false}"#).unwrap();
     assert!(!old.admin && !old.setup_needed);
+}
+
+/// Updates go over REST. The remote that uploads a bundle reloads into the new build, so these
+/// only have to stay readable within one release.
+#[test]
+fn update() {
+    let status = UpdateStatus {
+        build: "0.2.0".into(),
+        release: Some("0.2.0".into()),
+        on_trial: true,
+        last: Some(LastUpdate::RolledBack {
+            failed: "0.3.0".into(),
+            restored: "0.2.0".into(),
+            database_restored: true,
+        }),
+        can_install: true,
+    };
+    let outcomes = [
+        InstallOutcome::Installed { version: "0.3.0".into() },
+        InstallOutcome::Refused { reason: InstallRefusal::BadBundle },
+    ];
+    insta::assert_json_snapshot!((status, LastUpdate::Committed { version: "0.2.0".into() }, outcomes));
 }

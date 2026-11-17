@@ -53,6 +53,7 @@ fn Root() -> impl IntoView {
             paired: true,
             admin: true,
             setup_needed: false,
+            admin_remaining_s: None,
         };
         session.set(Some(info.unwrap_or(open)));
     });

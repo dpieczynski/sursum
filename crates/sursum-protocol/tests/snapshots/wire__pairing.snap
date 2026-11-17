@@ -1,13 +1,21 @@
 ---
 source: crates/sursum-protocol/tests/wire.rs
-expression: "(session, outcomes)"
+expression: "(session, unlocked, outcomes)"
 ---
 [
   {
     "pin_required": false,
     "paired": false,
     "admin": false,
-    "setup_needed": true
+    "setup_needed": true,
+    "admin_remaining_s": null
+  },
+  {
+    "pin_required": true,
+    "paired": true,
+    "admin": true,
+    "setup_needed": false,
+    "admin_remaining_s": 840
   },
   [
     {

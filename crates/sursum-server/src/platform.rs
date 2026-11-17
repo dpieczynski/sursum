@@ -7,12 +7,23 @@ pub trait Platform: Send + Sync {
     /// process restarted; a different value means the machine rebooted (ADR 0003).
     /// `None` when the platform cannot tell; the server then assumes a reboot.
     fn boot_id(&self) -> Option<String>;
+
+    /// Whether a service manager starts the server again when it exits, which an update from
+    /// the remote relies on. Only our systemd unit (`Type=notify`, `Restart=always`) does.
+    fn supervised(&self) -> bool {
+        false
+    }
 }
 
 /// The real platform.
 pub struct SystemPlatform;
 
 impl Platform for SystemPlatform {
+    fn supervised(&self) -> bool {
+        // systemd sets this only for `Type=notify` services; the device's unit is one.
+        std::env::var_os("NOTIFY_SOCKET").is_some()
+    }
+
     #[cfg(target_os = "linux")]
     fn boot_id(&self) -> Option<String> {
         let id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;

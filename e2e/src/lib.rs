@@ -95,6 +95,11 @@ impl Server {
         Ok(server)
     }
 
+    /// The server's data directory (to plant files a real device would have).
+    pub fn data_dir(&self) -> &std::path::Path {
+        self.data_dir.path()
+    }
+
     /// The URL of a page on this server, e.g. `url("/screen/")`.
     pub fn url(&self, path: &str) -> String {
         format!("http://{}{path}", self.addr)

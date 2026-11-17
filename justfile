@@ -99,6 +99,19 @@ app-bundle version: cross-pi
     cargo run -q -p sursum-server -- bundle create --key "$SURSUM_BUNDLE_SIGNING_KEY" --version {{version}} \
         target/aarch64-unknown-linux-gnu/release/sursum-server target/sursum-{{version}}.sursum-app
 
+# The release goes on trial; the device goes back by itself if it does not run (ADR 0013).
+# Install a bundle on a device over SSH (developers only, never during a service).
+deploy host version: (app-bundle version)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    file=sursum-{{version}}.sursum-app
+    scp target/$file {{host}}:/tmp/$file
+    ssh {{host}} "sudo -u sursum /var/lib/sursum/current/sursum-server --data-dir /var/lib/sursum \
+        bundle install /tmp/$file && rm /tmp/$file && sudo systemctl restart sursum"
+    echo "waiting for the trial to end (30 s of healthy running)…"
+    ssh {{host}} 'for i in $(seq 1 90); do test -e /var/lib/sursum/trial.json || break; sleep 1; done; \
+        cat /var/lib/sursum/update.json; echo'
+
 # Cross-compile the server for Windows (needs zig and cargo-zigbuild).
 cross-win: build-web
     cargo zigbuild --release -p sursum-server --target x86_64-pc-windows-gnu

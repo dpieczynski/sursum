@@ -228,6 +228,19 @@ pub enum Msg {
     PinsDiffer,
     InvalidPin,
     PinAlreadySet,
+    UpdateInstall,
+    UpdateTitle,
+    UpdateWarning,
+    UpdateConfirm,
+    UpdateInstalling,
+    UpdateInstalled,
+    UpdateSendFailed,
+    UpdateNoKey,
+    UpdateNotSupervised,
+    UpdateBadBundle,
+    UpdateAlreadyCurrent,
+    UpdateFailed,
+    UpdateOnTrial,
 }
 
 /// The Polish text for a message.
@@ -476,6 +489,66 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ShowPin => "Pokaż",
         Msg::HidePin => "Ukryj",
         Msg::NotSent => "Nie wysłano – brak połączenia z sursum",
+        Msg::UpdateInstall => "Zainstaluj aktualizację",
+        Msg::UpdateTitle => "Aktualizacja programu",
+        Msg::UpdateWarning => {
+            "Nie aktualizuj w czasie mszy. Program uruchomi się ponownie, a ekran na kilka sekund \
+             zgaśnie. Jeśli nowa wersja nie zadziała, urządzenie samo wróci do obecnej."
+        }
+        Msg::UpdateConfirm => "Zainstaluj",
+        Msg::UpdateInstalling => "Instalowanie…",
+        Msg::UpdateInstalled => "Program uruchamia się ponownie. Pilot odświeży się sam.",
+        Msg::UpdateSendFailed => "Nie udało się wysłać pliku.",
+        Msg::UpdateNoKey => "Ta wersja programu nie przyjmuje aktualizacji.",
+        Msg::UpdateNotSupervised => "Na tym komputerze aktualizację instaluje się ręcznie.",
+        Msg::UpdateBadBundle => {
+            "To nie jest aktualizacja dla tego urządzenia: plik jest uszkodzony albo nie ma \
+             właściwego podpisu."
+        }
+        Msg::UpdateAlreadyCurrent => "Ta wersja już działa.",
+        Msg::UpdateFailed => "Instalacja nie powiodła się (np. brak miejsca). Działa dotychczasowa wersja.",
+        Msg::UpdateOnTrial => {
+            "Nowa wersja jest sprawdzana. Jeśli nie zadziała, urządzenie samo wróci do poprzedniej."
+        }
+    }
+}
+
+/// "Tryb administratora włączony – wyłączy się za 14 min".
+pub fn admin_minutes_left(minutes: u32) -> String {
+    format!("Tryb administratora włączony – wyłączy się za {minutes} min")
+}
+
+/// Why the server did not install an update.
+pub fn install_refusal(reason: sursum_protocol::InstallRefusal) -> Msg {
+    use sursum_protocol::InstallRefusal;
+    match reason {
+        InstallRefusal::NoKey => Msg::UpdateNoKey,
+        InstallRefusal::NotSupervised => Msg::UpdateNotSupervised,
+        InstallRefusal::BadBundle => Msg::UpdateBadBundle,
+        InstallRefusal::AlreadyCurrent => Msg::UpdateAlreadyCurrent,
+        InstallRefusal::Failed => Msg::UpdateFailed,
+    }
+}
+
+/// "Zainstalowano wersję 0.3.0." (the server restarts into it next).
+pub fn installed_version(version: &str) -> String {
+    format!("Zainstalowano wersję {version}.")
+}
+
+/// How the most recent update ended, for "O programie".
+pub fn last_update(last: &sursum_protocol::LastUpdate) -> String {
+    use sursum_protocol::LastUpdate;
+    match last {
+        LastUpdate::Committed { version } => {
+            format!("Ostatnia aktualizacja: wersja {version} działa poprawnie.")
+        }
+        LastUpdate::RolledBack { failed, restored, database_restored } => {
+            let database =
+                if *database_restored { " Baza pieśni wróciła do stanu sprzed aktualizacji." } else { "" };
+            format!(
+                "Aktualizacja do wersji {failed} nie zadziałała – przywrócono wersję {restored}.{database}"
+            )
+        }
     }
 }
 

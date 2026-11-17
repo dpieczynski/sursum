@@ -24,6 +24,7 @@ pub mod platform;
 pub mod screen_guard;
 pub mod service;
 pub mod sets;
+pub mod update;
 pub mod ws;
 
 use std::net::SocketAddr;
@@ -47,9 +48,16 @@ pub struct RunningServer {
     pub addr: SocketAddr,
     shutdown: Option<oneshot::Sender<()>>,
     task: tokio::task::JoinHandle<anyhow::Result<()>>,
+    restart: std::sync::Arc<tokio::sync::Notify>,
 }
 
 impl RunningServer {
+    /// Resolves once an update has been installed from the remote: the caller should
+    /// [`stop`](Self::stop) and exit, and the service manager starts the new release.
+    pub async fn restart_requested(&self) {
+        self.restart.notified().await;
+    }
+
     /// Stops accepting connections and waits for the server task to finish.
     pub async fn stop(mut self) -> anyhow::Result<()> {
         if let Some(shutdown) = self.shutdown.take() {
@@ -80,7 +88,15 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     let state_for_watchdog = state.clone();
     let presence = screen_guard::ScreenPresence::default();
     screen_guard::spawn(&presence, config.screen_guard.clone(), state.clone());
-    let router = http::router(state, &config, access, power, presence);
+    let updates = update::Updates {
+        key: config.bundle_key,
+        supervised: platform.supervised(),
+        restart: std::sync::Arc::default(),
+        installing: std::sync::Arc::default(),
+    };
+    let restart = updates.restart.clone();
+    spawn_trial_commit(state.clone(), config.data_dir.clone());
+    let router = http::router(state, &config, access, power, presence, updates);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;
@@ -100,5 +116,26 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         let state = watched.clone();
         async move { state.alive().await }
     });
-    Ok(RunningServer { addr, shutdown: Some(shutdown), task })
+    Ok(RunningServer { addr, shutdown: Some(shutdown), task, restart })
+}
+
+/// After [`update::HEALTHY_AFTER`] of healthy running, ends the trial of this release if it is
+/// on trial (ADR 0013, second amendment).
+fn spawn_trial_commit(state: actor::StateHandle, data_dir: std::path::PathBuf) {
+    let Some(own_release) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Into::into)) else {
+        return;
+    };
+    tokio::spawn(async move {
+        tokio::time::sleep(update::HEALTHY_AFTER).await;
+        if !state.alive().await {
+            return;
+        }
+        let own_release: std::path::PathBuf = own_release;
+        match tokio::task::spawn_blocking(move || update::commit(&data_dir, &own_release)).await {
+            Ok(Ok(Some(version))) => tracing::info!(%version, "the update passed its trial"),
+            Ok(Ok(None)) => {}
+            Ok(Err(error)) => tracing::error!(?error, "could not end the update's trial"),
+            Err(error) => tracing::error!(?error, "the trial commit panicked"),
+        }
+    });
 }

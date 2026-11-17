@@ -35,6 +35,9 @@ pub struct Config {
     pub display_power: DisplayPowerConfig,
     /// What to do when the screen stays disconnected (restart the kiosk); off when `None`.
     pub screen_guard: Option<crate::screen_guard::ScreenGuardConfig>,
+    /// The key application updates must be signed with: the one compiled in from
+    /// `SURSUM_BUNDLE_KEY`. Never read from `config.toml`; tests set their own.
+    pub bundle_key: Option<ed25519_dalek::VerifyingKey>,
 }
 
 /// `[display_power]` in `config.toml`.
@@ -65,6 +68,7 @@ impl Config {
             wasm_delay_ms: 0,
             display_power: DisplayPowerConfig::None,
             screen_guard: None,
+            bundle_key: crate::bundle::trusted_key(),
         }
     }
 

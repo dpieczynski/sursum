@@ -530,7 +530,13 @@ async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() 
         serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
     assert_eq!(
         session,
-        sursum_protocol::SessionInfo { pin_required: true, paired: false, admin: false, setup_needed: false }
+        sursum_protocol::SessionInfo {
+            pin_required: true,
+            paired: false,
+            admin: false,
+            setup_needed: false,
+            admin_remaining_s: None,
+        }
     );
 
     assert!(pair_with(&server, "1111").await.starts_with("HTTP/1.1 401"));

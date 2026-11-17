@@ -8,12 +8,21 @@
 Description=sursum lyrics server
 Wants=network-online.target
 After=network-online.target
+# Never give up restarting: a crash loop of a new release ends in the guard's rollback below.
+StartLimitIntervalSec=0
 
 [Service]
 Type=notify
 User=sursum
 Group=sursum
+# Application updates are on trial until they have run healthily for 30 s (ADR 0013, second
+# amendment). Before each start the *previous* release (known good, never the one on trial)
+# counts the starts and, after the third, goes back to itself. The leading "-" ignores a missing
+# previous release (first install).
+ExecStartPre=-/var/lib/sursum/previous/sursum-server --data-dir /var/lib/sursum bundle guard
 ExecStart=/var/lib/sursum/current/sursum-server --data-dir /var/lib/sursum --listen 0.0.0.0:80
+# A start that hangs before it is ready counts as a failed start of the release on trial.
+TimeoutStartSec=30
 # The server pings only while its state actor answers; a hung server is restarted, and the screen
 # keeps its slide meanwhile (the kiosk reconnects by itself). 30 s leaves room for a big import
 # or merge on an SD card (each runs as one transaction on the actor).

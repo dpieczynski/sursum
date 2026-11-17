@@ -12,6 +12,7 @@ mod message;
 mod pairing;
 mod slide;
 mod state;
+mod update;
 
 pub use editor::{
     DraftPreview, ImportReport, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome, SongDraft,
@@ -29,3 +30,4 @@ pub use state::{
     DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SectionJump,
     SetItemKind, SetItemView, SetSummary, SetView, SongSummary, TextAlign, Theme,
 };
+pub use update::{InstallOutcome, InstallRefusal, LastUpdate, UpdateStatus};

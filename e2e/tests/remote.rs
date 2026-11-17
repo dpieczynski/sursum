@@ -300,6 +300,9 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         pin.send_keys("246813").await?;
         remote.find(By::Css("[data-testid=admin-unlock-submit]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
+        // The banner counts down the minutes admin mode has left.
+        let banner = remote.find(By::Css("[data-testid=admin-on]")).await?.text().await?;
+        anyhow::ensure!(banner.contains("wyłączy się za 15 min"), "{banner}");
         // The device list shows this tablet (which cannot revoke itself).
         wait_until(Duration::from_secs(5), || async {
             remote.find(By::Css("[data-testid=devices] .device-self")).await.is_ok()
@@ -511,6 +514,34 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
             Ok(())
         })
         .await
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn about_tells_when_an_update_was_undone_and_hides_installing_where_it_cannot_work()
+-> anyhow::Result<()> {
+    let server = Server::start().await?;
+    // What the device's guard writes after a release kept failing (ADR 0013, second amendment).
+    let outcome = sursum_protocol::LastUpdate::RolledBack {
+        failed: "0.3.0".into(),
+        restored: "0.2.0".into(),
+        database_restored: false,
+    };
+    std::fs::write(server.data_dir().join("update.json"), serde_json::to_vec(&outcome)?)?;
+    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        remote.goto(server.url("/remote/")).await?;
+        remote.query(By::Css("[data-testid=tab-ustawienia]")).first().await?.wait_until().displayed().await?;
+        open_tab(remote, "ustawienia").await?;
+        let status = remote.query(By::Css("[data-testid=update-status]")).first().await?;
+        status.wait_until().displayed().await?;
+        let text = status.text().await?;
+        anyhow::ensure!(text.contains("0.3.0") && text.contains("przywrócono wersję 0.2.0"), "{text}");
+        // A development build under no service manager cannot take updates: no button.
+        let install = By::XPath("//*[contains(text(), 'Zainstaluj aktualizację')]");
+        anyhow::ensure!(remote.find(install).await.is_err(), "installing must not be offered");
+        Ok(())
     })
     .await
 }

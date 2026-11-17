@@ -10,8 +10,8 @@
 //! Only bundles signed with the key whose public half is compiled into the running binary are
 //! installed. Installing writes `releases/<version>/sursum-server` in the data directory and
 //! switches the `current` symlink atomically, remembering the old target as `previous`, so
-//! [`rollback`] is one rename. Restarting the service and checking `/healthz` belong to the
-//! device's systemd units (M4).
+//! [`rollback`] is one rename. The trial of a new release, with its automatic rollback, is in
+//! [`crate::update`].
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -150,7 +150,7 @@ pub fn install(verified: &Verified, data_dir: &Path, schema_now: i64) -> anyhow:
 /// Writes `bytes` to `folder/name` through a temporary file (removed again on any failure), so a
 /// full disk or a power cut never leaves a half-written file behind or under the real name.
 #[cfg(unix)]
-fn write_atomically(folder: &Path, name: &str, bytes: &[u8], mode: u32) -> anyhow::Result<()> {
+pub(crate) fn write_atomically(folder: &Path, name: &str, bytes: &[u8], mode: u32) -> anyhow::Result<()> {
     use std::os::unix::fs::PermissionsExt as _;
     let temporary = folder.join(format!(".{name}.{}.part", uuid::Uuid::new_v4()));
     let written = (|| -> std::io::Result<()> {
@@ -215,7 +215,7 @@ pub fn rollback(data_dir: &Path, schema_now: i64) -> anyhow::Result<PathBuf> {
 /// Replaces the `current` symlink atomically (a new link renamed over the old one) and keeps the
 /// old target as `previous`. Links are relative, so the data directory can move.
 #[cfg(unix)]
-fn switch_current(data_dir: &Path, target: &Path) -> anyhow::Result<()> {
+pub(crate) fn switch_current(data_dir: &Path, target: &Path) -> anyhow::Result<()> {
     use std::os::unix::fs::symlink;
     let current = data_dir.join("current");
     let old = std::fs::read_link(&current).ok();

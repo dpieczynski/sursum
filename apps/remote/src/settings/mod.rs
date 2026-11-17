@@ -8,13 +8,14 @@ mod device;
 mod display;
 mod library;
 mod screen;
+mod update;
 
 use leptos::prelude::*;
 use sursum_protocol::RemoteState;
 
 use crate::Commands;
 use crate::admin::{AdminUnlock, DeviceList, Session, end_admin, watch_expiry};
-use crate::messages::{Msg, pl};
+use crate::messages::{Msg, admin_minutes_left, pl};
 
 /// Asking for the PIN from anywhere in the view (shared through the context).
 #[derive(Clone, Copy)]
@@ -33,12 +34,7 @@ pub fn SettingsView(state: RwSignal<Option<RemoteState>>, commands: Commands) ->
     view! {
         <div class="settings-view" data-testid="settings-view">
             <Show when=move || admin() && with_pin()>
-                <div class="admin-on" data-testid="admin-on">
-                    <span>{pl(Msg::AdminOn)}</span>
-                    <button class="btn btn--sm" data-testid="end-admin" on:click=move |_| end_admin(session)>
-                        {pl(Msg::EndAdmin)}
-                    </button>
-                </div>
+                <AdminOn session />
             </Show>
             <screen::ScreenSection state commands />
             <display::DisplaySection state commands />
@@ -53,6 +49,46 @@ pub fn SettingsView(state: RwSignal<Option<RemoteState>>, commands: Commands) ->
         </div>
         {unlock_sheet}
     }
+}
+
+/// "Admin mode ends in 14 min" with a button to end it now. Counts down locally between
+/// session reads and asks the server again when the time is up, so the locks come back.
+#[component]
+fn AdminOn(session: Session) -> impl IntoView {
+    let read_at = RwSignal::new(js_sys::Date::now());
+    Effect::new(move |_| {
+        session.0.track();
+        read_at.set(js_sys::Date::now());
+    });
+    let now = RwSignal::new(js_sys::Date::now());
+    let tick = gloo_timers::callback::Interval::new(10_000, move || now.set(js_sys::Date::now()));
+    // Dropped (and so cancelled) together with the component.
+    let _tick = StoredValue::new_local(tick);
+    let minutes = move || {
+        let remaining = session.0.get().admin_remaining_s?;
+        Some(minutes_left(remaining, now.get() - read_at.get()))
+    };
+    Effect::new(move |_| {
+        if minutes() == Some(0) {
+            session.refresh();
+        }
+    });
+    let text = move || minutes().map_or_else(|| pl(Msg::AdminOn).to_owned(), admin_minutes_left);
+    view! {
+        <div class="admin-on" data-testid="admin-on">
+            <span>{text}</span>
+            <button class="btn btn--sm" data-testid="end-admin" on:click=move |_| end_admin(session)>
+                {pl(Msg::EndAdmin)}
+            </button>
+        </div>
+    }
+}
+
+/// Whole minutes still left (rounded up) after `elapsed_ms` since the server said `remaining_s`.
+fn minutes_left(remaining_s: u32, elapsed_ms: f64) -> u32 {
+    // The clock ticks separately from the session read, so it may lag behind it a little.
+    let left_s = f64::from(remaining_s) - elapsed_ms.max(0.0) / 1000.0;
+    if left_s <= 0.0 { 0 } else { (left_s / 60.0).ceil() as u32 }
 }
 
 /// One card with a heading.

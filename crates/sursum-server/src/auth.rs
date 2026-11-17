@@ -159,6 +159,14 @@ impl Access {
         if admin { Rights::Admin } else { Rights::Operator }
     }
 
+    /// How long admin mode still lasts for the device sending these headers (`None` when it is
+    /// off, or when the open development mode makes everyone admin for good).
+    pub fn admin_remaining(&self, headers: &HeaderMap, now: Instant) -> Option<Duration> {
+        let hash = self.device(headers)?;
+        let until = *self.admin_until.lock().expect("not poisoned").get(&hash)?;
+        until.checked_duration_since(now).filter(|left| !left.is_zero())
+    }
+
     /// The token hash of the paired device sending these headers, if it is paired.
     pub fn device(&self, headers: &HeaderMap) -> Option<String> {
         let hash = token_hash(cookie_token(headers)?);
@@ -370,6 +378,9 @@ mod tests {
         access.grant_admin(hash.clone(), now);
         assert_eq!(access.rights(&request, now + Duration::from_secs(60)), Rights::Admin);
         assert_eq!(access.rights(&request, now + ADMIN_SESSION), Rights::Operator, "expired");
+        let minute = Duration::from_secs(60);
+        assert_eq!(access.admin_remaining(&request, now + minute), Some(ADMIN_SESSION - minute));
+        assert_eq!(access.admin_remaining(&request, now + ADMIN_SESSION), None);
         assert_eq!(access.rights(&headers("x=1"), now), Rights::None);
 
         let revocations = access.revocations();

@@ -149,12 +149,13 @@ spróbuj za chwilę”). To normalne.
   przeglądarki), **Pedał i klawisze**.
 - **Baza pieśni**: **Eksport bazy** (kopia zapasowa), **Scal bazę z pliku** 🔒,
   **Import z OpenSong (ZIP)** 🔒.
-- **Urządzenia** 🔒 i **O programie**.
+- **Urządzenia** 🔒 i **O programie** (wersja, **Zainstaluj aktualizację** 🔒).
 
 ### Dla administratora (🔒)
 
 Pozycje z kłódką wymagają ponownego wpisania PIN-u. Tryb administratora działa 15 minut na tym
-urządzeniu; u góry zakładki Ustawienia widać wtedy żółty pasek z **Zakończ tryb administratora**.
+urządzeniu; u góry zakładki Ustawienia widać wtedy żółty pasek z liczbą minut do końca i
+przyciskiem **Zakończ tryb administratora**.
 
 - **Import z OpenSong (ZIP)**: spakuj cały folder OpenSong (z podfolderami *Songs* i *Sets*) i
   wybierz plik. Po imporcie okno pokazuje, ile pieśni i zestawów dodano lub zmieniono, oraz uwagi
@@ -172,6 +173,12 @@ urządzeniu; u góry zakładki Ustawienia widać wtedy żółty pasek z **Zakoń
   znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca.
 - **Urządzenia**: lista sparowanych pilotów; **Odłącz** (przytrzymaj) usuwa zgubiony lub obcy
   tablet (będzie musiał ponownie podać PIN).
+- **Zainstaluj aktualizację** (w **O programie**, tylko na urządzeniu w kościele): wybierz plik
+  `.sursum-app` i potwierdź. **Nigdy w czasie mszy.** Program sprawdza podpis pliku, uruchamia
+  się ponownie, a ekran na kilka sekund gaśnie; pilot odświeża się sam. Nowa wersja przez pierwsze
+  pół minuty jest „na próbę”: jeśli się nie uruchomi albo zawiesza, urządzenie samo wraca do
+  poprzedniej wersji, a w **O programie** pojawia się informacja, że aktualizacja nie zadziałała.
+  Plik bez właściwego podpisu jest odrzucany i nic się nie zmienia.
 - **Usuń zestaw** (przytrzymaj, w oknie **Zmień zestaw**): nie da się usunąć zestawu, którego
   pozycja jest właśnie na ekranie.
 

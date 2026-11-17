@@ -91,9 +91,11 @@ no data loss; the pillar zone can be set from the remote in < 2 minutes.
 - [x] Server side of the screen guard (plan §11.3): `[screen_guard] restart_command = [...]`, `grace_s` (default 15 s; 60 s after startup) in `config.toml`; only a screen on this machine (loopback: the kiosk) counts; remotes warn while none is connected. On the device: `systemctl restart sursum-kiosk` plus a polkit rule ⚠
 - [x] Server side of the systemd watchdog: `Type=notify` readiness and `WATCHDOG=1` pings only while the state actor answers (checked under systemd on a desktop); draft `deploy/systemd/sursum.service` ⚠
 - [ ] In the image: systemd units, silent boot + splash, forced HDMI + fallback EDID ⚠, nftables, Avahi, kiosk watchdog, hardware/systemd watchdogs
+- [x] Release workflow for `v*` tags (`.github/workflows/release.yml`, [releasing.md](releasing.md)): signed Pi bundle checked against the compiled-in key, Windows binary, GitHub release ⚠ not yet run (needs the first tag)
 - [ ] Image build in CI on arm64 ⚠ (runner availability, privileged container); artifacts `.img` and `.update.tar.zst`
 - [x] Signed application bundles, core (ADR 0013 amendment): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
-- [ ] Bundles on the device: systemd units on `current/`, restart + `/healthz` with automatic rollback, browser upload, USB stick, `just deploy`
+- [x] Bundles on the device, server side (ADR 0013 second amendment): trial with a start-counting guard run from the previous release (`ExecStartPre`), automatic rollback incl. the database copy when the schema changed, self-commit after 30 s healthy, upload from the remote (admin, "O programie") with restart into the new release, outcome shown in the remote, `just deploy <host> <version>`; checked with a systemd user unit (crash and hang both roll back)
+- [ ] Bundles on the device, still open: unit and paths in the image (first release shipped with the image), USB stick, `just deploy` against a real Pi
 - [ ] `kiosk.engine = chromium | cog` in the `sursum-kiosk` layer; weekly CI build of the cog image variant
 - [ ] PoE evaluation
 - [x] Display power, PJLink part (ADR 0012 amendment): codec checked against the JBMIA 1.04 example, background task with polling, state indicator, "on" tap and 1.5 s standby hold in the remote, tested against a fake projector (integration + e2e)
@@ -128,6 +130,7 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] Zestaw view: set picker (newest first), new/rename/delete (hold), items always editable (tap opens the song card, never the screen), search that stays open with an "in the set" mark, "new song: <query>" when nothing is found, song card (e2e: `remote_sets.rs`)
 - [x] Ustawienia view: screen (power, logo, calibration behind a confirmation), display (gap after an item), this device (button side, vibration, full screen, pedal keys), song library (export; merge and import with reports in a sheet), devices, about; admin items always visible with a lock that asks for the PIN in place
 - [x] Editor: plain text (verses by empty lines, "Ref." refrains and repeats), buttons inserting a verse, refrain, bridge or slide break at the cursor, "how to write" help, order under "Zaawansowane", "Zapisz" as the main action, warnings as codes worded in Polish, unsaved-changes guard
+- [x] Admin mode counts down in the remote (`SessionInfo.admin_remaining_s`, plan §8.5)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
 
 ## Later

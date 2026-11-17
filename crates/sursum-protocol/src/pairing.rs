@@ -18,6 +18,10 @@ pub struct SessionInfo {
     /// may control the screen until then, so a freshly installed device is never open.
     #[serde(default)]
     pub setup_needed: bool,
+    /// Seconds until admin mode ends by itself on this device (`None` when it is off or never
+    /// ends, as in the open development mode), so the remote can count down.
+    #[serde(default)]
+    pub admin_remaining_s: Option<u32>,
 }
 
 /// `POST /api/admin`: unlock admin mode on this (paired) device for a while.

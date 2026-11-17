@@ -75,3 +75,31 @@ Debian Trixie container, or a spare Pi 5. QEMU builds on x86 laptops are a conve
   never because its schema is newer. Old releases are pruned (only `current` and `previous` stay),
   half-written files are removed on failure, and `bundle install` backs up through a plain
   connection, so it never migrates or "repairs" the database under a running server.
+
+## Amendment (2026-11-17): the trial of a new release
+The "automatic rollback if `/healthz` fails within 30 s" is built as a **trial** that does not
+depend on the new binary being able to judge itself:
+- Installing (CLI `bundle install` or `POST /api/update` from the remote in admin mode) writes
+  `trial.json` next to `current`: the release on trial, the release to go back to, the
+  `before-<version>` database copy and the schema before the update.
+- The unit runs `ExecStartPre=-/var/lib/sursum/previous/sursum-server … bundle guard` before every
+  start: the **previous** release, known good, counts the starts. After the third start without a
+  commit it switches `current` back, restores the database copy only if the new release had
+  already raised the schema (the migrated file is kept in `rolled-back/`), removes the failed
+  release so it never runs again, and records the outcome in `update.json`. Crashes, start
+  timeouts (`TimeoutStartSec=30`), watchdog kills and power cuts all count as starts;
+  `StartLimitIntervalSec=0` keeps systemd from giving up before the guard does.
+- The new server commits itself (removes `trial.json`, writes `update.json`) once it has run for
+  30 s with its state actor answering — and only if the running executable is the release on
+  trial, so the old server cannot vouch for its successor before the restart.
+- An upload from the remote is accepted only by builds with a bundle key that run under a
+  service manager (`NOTIFY_SOCKET`, i.e. our `Type=notify` unit); the server answers, then exits
+  and systemd starts the new release. The remote reloads by itself (new build id) and shows the
+  outcome under "O programie".
+- Data written during a failed trial is lost only when the schema changed (the database goes back
+  to the pre-update copy); otherwise the database is kept as it is.
+- A first install has nothing to go back to; the image ships a working release.
+- `trial.json` is read by the previous release, so its fields are only ever added with defaults.
+Verified on a desktop with a systemd user unit: a release that exits at once and one that never
+reports ready both went back by themselves after three starts (about 5 s and 3 × the start
+timeout), and a good release committed after 30 s.

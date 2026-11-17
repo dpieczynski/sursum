@@ -81,7 +81,7 @@ const MIGRATIONS: &[&str] = &[
 ];
 
 /// The database file inside the data directory.
-const DATABASE_FILE: &str = "sursum.db";
+pub(crate) const DATABASE_FILE: &str = "sursum.db";
 /// Backup copies, newest kept.
 const BACKUP_DIR: &str = "backups";
 /// How many backup copies to keep.

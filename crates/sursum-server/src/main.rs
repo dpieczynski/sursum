@@ -79,10 +79,17 @@ enum BundleTask {
         binary: PathBuf,
         output: PathBuf,
     },
-    /// Verify a bundle against this build's key and make it the current release in DATA_DIR.
+    /// Check a bundle against this build's key without installing it (e.g. that a release was
+    /// signed with the secret matching the public key devices trust).
+    Verify { bundle: PathBuf },
+    /// Verify a bundle against this build's key and make it the current release in DATA_DIR, on
+    /// trial until it has run healthily (restart the service afterwards).
     Install { bundle: PathBuf },
     /// Make the previous release current again.
     Rollback,
+    /// Run by systemd before each start, with the previous release's binary: count the starts
+    /// of a release on trial and go back to the previous one when it keeps failing.
+    Guard,
 }
 
 #[tokio::main]
@@ -133,7 +140,10 @@ async fn main() -> anyhow::Result<()> {
 
     let server = sursum_server::start(config, &SystemPlatform).await?;
     println!("listening on http://{}", server.addr);
-    tokio::signal::ctrl_c().await?;
+    tokio::select! {
+        signal = tokio::signal::ctrl_c() => signal?,
+        () = server.restart_requested() => tracing::info!("exiting so the service starts the update"),
+    }
     tracing::info!("shutting down");
     server.stop().await
 }
@@ -152,26 +162,47 @@ fn run_bundle_task(task: &BundleTask, data_dir: &std::path::Path) -> anyhow::Res
             std::fs::write(output, bytes)?;
             println!("wrote {}", output.display());
         }
-        BundleTask::Install { bundle: path } => {
+        BundleTask::Verify { bundle: path } => {
             let trusted = bundle::trusted_key().ok_or_else(|| {
                 anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no bundles")
             })?;
             let verified = bundle::verify(&std::fs::read(path)?, &trusted)?;
-            // A plain backup: the server may be running, and nothing must migrate or "repair"
-            // the database under it.
-            let label = format!("before-{}", verified.manifest.version);
-            sursum_server::db::Database::backup_file(data_dir, &label)?;
-            let schema = sursum_server::db::Database::schema_version(data_dir)?;
-            let release = bundle::install(&verified, data_dir, schema)?;
-            println!("installed {}; restart the service to run it", release.display());
+            println!("{} is genuine: version {}", path.display(), verified.manifest.version);
+        }
+        BundleTask::Install { bundle: path } => {
+            let trusted = bundle::trusted_key().ok_or_else(|| {
+                anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no bundles")
+            })?;
+            // Backs up through a plain connection: the server may be running, and nothing must
+            // migrate or "repair" the database under it.
+            let version = sursum_server::update::install(data_dir, &std::fs::read(path)?, &trusted)?;
+            println!("installed {version} on trial; restart the service to run it");
         }
         BundleTask::Rollback => {
             let schema = sursum_server::db::Database::schema_version(data_dir)?;
             let previous = bundle::rollback(data_dir, schema)?;
             println!("current is {} again; restart the service", previous.display());
         }
+        BundleTask::Guard => guard(data_dir)?,
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn guard(data_dir: &std::path::Path) -> anyhow::Result<()> {
+    use sursum_server::update::{Guarded, MAX_STARTS};
+    match sursum_server::update::guard(data_dir)? {
+        Guarded::NoTrial => {}
+        Guarded::Start(start) => println!("release on trial: start {start} of {MAX_STARTS}"),
+        Guarded::RolledBack(outcome) => println!("the release on trial kept failing: {outcome:?}"),
+        Guarded::NothingToRestore => println!("the release on trial kept failing; no previous release"),
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn guard(_: &std::path::Path) -> anyhow::Result<()> {
+    anyhow::bail!("releases are only supported on the Linux device")
 }
 
 /// Writes a secret readable only by its owner.

@@ -10,21 +10,29 @@ same Rust types, so they cannot drift apart within one build.
 - `GET /ws/remote`: requires the device cookie set during PIN pairing; `Origin` and `Host` are
   validated on upgrade (protection against cross-site WebSocket hijacking and DNS rebinding).
 - REST under `/api/…` for large or on-demand data: search, song drafts and preview, import,
-  library export/merge, pairing, admin mode and the device list.
+  library export/merge, pairing, admin mode, the device list and application updates.
 
 ### Rights (ADR 0016)
 
 | Who | May |
 |---|---|
 | anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/licenses` |
-| paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `POST /api/assets`, `/api/library/export`, `POST/DELETE /api/admin` |
-| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
+| paired remote (operator) | `/ws/remote` commands except setup ones, search, editor, `POST /api/assets`, `/api/library/export`, `GET /api/update/status`, `POST/DELETE /api/admin` |
+| admin mode (PIN again, 15 min) | `/api/import/opensong`, `/api/library/merge`, `POST /api/update`, `/api/devices`, `/api/devices/{id}/revoke`, commands `SetScreenProfile`, `Calibrate`, `SetLogo`, `DeleteSong` |
 
 Without a PIN nobody may control the screen: `/api/session` says `setup_needed`, and
 `POST /api/setup { pin, name }` sets the PIN once (`invalid_pin` → 400, `already_set` → 409) and
 pairs that browser with admin mode unlocked. Only the development flag `--open-without-pin` (used
 by `just dev` and the tests) gives everyone admin rights while no PIN is set. Refusals: HTTP 401 (not paired) or 403 (needs admin
 mode); WebSocket commands answer `Rejected { code: forbidden }`.
+
+Application updates (ADR 0013, second amendment): `POST /api/update` takes a `.sursum-app` file
+(with the `X-Sursum-Upload` header like other uploads) and answers `InstallOutcome`:
+`installed { version }`, after which the server exits and its service manager starts the new
+release, or `refused { reason }` with `no_key`, `not_supervised`, `bad_bundle`,
+`already_current` or `failed` (nothing changed). `GET /api/update/status` answers
+`UpdateStatus { build, release, on_trial, last, can_install }`; `last` is `committed { version }`
+or `rolled_back { failed, restored, database_restored }`.
 
 JSON text frames (`serde_json` on both sides, readable in browser dev tools); serde enums tagged
 with `"t"`; default Rust (snake_case) field names, since no JavaScript consumes them.

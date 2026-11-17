@@ -47,6 +47,7 @@ struct App {
     presence: crate::screen_guard::ScreenPresence,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
+    updates: crate::update::Updates,
 }
 
 /// Builds the router.
@@ -56,6 +57,7 @@ pub fn router(
     access: Arc<Access>,
     power: crate::display_power::PowerHandle,
     presence: crate::screen_guard::ScreenPresence,
+    updates: crate::update::Updates,
 ) -> Router {
     let app = App {
         power,
@@ -67,6 +69,7 @@ pub fn router(
         allowed_hosts: Arc::new(config.allowed_hosts.clone()),
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
+        updates,
     };
     // Bulk changes and device management need admin mode (once a PIN is set).
     let admin = Router::new()
@@ -82,6 +85,12 @@ pub fn router(
                 .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES))
                 .layer(middleware::from_fn(require_upload_header)),
         )
+        .route(
+            "/api/update",
+            axum::routing::post(install_update)
+                .layer(axum::extract::DefaultBodyLimit::max(MAX_UPDATE_BYTES))
+                .layer(middleware::from_fn(require_upload_header)),
+        )
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
         .route_layer(middleware::from_fn_with_state(app.clone(), require_admin));
@@ -93,6 +102,7 @@ pub fn router(
         .route("/api/songs/save", axum::routing::post(save_song))
         .route("/api/songs/{id}/draft", get(song_draft))
         .route("/api/library/export", get(export_library))
+        .route("/api/update/status", get(update_status))
         .route(
             "/api/assets",
             axum::routing::post(upload_asset)
@@ -143,12 +153,19 @@ async fn require_admin(State(app): State<App>, request: Request, next: Next) -> 
 
 /// `GET /api/session`: whether a PIN is set, whether this browser is paired and is admin.
 async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
-    let rights = app.access.rights(&headers, std::time::Instant::now());
+    let now = std::time::Instant::now();
+    let rights = app.access.rights(&headers, now);
+    let remaining = app.access.admin_remaining(&headers, now).filter(|_| rights == Rights::Admin);
     let info = SessionInfo {
         pin_required: app.access.pin_required(),
         paired: rights >= Rights::Operator,
         admin: rights == Rights::Admin,
         setup_needed: app.access.setup_needed(),
+        // Rounded up, so the remote never says "0 min" while admin mode still works.
+        admin_remaining_s: remaining.map(|left| {
+            let seconds = left.as_secs() + u64::from(left.subsec_nanos() > 0);
+            u32::try_from(seconds).unwrap_or(u32::MAX)
+        }),
     };
     axum::Json(info).into_response()
 }
@@ -316,6 +333,50 @@ async fn import_opensong(
     match parsed {
         Ok(Ok(library)) => axum::Json(app.state.import(library).await).into_response(),
         Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// An application bundle is one compressed binary of a few tens of megabytes.
+const MAX_UPDATE_BYTES: usize = 128 * 1024 * 1024;
+
+/// `GET /api/update/status`: the running version and how the last update went.
+async fn update_status(State(app): State<App>) -> Response {
+    let data_dir = app.data_dir.clone();
+    let can_install = app.updates.can_install();
+    match tokio::task::spawn_blocking(move || crate::update::status(&data_dir, crate::BUILD_ID, can_install))
+        .await
+    {
+        Ok(status) => axum::Json(status).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `POST /api/update` (admin): installs a signed bundle, answers, then restarts into it.
+async fn install_update(State(app): State<App>, body: axum::body::Bytes) -> Response {
+    use sursum_protocol::{InstallOutcome, InstallRefusal};
+    let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
+    let Some(key) = app.updates.key else { return refuse(InstallRefusal::NoKey) };
+    if !app.updates.supervised {
+        return refuse(InstallRefusal::NotSupervised);
+    }
+    let _installing = app.updates.installing.lock().await;
+    let data_dir = app.data_dir.clone();
+    match tokio::task::spawn_blocking(move || crate::update::install(&data_dir, &body, &key)).await {
+        Ok(Ok(version)) => {
+            tracing::info!(%version, "update installed; restarting into it");
+            let restart = app.updates.restart.clone();
+            tokio::spawn(async move {
+                // Let the answer reach the remote first.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                restart.notify_one();
+            });
+            axum::Json(InstallOutcome::Installed { version }).into_response()
+        }
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "update refused");
+            refuse(error.refusal())
+        }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
