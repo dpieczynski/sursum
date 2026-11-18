@@ -93,12 +93,27 @@ pub fn EditorForm(
     let commands = expect_context::<crate::Commands>();
     let editing = expect_context::<RwSignal<Option<super::EditorTarget>>>();
     let can_delete = move || session.0.get().admin && draft.with(|draft| draft.song_id.is_some());
+    // The desktop program's library has no screen to show the song on.
+    let has_screen =
+        use_context::<sursum_protocol::Installation>() != Some(sursum_protocol::Installation::Library);
     let delete = move || {
         if let Some(song_id) = draft.get_untracked().song_id {
             commands.send(sursum_protocol::Command::DeleteSong { song_id });
             editing.set(None);
         }
     };
+    let save_and_show = has_screen.then(|| {
+        view! {
+            <button
+                type="button"
+                class="btn btn--sm"
+                data-testid="save-and-show"
+                on:click=move |_| save(true)
+            >
+                {pl(Msg::SaveAndShow)}
+            </button>
+        }
+    });
     let title = move || draft.with(|draft| draft.title.clone());
     let number = move || draft.with(|draft| draft.number.clone().unwrap_or_default());
     let order = move || draft.with(|draft| draft.presentation.clone());
@@ -164,14 +179,7 @@ pub fn EditorForm(
                 >
                     {pl(Msg::Close)}
                 </button>
-                <button
-                    type="button"
-                    class="btn btn--sm"
-                    data-testid="save-and-show"
-                    on:click=move |_| save(true)
-                >
-                    {pl(Msg::SaveAndShow)}
-                </button>
+                {save_and_show}
                 <button
                     type="button"
                     class="btn btn--sm btn--primary"

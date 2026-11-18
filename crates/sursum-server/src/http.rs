@@ -48,6 +48,7 @@ struct App {
     allow_public_clients: bool,
     wasm_delay_ms: u64,
     updates: crate::update::Updates,
+    installation: sursum_protocol::Installation,
 }
 
 /// Builds the router.
@@ -70,6 +71,7 @@ pub fn router(
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
         updates,
+        installation: config.installation,
     };
     // Bulk changes and device management need admin mode (once a PIN is set).
     let admin = Router::new()
@@ -180,6 +182,7 @@ async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
             let seconds = left.as_secs() + u64::from(left.subsec_nanos() > 0);
             u32::try_from(seconds).unwrap_or(u32::MAX)
         }),
+        installation: app.installation,
     };
     axum::Json(info).into_response()
 }

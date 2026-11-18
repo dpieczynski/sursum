@@ -6,6 +6,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Msg {
     TabLive,
+    TabSongs,
+    LibraryHint,
     DiscardTitle,
     DiscardHint,
     KeepEditing,
@@ -293,6 +295,11 @@ pub enum Msg {
 pub fn pl(msg: Msg) -> &'static str {
     match msg {
         Msg::TabLive => "Msza",
+        Msg::TabSongs => "Pieśni",
+        Msg::LibraryHint => {
+            "Wyszukaj pieśń, żeby ją poprawić, albo dopisz nową. Gotową bazę zapisz \
+             w Ustawieniach (Eksport bazy) i scal na urządzeniu w kościele (Scal bazę z pliku)."
+        }
         Msg::DiscardTitle => "Odrzucić zmiany?",
         Msg::DiscardHint => "Pieśń ma niezapisane zmiany. Po zamknięciu przepadną.",
         Msg::KeepEditing => "Wróć do edycji",

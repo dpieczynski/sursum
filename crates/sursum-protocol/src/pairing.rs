@@ -22,6 +22,24 @@ pub struct SessionInfo {
     /// ends, as in the open development mode), so the remote can count down.
     #[serde(default)]
     pub admin_remaining_s: Option<u32>,
+    /// What this server is: a device with a screen, or a library without one. Older servers
+    /// do not send it and are devices.
+    #[serde(default)]
+    pub installation: Installation,
+}
+
+/// What kind of installation a server is, so the remote offers only what makes sense there.
+/// The server accepts the same requests either way; this decides what is shown, not what is
+/// allowed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Installation {
+    /// A device driving a screen (the Raspberry Pi next to the projector): the whole remote.
+    #[default]
+    Screen,
+    /// The desktop program at home (ADR 0020): songs, the editor and the library file; no
+    /// screen, no service, no pairing.
+    Library,
 }
 
 /// `POST /api/admin`: unlock admin mode on this (paired) device for a while.

@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* The Zestaw view: header, add bar, editable items, search results, picker and song card. */
+/* The Zestaw view: header, add bar, editable items, search results, picker and song card; the
+   desktop program's Pieśni view reuses the add bar and the results. */
 
-.sets-view {
+.sets-view,
+.songs-view {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -87,7 +89,7 @@
   align-self: flex-start;
 }
 
-.sets-view .search-result .result-text {
+:is(.sets-view, .songs-view) .search-result .result-text {
   border: none;
   background: transparent;
   color: var(--text);

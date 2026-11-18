@@ -13,7 +13,7 @@ mod screen;
 mod update;
 
 use leptos::prelude::*;
-use sursum_protocol::RemoteState;
+use sursum_protocol::{Installation, RemoteState};
 
 use crate::Commands;
 use crate::admin::{AdminUnlock, DeviceList, Session, end_admin, watch_expiry};
@@ -33,21 +33,33 @@ pub fn SettingsView(state: RwSignal<Option<RemoteState>>, commands: Commands) ->
     let with_pin = move || session.0.get().pin_required;
     let unlock_sheet =
         move || (unlocking.get() && !admin()).then(|| view! { <AdminUnlock open=unlocking session /> });
-    view! {
-        <div class="settings-view" data-testid="settings-view">
-            <Show when=move || admin() && with_pin()>
-                <AdminOn session />
-            </Show>
+    // The desktop program's library has no screen, no remotes to pair and no device to update.
+    let has_screen = expect_context::<Installation>() == Installation::Screen;
+    let device_sections = move || {
+        view! {
             <screen::ScreenSection state commands />
             <display::DisplaySection state commands />
             <device::DeviceSection />
-            <library::LibrarySection />
-            <backup::BackupSection />
+        }
+    };
+    let devices = move || {
+        view! {
             <Section title=Msg::Devices>
                 <AdminOnly label=Msg::ShowDevices>
                     <DeviceList />
                 </AdminOnly>
             </Section>
+        }
+    };
+    view! {
+        <div class="settings-view" data-testid="settings-view">
+            <Show when=move || admin() && with_pin()>
+                <AdminOn session />
+            </Show>
+            <Show when=move || has_screen>{device_sections}</Show>
+            <library::LibrarySection />
+            <backup::BackupSection />
+            <Show when=move || has_screen>{devices}</Show>
             <about::AboutSection />
         </div>
         {unlock_sheet}

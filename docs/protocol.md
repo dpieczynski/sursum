@@ -26,6 +26,13 @@ pairs that browser with admin mode unlocked. Only the development flag `--open-w
 by `just dev` and the tests) gives everyone admin rights while no PIN is set. Refusals: HTTP 401 (not paired) or 403 (needs admin
 mode); WebSocket commands answer `Rejected { code: forbidden }`.
 
+The desktop program (ADR 0020) runs the server in the *local owner* mode: it listens on loopback
+only (the server refuses to start otherwise), there is no PIN and no pairing, and every request is
+admin. `/api/session` then says `"installation": "library"` (a device says `"screen"`; older
+servers send nothing, which reads as `"screen"`), and the remote offers only songs, the editor,
+the library file and the backup. The same mode is reachable as `sursum-server --library` for the
+browser tests.
+
 Application updates (ADR 0013, second amendment): `POST /api/update` takes a `.sursum-app` file
 (with the `X-Sursum-Upload` header like other uploads) and answers `InstallOutcome`:
 `installed { version }`, after which the server exits and its service manager starts the new

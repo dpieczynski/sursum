@@ -27,10 +27,11 @@ fn main() -> anyhow::Result<()> {
     let data_dir = data_dir::default().context("finding a place for the data")?;
     std::fs::create_dir_all(&data_dir).with_context(|| format!("creating {}", data_dir.display()))?;
     let mut config = Config::with_data_dir(&data_dir).load_file()?;
-    // Loopback only, on a free port: nothing outside this computer can reach the server, so it
-    // needs no PIN (the remote is admin as long as none is set).
+    // Loopback only, on a free port: nothing outside this computer can reach the server, so its
+    // user is the owner and needs no PIN (ADR 0020). There is no screen at home.
     config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::LocalOwner;
+    config.installation = sursum_server::Installation::Library;
 
     // The window's toolkit wants the main thread; the server runs on the runtime's workers.
     let runtime = tokio::runtime::Runtime::new().context("starting the async runtime")?;

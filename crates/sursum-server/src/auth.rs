@@ -97,11 +97,25 @@ pub enum Rights {
     Admin,
 }
 
+/// Who may use the server, decided once at startup (never from `config.toml`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AccessMode {
+    /// The device in the church: remotes pair with the PIN; until one is set, the first remote
+    /// must set it and nobody else gets in.
+    #[default]
+    Pin,
+    /// Development and tests (`--open-without-pin`): as long as no PIN is set, every device on
+    /// the local network is admin.
+    OpenForDevelopment,
+    /// The desktop program (ADR 0020): the server listens on loopback only, so whoever sits at
+    /// this computer is its owner and admin; there is no PIN and no pairing.
+    LocalOwner,
+}
+
 /// Access rules shared by all requests.
 pub struct Access {
     pin: RwLock<Option<PinHash>>,
-    /// Development and tests only: without a PIN everyone is admin.
-    open_without_pin: bool,
+    mode: AccessMode,
     tokens: RwLock<HashSet<String>>,
     /// Token hash → end of its admin session.
     admin_until: Mutex<HashMap<String, Instant>>,
@@ -134,12 +148,11 @@ pub enum PinCheck {
 }
 
 impl Access {
-    /// Rules from the stored PIN and paired devices. `open_without_pin` is the development mode
-    /// in which, as long as no PIN is set, every device is admin.
-    pub fn new(pin: Option<PinHash>, token_hashes: Vec<String>, open_without_pin: bool) -> Self {
+    /// Rules from the stored PIN, the paired devices and the access mode.
+    pub fn new(pin: Option<PinHash>, token_hashes: Vec<String>, mode: AccessMode) -> Self {
         Access {
             pin: RwLock::new(pin),
-            open_without_pin,
+            mode,
             tokens: RwLock::new(token_hashes.into_iter().collect()),
             admin_until: Mutex::new(HashMap::new()),
             attempts: Mutex::new(HashMap::new()),
@@ -150,8 +163,11 @@ impl Access {
 
     /// What a request with these headers may do at `now`.
     pub fn rights(&self, headers: &HeaderMap, now: Instant) -> Rights {
+        if self.mode == AccessMode::LocalOwner {
+            return Rights::Admin;
+        }
         if !self.pin_required() {
-            return if self.open_without_pin { Rights::Admin } else { Rights::None };
+            return if self.mode == AccessMode::OpenForDevelopment { Rights::Admin } else { Rights::None };
         }
         let Some(hash) = self.device(headers) else { return Rights::None };
         let admin =
@@ -195,15 +211,14 @@ impl Access {
         self.revocations.subscribe()
     }
 
-    /// True once a PIN is set.
+    /// True once a PIN is set (never for the local owner, who needs none).
     pub fn pin_required(&self) -> bool {
-        self.pin.read().expect("not poisoned").is_some()
+        self.mode != AccessMode::LocalOwner && self.pin.read().expect("not poisoned").is_some()
     }
 
-    /// True while no PIN is set and the server is not in the open development mode: the first
-    /// remote has to set the PIN.
+    /// True while no PIN is set on a device that needs one: the first remote has to set it.
     pub fn setup_needed(&self) -> bool {
-        !self.pin_required() && !self.open_without_pin
+        self.mode == AccessMode::Pin && !self.pin_required()
     }
 
     /// Makes `pin` the PIN if none is set yet; false if one was set meanwhile (two remotes doing
@@ -330,19 +345,19 @@ mod tests {
 
     #[test]
     fn without_a_pin_nobody_may_control_until_the_first_remote_sets_one() {
-        let access = Access::new(None, vec![], false);
+        let access = Access::new(None, vec![], AccessMode::Pin);
         assert!(access.setup_needed() && !access.allows(&HeaderMap::new()));
         assert!(access.claim_pin(PinHash::new("246813").unwrap()));
         assert!(!access.claim_pin(PinHash::new("135792").unwrap()), "only the first setup wins");
         assert!(!access.setup_needed() && access.pin_required());
-        let open = Access::new(None, vec![], true);
+        let open = Access::new(None, vec![], AccessMode::OpenForDevelopment);
         assert!(!open.setup_needed() && open.allows(&HeaderMap::new()), "development mode");
     }
 
     #[test]
     fn with_a_pin_only_paired_devices_may_control() {
         let (token, hash) = new_token().unwrap();
-        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![], false);
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![], AccessMode::Pin);
         assert!(!access.allows(&headers(&format!("{COOKIE}={token}"))));
         access.add_token(hash);
         assert!(access.allows(&headers(&format!("other=1; {COOKIE}={token}"))));
@@ -351,7 +366,7 @@ mod tests {
 
     #[test]
     fn changing_addresses_does_not_escape_the_global_limit() {
-        let access = Access::new(Some(PinHash::new("246813").unwrap()), vec![], false);
+        let access = Access::new(Some(PinHash::new("246813").unwrap()), vec![], AccessMode::Pin);
         let now = Instant::now();
         for host in 1..=GLOBAL_FAILURES {
             let address = IpAddr::from([192, 168, 1, u8::try_from(host).unwrap()]);
@@ -371,7 +386,7 @@ mod tests {
     #[test]
     fn admin_mode_is_per_device_expires_and_ends_on_revocation() {
         let (token, hash) = new_token().unwrap();
-        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()], false);
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()], AccessMode::Pin);
         let request = headers(&format!("{COOKIE}={token}"));
         let now = Instant::now();
         assert_eq!(access.rights(&request, now), Rights::Operator);
@@ -387,12 +402,15 @@ mod tests {
         access.revoke(&hash);
         assert!(revocations.has_changed().unwrap());
         assert_eq!(access.rights(&request, now), Rights::None);
-        assert_eq!(Access::new(None, vec![], true).rights(&HeaderMap::new(), now), Rights::Admin);
+        assert_eq!(
+            Access::new(None, vec![], AccessMode::OpenForDevelopment).rights(&HeaderMap::new(), now),
+            Rights::Admin
+        );
     }
 
     #[test]
     fn wrong_attempts_lock_the_address_out_with_doubling_time() {
-        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![], false);
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![], AccessMode::Pin);
         let address: IpAddr = "192.168.1.20".parse().unwrap();
         let now = Instant::now();
         for _ in 0..FREE_ATTEMPTS - 1 {
@@ -407,5 +425,17 @@ mod tests {
         assert_eq!(access.check_pin(address, "1234", much_later), PinCheck::Correct);
         // Another address is not affected.
         assert_eq!(access.check_pin("192.168.1.21".parse().unwrap(), "1234", now), PinCheck::Correct);
+    }
+
+    #[test]
+    fn the_local_owner_is_admin_without_a_pin() {
+        let now = Instant::now();
+        let owner = Access::new(None, vec![], AccessMode::LocalOwner);
+        assert_eq!(owner.rights(&HeaderMap::new(), now), Rights::Admin);
+        assert!(!owner.setup_needed() && !owner.pin_required());
+        // A PIN that came with an old database changes nothing: there is nobody to pair.
+        let with_pin = Access::new(Some(PinHash::new("246813").unwrap()), vec![], AccessMode::LocalOwner);
+        assert_eq!(with_pin.rights(&HeaderMap::new(), now), Rights::Admin);
+        assert!(!with_pin.pin_required());
     }
 }

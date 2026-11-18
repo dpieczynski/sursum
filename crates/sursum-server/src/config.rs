@@ -26,9 +26,12 @@ pub struct Config {
     pub transition_ms: u32,
     /// Accept connections from any address, not only private networks (for special setups).
     pub allow_public_clients: bool,
-    /// Development and tests only (`--open-without-pin`, never from `config.toml`): as long as no
-    /// PIN is set, every device on the local network is admin instead of having to set the PIN.
-    pub open_without_pin: bool,
+    /// Who may use the server (never from `config.toml`): the PIN on the device, the open
+    /// development mode, or the desktop program's local owner.
+    pub access: crate::auth::AccessMode,
+    /// What kind of installation this is, so the remote offers only what makes sense: a device
+    /// with a screen, or the desktop program's library without one (never from `config.toml`).
+    pub installation: sursum_protocol::Installation,
     /// Test-only: delay serving WebAssembly by this many milliseconds (`e2e-hooks` feature).
     pub wasm_delay_ms: u64,
     /// How the server switches the display on and off (ADR 0012).
@@ -72,7 +75,8 @@ impl Config {
             screen_profile: ScreenProfile { safe_area: Insets::uniform(48), exclusions: Vec::new() },
             transition_ms: 250,
             allow_public_clients: false,
-            open_without_pin: false,
+            access: crate::auth::AccessMode::Pin,
+            installation: sursum_protocol::Installation::Screen,
             wasm_delay_ms: 0,
             display_power: DisplayPowerConfig::None,
             screen_guard: None,

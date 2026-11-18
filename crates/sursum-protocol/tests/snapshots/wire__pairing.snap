@@ -1,6 +1,6 @@
 ---
 source: crates/sursum-protocol/tests/wire.rs
-expression: "(session, unlocked, outcomes)"
+expression: "(session, unlocked, library, outcomes)"
 ---
 [
   {
@@ -8,14 +8,24 @@ expression: "(session, unlocked, outcomes)"
     "paired": false,
     "admin": false,
     "setup_needed": true,
-    "admin_remaining_s": null
+    "admin_remaining_s": null,
+    "installation": "screen"
   },
   {
     "pin_required": true,
     "paired": true,
     "admin": true,
     "setup_needed": false,
-    "admin_remaining_s": 840
+    "admin_remaining_s": 840,
+    "installation": "screen"
+  },
+  {
+    "pin_required": false,
+    "paired": true,
+    "admin": true,
+    "setup_needed": false,
+    "admin_remaining_s": null,
+    "installation": "library"
   },
   [
     {

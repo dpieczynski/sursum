@@ -172,7 +172,8 @@ Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-
 - [ ] The web view's data in its own folder beside the database (the spike mixes them)
 - [ ] Decide GNU target + `WebView2Loader.dll` (check its license) or MSVC target on a Windows runner; then `just` recipes, CI build and the release workflow
 - [ ] Devcontainer and CI: GTK 4 and WebKitGTK 6.0 development packages ⚠ (Debian package names), so `just lint` covers the crate
-- [ ] Library-only view of the remote for a computer without a screen (search, editor, export, merge; no Msza view, no screen settings)
+- [x] Library-only view of the remote for a computer without a screen: `SessionInfo.installation` (`screen` | `library`), Pieśni · Ustawienia tabs (search, new song, editor without "Zapisz i pokaż"; export, merge, OpenSong import, backup, about without updates), no screen status or banners (e2e: `remote_library.rs`)
+- [x] Local owner access mode (`AccessMode::LocalOwner` replaces the `open_without_pin` flag): admin without a PIN, refused unless the server listens on loopback; `sursum-server --library` (hidden) for the browser tests
 - [ ] One copy at a time on Windows; program icon on both platforms
 - [ ] Smoke test for the Linux window (starts, the remote connects, the editor opens)
 - [ ] Operator guide: "Pieśni przygotowane w domu" (with the SmartScreen warning explained)

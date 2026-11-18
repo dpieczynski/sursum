@@ -122,6 +122,23 @@
   }
 }
 
+/* ---------- The desktop program's library (no screen, ADR 0020) ----------
+   Only the top bar and the content, at every width; the selector outweighs the layouts above.
+   The content keeps a readable width on a wide window. */
+main.remote[data-installation="library"][data-view] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "top" "content";
+}
+main.remote[data-installation="library"][data-view] :is(.area-now, .area-slides, .area-pad, .area-strip),
+main.remote[data-installation="library"] .status-chip {
+  display: none;
+}
+main.remote[data-installation="library"] .area-content > * {
+  max-width: 960px;
+  margin-inline: auto;
+}
+
 /* ---------- Top bar ---------- */
 .topbar {
   height: 44px;

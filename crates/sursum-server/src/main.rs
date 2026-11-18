@@ -36,6 +36,10 @@ struct Args {
     /// (without it, the first remote must set the PIN).
     #[arg(long)]
     open_without_pin: bool,
+    /// Run as the desktop program's library (ADR 0020): no screen, no PIN, loopback only. The
+    /// `sursum` program does this itself; the flag lets the browser tests reach the same mode.
+    #[arg(long, hide = true)]
+    library: bool,
     /// Test-only: delay serving WebAssembly (needs the `e2e-hooks` feature).
     #[arg(long, default_value_t = 0, hide = true)]
     wasm_delay_ms: u64,
@@ -178,7 +182,13 @@ async fn main() -> anyhow::Result<()> {
     }
     config.allowed_origins.extend(args.allow_origins);
     config.wasm_delay_ms = args.wasm_delay_ms;
-    config.open_without_pin = args.open_without_pin;
+    if args.open_without_pin {
+        config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    }
+    if args.library {
+        config.access = sursum_server::auth::AccessMode::LocalOwner;
+        config.installation = sursum_server::Installation::Library;
+    }
 
     let server = sursum_server::start(config, &SystemPlatform).await?;
     println!("listening on http://{}", server.addr);

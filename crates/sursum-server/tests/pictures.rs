@@ -57,7 +57,7 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
     }
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
     let server = sursum_server::start(config, &sursum_server::SystemPlatform).await.unwrap();
 
     let counted = clean_up(&server, true).await;

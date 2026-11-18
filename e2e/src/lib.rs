@@ -38,6 +38,8 @@ enum Access<'a> {
     Pin(&'a str),
     /// No PIN yet: the first remote must set one.
     NewDevice,
+    /// The desktop program's library: no screen, no PIN (ADR 0020).
+    Library,
 }
 
 impl Server {
@@ -61,6 +63,11 @@ impl Server {
         Self::start_prepared(&[], Some(config_toml), Access::Pin(pin)).await
     }
 
+    /// Starts a server as the desktop program runs it: a library without a screen or a PIN.
+    pub async fn start_library() -> anyhow::Result<Server> {
+        Self::start_prepared(&[], None, Access::Library).await
+    }
+
     /// Starts a server as freshly installed: no PIN, so the first remote must set one.
     pub async fn start_new_device() -> anyhow::Result<Server> {
         Self::start_prepared(&[], Some("transition_ms = 0\n"), Access::NewDevice).await
@@ -76,8 +83,10 @@ impl Server {
             std::fs::write(data_dir.path().join("config.toml"), config)?;
         }
         let mut extra_args: Vec<String> = extra_args.iter().map(|arg| (*arg).to_owned()).collect();
-        if matches!(access, Access::Open) {
-            extra_args.push("--open-without-pin".to_owned());
+        match access {
+            Access::Open => extra_args.push("--open-without-pin".to_owned()),
+            Access::Library => extra_args.push("--library".to_owned()),
+            Access::Pin(_) | Access::NewDevice => {}
         }
         if let Access::Pin(pin) = access {
             let status = Process::new(server_binary())
