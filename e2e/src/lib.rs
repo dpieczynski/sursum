@@ -6,11 +6,15 @@
 //! - `SURSUM_SERVER_BIN`: server binary (default: `target/debug/sursum-server`; build it with
 //!   `--features e2e-hooks` for the first-frame test);
 //! - `SURSUM_E2E_BROWSER`: `chromium` (default) or `wpe`, the engine under test (the screen's);
-//! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default) or `webkitgtk`, the remotes' engine
-//!   (roadmap P2: the remote on WebKit, as on an iPad; headless WPE cannot, its view is fixed at
-//!   800×600);
+//! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default), `webkitgtk` or `safari-ipad`, the remotes'
+//!   engine (roadmap P2: the remote on WebKit; headless WPE cannot, its view is fixed at 800×600;
+//!   `safari-ipad` is Safari in the iPad Simulator through `safaridriver` on macOS, where the
+//!   window is the simulated iPad's screen and cannot be resized);
+//! - `SURSUM_CHROMIUM_BINARY`: Chromium or Chrome (default `/usr/bin/chromium`, as in the
+//!   browsers image; on macOS Chrome's path);
 //! - `SURSUM_WEBDRIVER_URL`: WebDriver server (default `http://127.0.0.1:9515` for Chromium,
-//!   `http://127.0.0.1:9516` for WPE, `http://127.0.0.1:9517` for WebKitGTK).
+//!   `http://127.0.0.1:9516` for WPE, `http://127.0.0.1:9517` for WebKitGTK,
+//!   `http://127.0.0.1:4444` for `safaridriver`).
 //!
 //! The browsers run in the `sursum-browsers` container with host networking (`just browsers`).
 
@@ -273,6 +277,8 @@ pub enum Browser {
     /// WebKitGTK's MiniBrowser: WebKit in a window whose size can be set, for the remote
     /// (roadmap P2).
     WebKitGtk,
+    /// Safari in the iPad Simulator (macOS with Xcode, roadmap P2).
+    SafariIpad,
 }
 
 impl Browser {
@@ -290,6 +296,7 @@ impl Browser {
         match std::env::var(variable).as_deref() {
             Ok("wpe") => Browser::Wpe,
             Ok("webkitgtk") => Browser::WebKitGtk,
+            Ok("safari-ipad") => Browser::SafariIpad,
             _ => Browser::Chromium,
         }
     }
@@ -299,6 +306,7 @@ impl Browser {
             Browser::Chromium => "http://127.0.0.1:9515".to_owned(),
             Browser::Wpe => "http://127.0.0.1:9516".to_owned(),
             Browser::WebKitGtk => "http://127.0.0.1:9517".to_owned(),
+            Browser::SafariIpad => "http://127.0.0.1:4444".to_owned(),
         })
     }
 
@@ -307,7 +315,8 @@ impl Browser {
             Browser::Chromium => serde_json::json!({
                 "browserName": "chrome",
                 "goog:chromeOptions": {
-                    "binary": "/usr/bin/chromium",
+                    "binary": std::env::var("SURSUM_CHROMIUM_BINARY")
+                        .unwrap_or_else(|_| "/usr/bin/chromium".to_owned()),
                     "args": [
                         "--headless=new", "--no-sandbox", "--hide-scrollbars", "--force-device-scale-factor=1",
                         format!("--window-size={width},{height}"),
@@ -319,6 +328,12 @@ impl Browser {
                     "binary": "cog",
                     "args": ["--automation", "--platform=headless", "--bg-color=black"],
                 },
+            }),
+            Browser::SafariIpad => serde_json::json!({
+                "browserName": "safari",
+                "platformName": "iOS",
+                "safari:useSimulator": true,
+                "safari:deviceType": "iPad",
             }),
             Browser::WebKitGtk => serde_json::json!({
                 "webkitgtk:browserOptions": {

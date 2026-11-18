@@ -1,6 +1,9 @@
 # Implementation plan: desktop program (D1) and iPad remote (P2)
 
-Written 2026-11-18 from the spike on branch `spike/desktop-shell`. The decisions are in
+Written 2026-11-18 from the spike on branch `spike/desktop-shell`. **Status (same day):** D1.1,
+D1.3 to D1.8 and P2.1 to P2.6 are implemented as far as they can be without Windows, an iPad or a
+GitHub run; what is left is in the roadmap's D1 and P2 sections (marked ⚠ or unchecked). The
+findings below still hold; section 3 describes the spike as it was. The decisions are in
 [ADR 0020](decisions/0020-desktop-program.md); the checkboxes are in
 [roadmap.md](roadmap.md) (sections D1 and P2). Where this plan and those two differ, they win.
 ⚠ marks something nobody has verified yet: check it before relying on it.

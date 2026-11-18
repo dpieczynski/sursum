@@ -184,22 +184,22 @@ browser, writes a song with the preview, exports the library, and the church dev
 
 ## P2 — iPad as a remote (WebKit)
 
-Prepared without hardware as far as that goes: the engine in CI on Linux, iPadOS itself in the
-iPad Simulator on a macOS runner. Support is only announced after one session on a real device.
-Work packages: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md), section 6.
+Prepared without hardware as far as that goes (ADR 0021): the remote's tests on WebKitGTK in CI,
+iPadOS itself in the iPad Simulator on a macOS runner. Support is only announced after one
+session on a real device. Work packages: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md), section 6.
 
-- [ ] Minimum version: iPadOS 16.4 proposed (unprefixed Fullscreen API, `dvh`, Screen Wake Lock) ⚠ check which iPads the parishes actually have
-- [ ] Remote tests on WebKit on Linux: run `remote*.rs` under `SURSUM_E2E_BROWSER=wpe` (the harness and WPEWebDriver are already there, ADR 0015), skipping the tests that need CDP; make them blocking once green. Catches engine differences (layout, CSS, WebAssembly, fitting), not iPadOS behavior
-- [ ] Audit of the remote against Safari, from the code: `viewport-fit=cover` is set but no `env(safe-area-inset-*)` is used (content can sit under the home indicator); `navigator.vibrate` is missing on iOS (already feature-detected, the setting hides); full screen only where the API exists; text fields at 16 px or more so Safari does not zoom; hold buttons against the long-press menu (`-webkit-touch-callout` is set); the live strip with the on-screen keyboard open; `<input type="file" accept=".sursum">` and the export download through the Files app ⚠; WebAssembly features emitted by the toolchain against the minimum Safari ⚠
-- [ ] iPad Simulator in CI: a macOS runner builds the server natively ⚠ and runs the remote tests through `safaridriver` (`platformName: iOS`, `safari:useSimulator: true`, `safari:deviceType: iPad`; needs Xcode, which the hosted images ship with iPad simulators) as a new `Browser` variant in `e2e`; `remote-sizes` screenshots at iPad sizes kept as artifacts. Non-blocking at first ⚠ `safaridriver --enable` on hosted runners, simulator sessions known to be flaky, runner minutes if the repository is private
-- [ ] ADR: the remote joins the WebKit API contract of ADR 0015 (today it binds only the screen)
-- [ ] Screen stays awake: Screen Wake Lock needs HTTPS (M6); until then the guide says to set Auto-Lock to "Never" for the service
-- [ ] One session on a real device (a borrowed iPad; an iPhone covers everything but the layout; or a real-device cloud service with synthetic songs only), checklist in `docs/testing.md`: pairing through `sursum.local` on the church network, hold buttons, typing in the editor, lock/unlock and switching apps (the remote reconnects), a whole set driven by touch and by the pedal, export and merge
-- [ ] Operator guide section for the iPad; the plan's "furtka" wording updated
+- [x] Minimum version iPadOS 16.4 (ADR 0021): every WebAssembly feature our build emits works from Safari 15 (webassembly.org); the newest CSS is `overflow: clip` (16); page full screen on iPad from 16.4
+- [x] Remote tests on WebKit, blocking in `just e2e`: WebKitGTK's WebDriver and MiniBrowser under Xvfb in the browsers image (port 9517), `SURSUM_E2E_REMOTE_BROWSER=webkitgtk`; all 30 remote tests pass. Headless WPE was tried first and cannot (view fixed at 800×600; page zoom breaks clicks). Driver differences handled in the harness (`shown_text`, `typed`)
+- [x] Audit fixes: safe areas on every side and width (the tablet layouts had dropped the bottom inset), fields at 16px or more, full screen offered only where it exists, buttons clip with `overflow: clip`; found on the way (also in Chromium): the live preview overflowed its row on a 768×1024 iPad upright, and a sheet jumped beside the controls a frame after opening (a tap could close it); `just remote-sizes` covers iPad sizes
+- [ ] iPad Simulator workflow (`.github/workflows/ipad.yml`, by hand and weekly, not blocking): `safari-ipad` in the harness, screen in Chrome ⚠ not yet run (`safaridriver --enable` and simulator sessions on hosted runners, `CHROMEWEBDRIVER`, the server building on macOS)
+- [x] ADR 0021: the remote joins the WebKit API contract of ADR 0015
+- [ ] Screen stays awake: Screen Wake Lock needs HTTPS (M6); until then the guide asks for Auto-Lock "Never" during the service
+- [ ] One session on a real device with the checklist in `docs/testing.md` ("iPad on a real device")
+- [ ] Operator guide section for the iPad (after that session)
 
-**Done when:** the remote tests are blocking on WebKit on Linux and pass in the iPad Simulator,
-and the checklist has passed once on a real iPad. Until that session the guide says "prepared,
-not confirmed".
+**Done when:** the remote tests are blocking on WebKit (done) and pass in the iPad Simulator, and
+the checklist has passed once on a real iPad. Until that session the guide says "prepared, not
+confirmed".
 
 ## Later
 
