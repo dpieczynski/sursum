@@ -12,7 +12,7 @@ use crate::messages::{Msg, locked_for, pl};
 #[component]
 pub fn Pairing() -> impl IntoView {
     let pin = RwSignal::new(String::new());
-    let name = RwSignal::new(pl(Msg::DefaultDeviceName).to_owned());
+    let name = RwSignal::new(suggested_name());
     let status = RwSignal::new(None::<String>);
     let submit = move |event: leptos::ev::SubmitEvent| {
         event.prevent_default();
@@ -52,7 +52,7 @@ pub fn Pairing() -> impl IntoView {
 pub fn Setup() -> impl IntoView {
     let pin = RwSignal::new(String::new());
     let repeat = RwSignal::new(String::new());
-    let name = RwSignal::new(pl(Msg::DefaultDeviceName).to_owned());
+    let name = RwSignal::new(suggested_name());
     let status = RwSignal::new(None::<&'static str>);
     let submit = move |event: leptos::ev::SubmitEvent| {
         event.prevent_default();
@@ -93,8 +93,54 @@ pub fn Setup() -> impl IntoView {
     }
 }
 
+/// A name that tells paired devices apart in the device list: "Tablet", "Telefon" or
+/// "Komputer (Windows)" from the browser's description of itself; the operator can change it.
+fn suggested_name() -> String {
+    let user_agent = web_sys::window().and_then(|window| window.navigator().user_agent().ok());
+    device_name(user_agent.as_deref().unwrap_or_default())
+}
+
+/// The suggested name for a browser with `user_agent`.
+fn device_name(user_agent: &str) -> String {
+    let has = |part: &str| user_agent.contains(part);
+    let computer = |system: &str| format!("{} ({system})", pl(Msg::DeviceComputer));
+    if has("iPhone") || (has("Android") && has("Mobile")) {
+        pl(Msg::DevicePhone).to_owned()
+    } else if has("Android") || has("iPad") {
+        pl(Msg::DeviceTablet).to_owned()
+    } else if has("Windows") {
+        computer("Windows")
+    } else if has("Macintosh") {
+        computer("Mac")
+    } else if has("Linux") {
+        computer("Linux")
+    } else {
+        pl(Msg::DefaultDeviceName).to_owned()
+    }
+}
+
 fn reload() {
     if let Some(window) = web_sys::window() {
         let _ = window.location().reload();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suggested_names_tell_devices_apart() {
+        let tablet = "Mozilla/5.0 (Linux; Android 14; SM-X200) AppleWebKit/537.36 Chrome/131.0 Safari/537.36";
+        let phone =
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36";
+        let windows =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36";
+        let linux = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36";
+        assert_eq!(device_name(tablet), "Tablet");
+        assert_eq!(device_name(phone), "Telefon");
+        assert_eq!(device_name(windows), "Komputer (Windows)");
+        assert_eq!(device_name(linux), "Komputer (Linux)");
+        assert_eq!(device_name(""), "Pilot");
     }
 }

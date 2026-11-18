@@ -58,7 +58,11 @@ pub fn Now(state: RwSignal<Option<RemoteState>>) -> impl IntoView {
                 </Show>
             </div>
             <div class="now-previews">
-                <div class="preview-box live" class:on-air=move || !covered.get() data-testid="preview-live">
+                <div
+                    class="preview-box live"
+                    class:on-air=move || shows().is_content()
+                    data-testid="preview-live"
+                >
                     <SlidePreview data=live dimmed=covered />
                     {band}
                 </div>

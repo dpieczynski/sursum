@@ -35,7 +35,8 @@ pub struct AdminRequest {
 pub struct DeviceView {
     pub device_id: String,
     pub name: String,
-    /// When it was paired (server time, `YYYY-MM-DD HH:MM:SS`; the clock may be wrong offline).
+    /// When it was paired (server clock in UTC, `YYYY-MM-DD HH:MM:SS`; the clock may be wrong
+    /// offline). The remote shows it in its own local time.
     pub paired_at: String,
     /// True for the device asking (so nobody revokes their own tablet by mistake).
     pub this_device: bool,

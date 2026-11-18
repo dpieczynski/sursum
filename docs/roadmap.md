@@ -140,6 +140,7 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] Deleting a set can be undone from the toast (`UndoDeleteSet`)
 - [x] Admin mode counts down in the remote (`SessionInfo.admin_remaining_s`, plan §8.5)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
+- [x] Review of the running remote (2026-11-18, ADR 0017 amendment): sheets leave the controls tappable and focus their field, the live strip fits one row on phones, the next-slide preview fits again after the tablet turns, green only for what is on screen, "Brak logo" without a logo, back gesture between views, editor actions always in view, local pairing dates and device-type names, equal admin rows, contrast of filled green and blue (e2e: `remote_live.rs`)
 
 ## M7 — Offline system updates
 

@@ -79,6 +79,15 @@ pub enum Msg {
     ShowText,
     ShowLogo,
     LogoOnScreen,
+    NoLogo,
+    NoLogoYet,
+    UploadLogo,
+    ShowDevices,
+    AddAgain,
+    DevicePhone,
+    DeviceTablet,
+    DeviceComputer,
+    Px,
     Search,
     PrevSong,
     NextSong,
@@ -367,9 +376,18 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ShowText => "Pokaż tekst",
         Msg::ShowLogo => "Pokaż logo",
         Msg::LogoOnScreen => "Logo na ekranie",
+        Msg::NoLogo => "Brak logo",
+        Msg::NoLogoYet => "nie wgrano",
+        Msg::UploadLogo => "Wgraj logo",
+        Msg::ShowDevices => "Pokaż urządzenia",
+        Msg::AddAgain => "Dodaj jeszcze raz",
+        Msg::DevicePhone => "Telefon",
+        Msg::DeviceTablet => "Tablet",
+        Msg::DeviceComputer => "Komputer",
+        Msg::Px => "px",
         Msg::Search => "Szukaj",
-        Msg::PrevSong => "Poprzednia pieśń",
-        Msg::NextSong => "Następna pieśń",
+        Msg::PrevSong => "Poprzednia pozycja",
+        Msg::NextSong => "Następna pozycja",
         Msg::NothingLive => "Nic nie jest wyświetlane. Dotknij pozycji w zestawie albo naciśnij Dalej.",
         Msg::GapAfterItem => "Przerwa po pozycji – pusty ekran",
         Msg::SlideOf => "slajd",
@@ -397,8 +415,8 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Items => "poz.",
         Msg::Next => "Dalej",
         Msg::Prev => "Wstecz",
-        Msg::NextItem => "Następna pieśń",
-        Msg::PrevItem => "Poprzednia pieśń",
+        Msg::NextItem => "Następna pozycja",
+        Msg::PrevItem => "Poprzednia pozycja",
         Msg::Black => "Wygaś / pokaż ekran",
         Msg::Disconnected => "Brak połączenia – ekran pokazuje ostatni slajd. Ponawiam…",
         Msg::Connecting => "Łączenie…",
@@ -638,6 +656,21 @@ pub fn backup_summary_lines(summary: &sursum_protocol::BackupSummary, date: [u32
         format!("Kopia z {day}.{month:02}.{year}, {hour}:{minute:02}"),
         format!("Pieśni: {}, zestawy: {}, obrazy: {}", summary.songs, summary.sets, summary.pictures),
     ]
+}
+
+/// "sparowano 18.11.2026, 1:15" from day, month, year, hour and minute in local time.
+pub fn paired_on(date: [u32; 5]) -> String {
+    let [day, month, year, hour, minute] = date;
+    format!("sparowano {day}.{month:02}.{year}, {hour}:{minute:02}")
+}
+
+/// "nr 12" for a song's number in the hymnal (so it is not mistaken for a count); empty without.
+pub fn song_number(number: Option<&str>) -> String {
+    number
+        .map(str::trim)
+        .filter(|number| !number.is_empty())
+        .map(|number| format!("nr {number}"))
+        .unwrap_or_default()
 }
 
 /// "Tryb administratora włączony – wyłączy się za 14 min".

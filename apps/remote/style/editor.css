@@ -7,6 +7,21 @@
   gap: 14px;
   min-height: 100%;
 }
+/* Side by side, each column scrolls on its own: the previews stay in view while typing, and
+   the actions stay at the bottom of the form. */
+@media (min-width: 900px) {
+  .area-content:has(> .editor) {
+    overflow: hidden;
+  }
+  .editor {
+    height: 100%;
+  }
+  .editor-form,
+  .editor-preview {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
 @media (max-width: 899px) {
   .editor {
     grid-template-columns: minmax(0, 1fr);
@@ -35,6 +50,7 @@
   gap: 8px;
 }
 .editor-form textarea.lyrics {
+  flex: 1;
   min-height: 40dvh;
   font-family: "DejaVu Sans Mono", ui-monospace, monospace;
   font-size: 17px;
@@ -49,9 +65,20 @@
   min-height: var(--tap-sm);
   display: flex;
   align-items: center;
+  gap: 8px;
   color: var(--text);
   font-weight: 700;
   cursor: pointer;
+}
+/* `display: flex` hides the native marker; draw one so it reads as something that opens. */
+.editor-help summary::before {
+  content: "▶";
+  width: 1em;
+  color: var(--muted);
+  font-size: 0.8em;
+}
+.editor-help[open] summary::before {
+  content: "▼";
 }
 .editor-help ul {
   margin: 0;
@@ -61,10 +88,22 @@
   margin: 4px 0;
 }
 .editor-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: auto;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.editor-actions .status-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .editor-warnings {
   margin: 0;

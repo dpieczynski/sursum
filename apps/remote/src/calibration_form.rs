@@ -204,6 +204,7 @@ fn number_field(
                 prop:value=value.to_string()
                 on:change=move |event| on_change(event_target_value(&event))
             />
+            <span class="unit">{pl(Msg::Px)}</span>
         </label>
     }
 }

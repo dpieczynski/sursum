@@ -119,7 +119,7 @@ fn set_row(
             <button class="picker-pick tappable" data-testid="pick-set" on:click=pick>
                 <span class="picker-name">{set.name}</span>
                 <span class="picker-count">{format!("{} {}", set.items, pl(Msg::Items))}</span>
-                {chosen.then(|| view! { <span class="row-badge live">{pl(Msg::Chosen)}</span> })}
+                {chosen.then(|| view! { <span class="row-badge muted">{pl(Msg::Chosen)}</span> })}
             </button>
             <HoldButton label=pl(Msg::Delete) on_hold=delete testid="delete-set" />
         </li>

@@ -6,7 +6,7 @@ use leptos::prelude::*;
 use sursum_protocol::{Command, ItemId, RemoteState, SetItemKind, SetItemView, SongId};
 
 use crate::Commands;
-use crate::messages::{Msg, pl, removed};
+use crate::messages::{Msg, pl, removed, song_number};
 use crate::ui::{HoldButton, Toasts};
 
 #[component]
@@ -68,16 +68,28 @@ fn row(
         _ => item.title.clone(),
     };
     let kind = match item.kind {
-        SetItemKind::Song | SetItemKind::MissingSong => item.song_number.clone().unwrap_or_default(),
+        SetItemKind::Song | SetItemKind::MissingSong => song_number(item.song_number.as_deref()),
         SetItemKind::Text => pl(Msg::KindText).to_owned(),
         SetItemKind::Image => pl(Msg::KindImage).to_owned(),
         SetItemKind::Pause => pl(Msg::KindPause).to_owned(),
     };
     let song_id = item.song_id.clone().filter(|_| item.kind == SetItemKind::Song);
-    let open_card = move |_| {
-        if let Some(song_id) = song_id.clone() {
-            card.set(Some(song_id));
+    // Only songs have a card; other items are not buttons, so they do not look tappable.
+    let label = match song_id {
+        Some(song_id) => view! {
+            <button class="edit-title tappable" on:click=move |_| card.set(Some(song_id.clone()))>
+                <span class="row-title">{title.clone()}</span>
+                <span class="row-kind">{kind}</span>
+            </button>
         }
+        .into_any(),
+        None => view! {
+            <span class="edit-title">
+                <span class="row-title">{title.clone()}</span>
+                <span class="row-kind">{kind}</span>
+            </span>
+        }
+        .into_any(),
     };
     let index = number - 1;
     let (up_id, down_id, remove_id) = (item.item_id.clone(), item.item_id.clone(), item.item_id.clone());
@@ -95,10 +107,7 @@ fn row(
     view! {
         <li class="edit-row" class:live=is_live data-number=number>
             <span class="row-number">{number}</span>
-            <button class="edit-title tappable" on:click=open_card>
-                <span class="row-title">{title}</span>
-                <span class="row-kind">{kind}</span>
-            </button>
+            {label}
             <button class="btn btn--sm move-up" aria-label=pl(Msg::MoveUp) disabled=index == 0 on:click=up>
                 "↑"
             </button>
@@ -110,7 +119,12 @@ fn row(
             >
                 "↓"
             </button>
-            <HoldButton label=pl(Msg::Remove) on_hold=remove testid="remove-item" />
+            <HoldButton
+                label=pl(Msg::Remove)
+                on_hold=remove
+                testid="remove-item"
+                class="btn--sm btn--quiet-danger"
+            />
         </li>
     }
 }

@@ -36,7 +36,9 @@ kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia 
      wyszukiwanie zostaje otwarte, więc można dodać kilka pieśni po kolei. Pieśni, które już są
      w zestawie, mają znaczek „w zestawie”.
    - Dotknięcie tytułu pieśni otwiera jej **kartę**: tekst wszystkich slajdów oraz **Dodaj do
-     zestawu**, **Edytuj** i **Pokaż teraz na ekranie**.
+     zestawu** (dla pieśni, która już jest w zestawie: **Dodaj jeszcze raz**), **Edytuj** i
+     **Pokaż teraz na ekranie**. Ogłoszenia, obrazy i przerwy nie mają karty; żeby poprawić
+     ogłoszenie, usuń je i dodaj ponownie.
    - Strzałki ↑ ↓ przesuwają pozycje. **Usuń** trzeba przytrzymać; pomyłkę cofa **Cofnij** w
      dymku na dole albo **Cofnij usunięcie** pod listą.
    - **Ogłoszenie** dodaje slajdy z tekstem (pusta linia zaczyna nowy slajd), **Obraz** dodaje
@@ -54,11 +56,11 @@ tekstu.
 |---|---|
 | następny slajd | **Dalej ▶** (albo pedał) |
 | poprzedni slajd | **◀ Wstecz** |
-| następną / poprzednią pieśń | **Następna pieśń** / **Poprzednia pieśń** |
+| następną / poprzednią pozycję zestawu (pieśń, ogłoszenie, przerwę) | **Następna pozycja** / **Poprzednia pozycja** |
 | konkretną zwrotkę lub refren | jej kafelek („Zwrotka 2”, „Refren”) pod podglądem |
 | konkretną pozycję zestawu | jej wiersz na liście |
 | wygasić ekran | **Wygaś ekran**; z powrotem: **Pokaż tekst** |
-| pokazać logo parafii | **Pokaż logo**; z powrotem: **Pokaż tekst** |
+| pokazać logo parafii | **Pokaż logo**; z powrotem: **Pokaż tekst**. Napis **Brak logo** znaczy, że logo nie wgrano (Ustawienia → Ekran) |
 | szybko pokazać pieśń spoza zestawu | **Szukaj**, potem **Pokaż teraz** |
 
 - Napis pod **Dalej ▶** mówi, co się stanie. Żółty podpis („→ 2. Barka”) oznacza, że następne
@@ -72,6 +74,10 @@ tekstu.
 - **Szukaj** otwiera okno wyszukiwania. **Pokaż teraz** od razu wyświetla pieśń: jeśli jest w
   zestawie, przechodzi do niej, a jeśli nie, wstawia ją za bieżącą. **+ Do zestawu** tylko ją
   dopisuje na koniec.
+- Każde okno (wyszukiwanie, karta pieśni, ustawienia) zostawia przyciski sterowania odsłonięte:
+  **Wygaś ekran** i **Dalej ▶** działają także wtedy, gdy okno jest otwarte.
+- Zielony znaczy „wierni to widzą”. Gdy ekran jest wygaszony, pokazuje logo albo przerwę, bieżąca
+  pozycja ma szary znaczek „pod zasłoną” albo „przerwa” zamiast zielonego „na ekranie”.
 - Jeśli dwie osoby naciśną **Dalej** w tej samej chwili, ekran przesunie się tylko raz, a drugi
   pilot pokaże „Już przełączone przez inny pilot”.
 - Z zakładek **Zestaw** i **Ustawienia** (na telefonie i tablecie w pionie) przyciski **Wygaś
@@ -137,7 +143,7 @@ spróbuj za chwilę”). To normalne.
 | Czerwony pasek „Brak połączenia – ekran pokazuje ostatni slajd” | Przyciski są nieaktywne, a ekran nadal pokazuje ostatni slajd. Sprawdź Wi-Fi tabletu; pilot połączy się sam. |
 | Żółty pasek „Ekran nie jest połączony z sursum” | Ekran w kościele nie odpowiada; urządzenie spróbuje go uruchomić ponownie. Jeśli to trwa, sprawdź zasilanie urządzenia przy projektorze. |
 | Żółty pasek „Ekran jest uśpiony” | Dotknij **Włącz** na pasku. |
-| Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. |
+| Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. Bez wgranego logo „logo” jest czarnym ekranem, więc pilot nazywa je „Ekran wygaszony”. |
 | Adres `http://sursum.local/` się nie otwiera | Wpisz adres IP urządzenia (np. `http://192.168.1.50/`; najlepiej ustawić go na stałe w routerze parafii). Nazwę `sursum.local` blokują często aplikacje VPN (np. Tailscale) – wyłącz je na tablecie – oraz Firefox zainstalowany jako Flatpak na Linuksie; Chrome i Chromium radzą sobie z nią. |
 | Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę. Wpisz PIN parafii. |
 | Przy przycisku jest kłódka „wymaga trybu administratora” | Dotknij go i wpisz PIN; tryb administratora działa 15 minut. |

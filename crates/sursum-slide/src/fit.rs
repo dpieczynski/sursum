@@ -62,7 +62,8 @@ thread_local! {
 ///
 /// A measurer that is not laid out (inside `display: none`, e.g. a preview hidden on a narrow
 /// layout) has no size, so everything would seem to fit: then the smallest size is returned and
-/// nothing is cached, so a hidden preview never spoils the size of a visible one.
+/// nothing is cached, so a hidden preview never spoils the size of a visible one. Callers fit
+/// again when the measurer is laid out (`SlidePreview` watches for that).
 pub async fn fit_deck(deck: &Deck, theme: &Theme, content: Rect, measurer: &web_sys::HtmlElement) -> Fit {
     if measurer.client_width() == 0 || measurer.client_height() == 0 {
         return Fit { font_px: theme.min_font_px, wrap: false };

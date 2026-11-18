@@ -28,6 +28,8 @@ pub fn AddBar(query: RwSignal<String>, commands: Commands) -> impl IntoView {
                     type="search"
                     enterkeyhint="search"
                     autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
                     placeholder=pl(Msg::SearchPlaceholder)
                     prop:value=query
                     on:input=move |event| query.set(event_target_value(&event))
@@ -130,7 +132,7 @@ fn result_row(
                 <span class="result-line">{song.first_line}</span>
             </button>
             <Show when=already>
-                <span class="row-badge next">{pl(Msg::InSet)}</span>
+                <span class="row-badge muted">{pl(Msg::InSet)}</span>
             </Show>
             <button class="btn btn--primary result-action" data-testid="add-song" on:click=add>
                 {pl(Msg::AddShort)}

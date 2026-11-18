@@ -146,6 +146,16 @@ pub fn EditorForm(
                 </label>
             </details>
             <div class="editor-actions">
+                <Show when=can_delete>
+                    <crate::ui::HoldButton
+                        label=pl(Msg::DeleteSong)
+                        on_hold=delete
+                        class="btn--sm btn--quiet-danger"
+                    />
+                </Show>
+                <p class="status-text" data-testid="editor-status">
+                    {move || status.get()}
+                </p>
                 <button
                     type="button"
                     class="btn btn--sm btn--quiet"
@@ -154,9 +164,6 @@ pub fn EditorForm(
                 >
                     {pl(Msg::Close)}
                 </button>
-                <Show when=can_delete>
-                    <crate::ui::HoldButton label=pl(Msg::DeleteSong) on_hold=delete />
-                </Show>
                 <button
                     type="button"
                     class="btn btn--sm"
@@ -167,16 +174,13 @@ pub fn EditorForm(
                 </button>
                 <button
                     type="button"
-                    class="btn btn--primary"
+                    class="btn btn--sm btn--primary"
                     data-testid="save"
                     on:click=move |_| save(false)
                 >
                     {pl(Msg::Save)}
                 </button>
             </div>
-            <p class="status-text" data-testid="editor-status">
-                {move || status.get()}
-            </p>
         </form>
     }
 }

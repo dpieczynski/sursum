@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use sursum_protocol::{AdminRequest, DeviceView, PairOutcome, SessionInfo};
 
 use crate::api::{get_json, post_json, request_status};
-use crate::messages::{Msg, locked_for, pl};
+use crate::messages::{Msg, locked_for, paired_on, pl};
 use crate::ui::HoldButton;
 
 /// While admin mode is on, the session is re-read this often so the tools hide when it expires.
@@ -131,8 +131,25 @@ fn device_row(device: DeviceView, reload: impl Fn() + Copy + Send + Sync + 'stat
     view! {
         <li class="device">
             <span class="device-name">{device.name}</span>
-            <span class="device-date">{device.paired_at}</span>
+            <span class="device-date">{paired_label(&device.paired_at)}</span>
             {action}
         </li>
     }
+}
+
+/// "2026-11-18 00:15:56" (UTC, as the database stores it) → "sparowano 18.11.2026, 1:15" in this
+/// browser's local time; anything unexpected is shown as it came.
+fn paired_label(paired_at: &str) -> String {
+    let utc = format!("{}Z", paired_at.trim().replacen(' ', "T", 1));
+    let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(&utc));
+    if date.get_time().is_nan() {
+        return paired_at.to_owned();
+    }
+    paired_on([
+        date.get_date(),
+        date.get_month() + 1,
+        date.get_full_year(),
+        date.get_hours(),
+        date.get_minutes(),
+    ])
 }

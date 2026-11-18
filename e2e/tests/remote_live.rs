@@ -385,3 +385,72 @@ async fn the_controls_work_in_browsers_that_cannot_vibrate() -> anyhow::Result<(
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn black_is_one_tap_away_while_a_sheet_is_open() -> anyhow::Result<()> {
+    for (width, height, _) in SIZES {
+        with_remote(width, height, async |_, screen, remote| {
+            let size = format!("{width}×{height}");
+            remote.find(By::Css("[data-testid=search]")).await?.click().await?;
+            remote.find(By::Css("[data-testid=search-sheet]")).await?;
+            // The sheet takes the typing at once (no tap into the field first).
+            wait_until(Duration::from_secs(5), || async {
+                truth(
+                    remote,
+                    "return document.activeElement?.matches('[data-testid=search-sheet] .search-input')",
+                )
+                .await
+                .unwrap_or(false)
+            })
+            .await
+            .with_context(|| format!("{size}: the search field did not get the cursor"))?;
+            // WebDriver refuses to click an element that something else covers.
+            remote
+                .find(By::Css(".area-pad [data-testid=black]"))
+                .await?
+                .click()
+                .await
+                .with_context(|| format!("{size}: the sheet covers the black button"))?;
+            wait_until(Duration::from_secs(5), || async {
+                attribute(screen, SCREEN_ROOT, "data-overlay").await == "black"
+            })
+            .await
+            .with_context(|| format!("{size}: black did not reach the screen"))?;
+            anyhow::ensure!(
+                remote.find(By::Css("[data-testid=search-sheet]")).await.is_ok(),
+                "{size}: blacking out closed the search"
+            );
+            Ok(())
+        })
+        .await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn the_next_slide_preview_fits_when_the_tablet_turns_upright() -> anyhow::Result<()> {
+    with_remote(1280, 800, async |_, _, remote| {
+        let next = "[data-testid=preview-next]";
+        anyhow::ensure!(
+            !remote.find(By::Css(next)).await?.is_displayed().await?,
+            "the next slide preview should be hidden on a landscape tablet"
+        );
+        remote.set_window_rect(0, 0, 800, 1280).await?;
+        let sizes = async || {
+            (
+                attribute(remote, "[data-testid=preview-live] [data-font-px]", "data-font-px").await,
+                attribute(remote, "[data-testid=preview-next] [data-font-px]", "data-font-px").await,
+            )
+        };
+        wait_until(Duration::from_secs(5), || async {
+            let (live, next) = sizes().await;
+            !live.is_empty() && live == next
+        })
+        .await
+        .context("the next slide keeps the size it got while hidden")?;
+        Ok(())
+    })
+    .await
+}

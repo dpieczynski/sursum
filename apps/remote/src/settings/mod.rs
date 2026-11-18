@@ -44,7 +44,7 @@ pub fn SettingsView(state: RwSignal<Option<RemoteState>>, commands: Commands) ->
             <library::LibrarySection />
             <backup::BackupSection />
             <Section title=Msg::Devices>
-                <AdminOnly label=Msg::Devices>
+                <AdminOnly label=Msg::ShowDevices>
                     <DeviceList />
                 </AdminOnly>
             </Section>

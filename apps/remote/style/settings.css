@@ -56,10 +56,24 @@
   height: 26px;
   accent-color: var(--accent);
 }
+/* Full width, so a column of locked items lines up instead of following each label's length. */
 .locked {
+  width: 100%;
   flex-wrap: wrap;
   justify-content: flex-start;
   text-align: left;
+}
+.setting-value {
+  color: var(--muted);
+  font-style: italic;
+}
+/* A button that opens a panel below it says so, and whether it is open. */
+.disclosure::after {
+  content: "▾";
+  color: var(--muted);
+}
+.disclosure[aria-expanded="true"]::after {
+  content: "▴";
 }
 .lock-icon {
   width: 18px;

@@ -51,7 +51,7 @@ pub fn CalibrationPanel(
         <div class="calibration">
             <header class="calibration-header">
                 <h2>{pl(Msg::CalibrationTitle)}</h2>
-                <button class="close" on:click=close>
+                <button class="btn btn--quiet btn--sm" on:click=close>
                     {pl(Msg::Close)}
                 </button>
             </header>

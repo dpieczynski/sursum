@@ -54,7 +54,11 @@ fn typing_in_a_field(event: &web_sys::KeyboardEvent) -> bool {
 pub fn KeysButton() -> impl IntoView {
     let open = RwSignal::new(false);
     view! {
-        <button class="btn btn--sm" on:click=move |_| open.update(|open| *open = !*open)>
+        <button
+            class="btn btn--sm disclosure"
+            aria-expanded=move || open.get().to_string()
+            on:click=move |_| open.update(|open| *open = !*open)
+        >
             {pl(Msg::Keys)}
         </button>
         <Show when=move || open.get()>
@@ -76,8 +80,20 @@ pub fn KeySettings(open: RwSignal<bool>) -> impl IntoView {
         keys.learning.set(None);
         open.set(false);
     };
+    // The panel opens below the button, often below the fold: bring it into view, or the
+    // button seems to do nothing (and a second tap closes it again).
+    let panel = NodeRef::<leptos::html::Div>::new();
+    Effect::new(move |_| {
+        let Some(panel) = panel.get() else { return };
+        request_animation_frame(move || {
+            let options = web_sys::ScrollIntoViewOptions::new();
+            options.set_block(web_sys::ScrollLogicalPosition::Nearest);
+            options.set_behavior(web_sys::ScrollBehavior::Smooth);
+            panel.scroll_into_view_with_scroll_into_view_options(&options);
+        });
+    });
     view! {
-        <div class="key-settings" data-testid="key-settings">
+        <div class="key-settings" data-testid="key-settings" node_ref=panel>
             <p class="editor-help">{pl(Msg::KeysHelp)}</p>
             {rows}
             <div class="setting-row">

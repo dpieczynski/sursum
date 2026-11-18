@@ -10,10 +10,13 @@
   --text: #f2f2f2;
   --muted: #a8a8a8;
 
-  /* The main action: Next, Show now, primary buttons. */
-  --accent: #2f6fe0;
+  /* The main action: Next, Show now, primary buttons (light text on it is above 4.5:1). */
+  --accent: #2a63d6;
   /* What the congregation sees: live preview frame, live slide, live set item. */
   --live: #16a34a;
+  /* The same, as a fill under white text ("na ekranie", the logo while it is up): darker, so
+     the text keeps 5:1. */
+  --live-fill: #15803d;
   /* Attention: warnings, "next goes to another song". */
   --warn: #eab308;
   /* Errors and destruction: no connection, hold-to-delete. */

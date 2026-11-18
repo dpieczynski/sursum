@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! "Szukaj" during Mass: find a song that is not in the set (or is, further down) and show it
-//! at once, or add it to the end of the set. The controls stay visible below the sheet's card on
-//! wide screens; on a phone the sheet covers them, and closing it is one tap.
+//! at once, or add it to the end of the set. The controls stay usable beside or below the sheet
+//! (see `ui::Sheet`), so black is one tap away while searching.
 
 use leptos::prelude::*;
 use sursum_protocol::{Command, SongSummary};
@@ -41,6 +41,8 @@ pub fn SearchSheet(commands: Commands, open: RwSignal<bool>) -> impl IntoView {
                     inputmode=input_mode
                     enterkeyhint="search"
                     autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
                     autofocus=true
                     placeholder=pl(Msg::SearchPlaceholder)
                     prop:value=query

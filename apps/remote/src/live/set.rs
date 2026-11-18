@@ -7,7 +7,8 @@ use leptos::prelude::*;
 use sursum_protocol::{Command, ItemId, NextStep, RemoteState, SetItemKind, SetItemView};
 
 use crate::Commands;
-use crate::messages::{Msg, pl};
+use crate::live::info::{Shows, screen_shows};
+use crate::messages::{Msg, pl, song_number};
 use crate::shell::{CurrentView, View};
 
 #[component]
@@ -23,6 +24,8 @@ pub fn LiveSet(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl
                 .then(|| state.next.as_ref().map(|next| next.deck.item_id.clone()))?
         })
     });
+    let shows =
+        Signal::derive(move || state.with(|state| state.as_ref().map_or(Shows::Nothing, screen_shows)));
     let header = move || {
         state.with(|state| {
             state
@@ -39,13 +42,15 @@ pub fn LiveSet(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl
     let rows = move || match items() {
         None => empty(Msg::NoSet, Msg::ChooseSet).into_any(),
         Some(items) if items.is_empty() => empty(Msg::SetEmpty, Msg::AddSongs).into_any(),
-        Some(items) => {
-            items.into_iter().map(|item| row(item, live_item, next_item, commands)).collect_view().into_any()
-        }
+        Some(items) => items
+            .into_iter()
+            .map(|item| row(item, live_item, next_item, shows, commands))
+            .collect_view()
+            .into_any(),
     };
     Effect::new(move |_| {
         live_item.track();
-        crate::scroll::reveal_after_render(container, ".set-row.live", crate::scroll::Place::Second);
+        crate::scroll::reveal_after_render(container, ".set-row:is(.live, .covered)");
     });
     view! {
         <div class="live-set">
@@ -61,6 +66,7 @@ fn row(
     item: SetItemView,
     live_item: Signal<Option<ItemId>>,
     next_item: Signal<Option<ItemId>>,
+    shows: Signal<Shows>,
     commands: Commands,
 ) -> impl IntoView {
     let number = item.number;
@@ -74,17 +80,24 @@ fn row(
         _ => item.title.clone(),
     };
     let kind = match item.kind {
-        SetItemKind::Song | SetItemKind::MissingSong => item.song_number.clone().unwrap_or_default(),
+        SetItemKind::Song | SetItemKind::MissingSong => song_number(item.song_number.as_deref()),
         SetItemKind::Text => pl(Msg::KindText).to_owned(),
         SetItemKind::Image => pl(Msg::KindImage).to_owned(),
         SetItemKind::Pause => pl(Msg::KindPause).to_owned(),
     };
     let connection = expect_context::<crate::Connection>();
     let show = move |_| commands.send(Command::GoToItemNumber { number });
-    let badge = move || {
-        if is_live.get() {
+    // The live item is "on screen" only while the congregation sees it; under black, the logo
+    // or in the gap after it, it is still where "Dalej" continues, but nobody sees it.
+    let on_air = move || is_live.get() && shows.get().is_content();
+    let covered = move || is_live.get() && !shows.get().is_content();
+    let badge = move || match (is_live.get(), shows.get()) {
+        (true, shows) if shows.is_content() => {
             Some(view! { <span class="row-badge live">{pl(Msg::LiveBadge)}</span> })
-        } else {
+        }
+        (true, Shows::Gap) => Some(view! { <span class="row-badge muted">{pl(Msg::ShortGap)}</span> }),
+        (true, _) => Some(view! { <span class="row-badge muted">{pl(Msg::UnderCover)}</span> }),
+        (false, _) => {
             is_next.get().then(|| view! { <span class="row-badge next">{pl(Msg::NextBadge)}</span> })
         }
     };
@@ -92,7 +105,8 @@ fn row(
         <li>
             <button
                 class="set-row set-item tappable"
-                class:live=is_live
+                class:live=on_air
+                class:covered=covered
                 class:next=is_next
                 prop:disabled=move || missing || !connection.up()
                 data-number=number

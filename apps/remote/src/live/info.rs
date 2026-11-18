@@ -48,10 +48,12 @@ impl Shows {
     }
 }
 
-/// What the congregation sees: an overlay wins over the live slide.
+/// What the congregation sees: an overlay wins over the live slide. The logo cover without an
+/// uploaded logo is plain black on the screen, so it is called that.
 pub fn screen_shows(state: &RemoteState) -> Shows {
     match state.program.overlay {
         Overlay::Black => return Shows::Black,
+        Overlay::Logo if state.program.logo.is_none() => return Shows::Black,
         Overlay::Logo => return Shows::Logo,
         Overlay::None => {}
     }
@@ -81,7 +83,8 @@ pub fn live_heading(state: &RemoteState) -> Option<String> {
     })
 }
 
-/// "Zwrotka 2 · slajd 3 z 7", or the gap's description.
+/// "Zwrotka 2 · slajd 3 z 7", "Slajd 1 z 2" for pages without a section name (announcements,
+/// whose tiles are just numbered), or the gap's description.
 pub fn live_position(state: &RemoteState) -> Option<String> {
     let live = state.program.live.as_ref()?;
     if live.gap {
@@ -90,10 +93,17 @@ pub fn live_position(state: &RemoteState) -> Option<String> {
     let slide = live.deck.slides.get(live.slide_index as usize)?;
     let count = live.deck.slides.len();
     let counter = format!("{} {} z {count}", pl(Msg::SlideOf), live.slide_index + 1);
-    Some(match slide_name(slide) {
+    let numbered_page = slide.key.as_str().starts_with("t#");
+    Some(match slide_name(slide).filter(|_| !numbered_page) {
         Some(name) => format!("{name} · {counter}"),
-        None => counter,
+        None => capitalized(&counter),
     })
+}
+
+/// "slajd 1 z 2" → "Slajd 1 z 2".
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 /// The tile label of a slide: "Zwrotka 1", "Refren (2)" for the second slide of a section,
@@ -290,7 +300,18 @@ mod tests {
         assert_eq!(screen_shows(&state(Some(("i1", 2, true)), NextStep::Item)), Shows::Gap);
         let mut logo = state(Some(("i1", 0, false)), NextStep::Slide);
         logo.program.overlay = Overlay::Logo;
+        assert_eq!(screen_shows(&logo), Shows::Black, "no logo uploaded: the screen is black");
+        logo.program.logo = Some(AssetId::from("logo"));
         assert_eq!(screen_shows(&logo), Shows::Logo);
+    }
+
+    #[test]
+    fn announcement_pages_are_counted_not_named_twice() {
+        let mut page = state(Some(("i1", 0, false)), NextStep::Item);
+        if let Some(live) = page.program.live.as_mut() {
+            live.deck.slides = vec![slide("t#0", "1", "Zapraszamy")];
+        }
+        assert_eq!(live_position(&page).as_deref(), Some("Slajd 1 z 1"));
     }
 
     #[test]

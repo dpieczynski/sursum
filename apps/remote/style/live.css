@@ -65,20 +65,25 @@
   color: var(--muted);
   font-size: var(--font-small);
 }
+/* What covers the slide, as a label over the dimmed preview (a full-width band looked like
+   the middle line was struck through). */
 .cover-band {
   position: absolute;
-  left: 3px;
-  right: 3px;
+  left: 50%;
   top: 50%;
-  padding: 4px 6px;
-  background: rgba(0, 0, 0, 0.85);
-  border-top: 2px solid #fff;
-  border-bottom: 2px solid #fff;
+  max-width: calc(100% - 16px);
+  padding: 4px 12px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.9);
   font-size: 15px;
   font-weight: 800;
   text-align: center;
+  text-overflow: ellipsis;
   text-transform: uppercase;
-  transform: translateY(-50%);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
 }
 .sursum-mask-preview {
   background: repeating-linear-gradient(45deg, #000, #000 20px, #333 20px, #333 40px);
@@ -161,6 +166,12 @@
   border-color: var(--live);
   background: #12361f;
 }
+/* The live slide under black, the logo or in the gap: still where "Dalej" continues, but not
+   green, because the congregation does not see it. */
+.slide-tile.covered {
+  border-color: var(--muted);
+  background: var(--panel-2);
+}
 .slide-name {
   font-size: 16px;
   font-weight: 800;
@@ -228,6 +239,10 @@
   border-left-color: var(--live);
   background: #12361f;
 }
+.set-row.covered {
+  border-left-color: var(--muted);
+  background: var(--panel-2);
+}
 .set-row.next {
   border-left-color: var(--warn);
 }
@@ -261,7 +276,13 @@
   text-transform: uppercase;
 }
 .row-badge.live {
-  background: var(--live);
+  background: var(--live-fill);
+  color: #fff;
+}
+.row-badge.muted {
+  border: 1px solid var(--muted);
+  background: transparent;
+  color: var(--text);
 }
 .row-badge.next {
   background: var(--warn);
@@ -339,7 +360,8 @@
   font-size: 19px;
 }
 .pad-logo.active {
-  background: var(--live);
+  background: var(--live-fill);
+  color: #fff;
 }
 .cover {
   background: #000;
@@ -450,15 +472,6 @@
 .remote[data-hand="left"] .strip > :nth-child(4) {
   order: 1;
 }
-@media (max-width: 599px) {
-  .strip,
-  .remote[data-hand="left"] .strip {
-    grid-template-columns: auto auto minmax(0, 1fr);
-  }
-  .strip-summary {
-    display: none;
-  }
-}
 .strip-summary {
   align-self: center;
   overflow: hidden;
@@ -467,6 +480,17 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+/* After the rules above, so `display: none` wins: on a phone the three buttons take the row
+   (the status chip in the top bar already says what is on screen). */
+@media (max-width: 599px) {
+  .strip,
+  .remote[data-hand="left"] .strip {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .strip-summary {
+    display: none;
+  }
 }
 .strip .btn {
   min-height: 64px;
@@ -518,6 +542,12 @@
   color: var(--text);
   font-size: 20px;
   user-select: text;
+}
+/* In the Zestaw view "Zamknij" beside the field clears it; a second, native clear button
+   would only be one more thing that does the same. */
+.add-bar .search-input::-webkit-search-cancel-button {
+  display: none;
+  -webkit-appearance: none;
 }
 .search-results {
   margin: 0;

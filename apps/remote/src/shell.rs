@@ -57,10 +57,13 @@ impl View {
 pub struct CurrentView(pub RwSignal<View>);
 
 impl CurrentView {
-    /// Switches the view and records it in the URL fragment.
+    /// Switches the view and records it in the URL fragment (a history entry, so the browser's
+    /// back button returns to the previous view; `App` follows the fragment when it changes).
     pub fn show(self, view: View) {
         self.0.set(view);
-        if let Some(window) = web_sys::window() {
+        if let Some(window) = web_sys::window()
+            && View::from_location() != view
+        {
             let _ = window.location().set_hash(view.fragment());
         }
     }

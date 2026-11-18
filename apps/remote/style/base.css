@@ -66,7 +66,18 @@ textarea {
   border-color: var(--line);
 }
 .btn--live {
-  background: var(--live);
+  background: var(--live-fill);
+  color: #fff;
+}
+/* A destructive action that is frequent in the layout (one per row): red text instead of a red
+   fill, so it does not shout; it still needs a hold and fills red while held. */
+.btn--quiet-danger {
+  background: transparent;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+.btn.btn--quiet-danger.hold::before {
+  background: rgba(198, 40, 40, 0.75);
 }
 .btn:disabled {
   opacity: 0.35;
@@ -156,11 +167,14 @@ select:focus-visible {
   justify-content: center;
   background: rgba(0, 0, 0, 0.65);
 }
+/* The backdrop leaves the live controls free: a hole around them and padding beside them are
+   set from the layout (see `ui/sheet.rs`), so the sheet is sized to the space left, not to the
+   window. */
 .sheet {
   display: flex;
   flex-direction: column;
-  width: min(560px, 100vw);
-  max-height: 100dvh;
+  width: min(560px, 100%);
+  max-height: 100%;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel);
@@ -190,10 +204,20 @@ select:focus-visible {
   justify-content: flex-end;
   gap: var(--gap);
 }
+/* The actions at the end of a long sheet (a song card on a phone) stay in view while the rest
+   scrolls; the negative offset covers the body's bottom padding. */
+.sheet-body > .sheet-actions:last-child {
+  position: sticky;
+  bottom: -16px;
+  margin-bottom: -16px;
+  padding: 10px 0 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
 @media (max-width: 599px) {
   .sheet {
-    width: 100vw;
-    height: 100dvh;
+    width: 100%;
+    height: 100%;
     border-radius: 0;
   }
 }

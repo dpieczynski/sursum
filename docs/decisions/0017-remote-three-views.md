@@ -33,3 +33,22 @@ many not technical, have one hand free for a second during Mass.
 More components, but each is small, and the e2e tests check the layout itself (rows visible at
 360×800, 800×1280, 1280×800; controls inside the window and at least 56 px; positions unchanged
 by state changes). `just remote-sizes` captures every tab at the three sizes for review.
+
+## Amendment (2026-11-18): review of the remote on the pilot Pi
+
+A review of the running remote found places where the rules above did not hold:
+
+- **Sheets kept black two taps away**: their dimmed backdrop lay over the controls. Now every
+  sheet leaves the visible controls (the pad, or the live strip) undimmed and tappable, cut out
+  of the backdrop and centred beside them; only the locked update sheet still covers everything.
+  Sheets put the cursor in their first field.
+- **Green means "the congregation sees it", everywhere**: the live set row, the current slide
+  tile and the preview frame are green only while text or a picture is on screen; under black,
+  the logo or in the gap after an item they are grey and the row says "pod zasłoną" or
+  "przerwa". The selected set and "w zestawie" are neutral marks.
+- **The logo button without an uploaded logo** says "Brak logo" and is disabled; the logo cover
+  without a logo is called black, because that is what the screen shows.
+- **Words follow what buttons do**: "Następna/Poprzednia pozycja" (they also reach announcements
+  and pauses), hymnal numbers as "nr 12".
+- Back and forward in the browser (Android's back gesture) follow the views recorded in the URL
+  fragment.

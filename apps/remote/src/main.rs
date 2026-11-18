@@ -146,6 +146,10 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     provide_context(calibrating);
     let current = CurrentView(RwSignal::new(View::from_location()));
     provide_context(current);
+    // Back and forward (also Android's back gesture) move between the views they recorded.
+    let history =
+        window_event_listener(leptos::ev::hashchange, move |_| current.0.set(View::from_location()));
+    on_cleanup(move || history.remove());
     let maintenance = maintenance::Maintenance::new();
     provide_context(maintenance);
 

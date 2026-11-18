@@ -24,7 +24,8 @@ pub fn SetsView(state: RwSignal<Option<RemoteState>>, commands: Commands) -> imp
     let searching = move || !query.with(|query| query.trim().is_empty());
     let card = RwSignal::new(None::<sursum_protocol::SongId>);
     let items = move || view! { <items::Items state commands card /> };
-    let card_sheet = move || card.get().map(|song_id| view! { <SongCard song_id open=card commands /> });
+    let card_sheet =
+        move || card.get().map(|song_id| view! { <SongCard song_id open=card state commands /> });
     view! {
         <div class="sets-view" data-testid="sets-view">
             <picker::SetHeader state commands />

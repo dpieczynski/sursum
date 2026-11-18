@@ -123,8 +123,12 @@ pub fn Pad(
         let steps = state.with(|state| state.as_ref().map_or((false, false), item_steps));
         if connection.up() { steps } else { (false, false) }
     };
+    // Without an uploaded logo the logo cover would be plain black: say so instead of offering it.
+    let no_logo =
+        move || state.with(|state| state.as_ref().is_some_and(|state| state.program.logo.is_none()));
     let logo_up = move || {
         state.with(|state| state.as_ref().is_some_and(|state| state.program.overlay == Overlay::Logo))
+            && !no_logo()
     };
     let send = move |command: Command| {
         commands.send(command);
@@ -134,7 +138,11 @@ pub fn Pad(
         let overlay = if logo_up() { Overlay::None } else { Overlay::Logo };
         send(Command::SetOverlay { overlay });
     };
-    let logo_label = move || if logo_up() { pl(Msg::LogoOnScreen) } else { pl(Msg::ShowLogo) };
+    let logo_label = move || match (no_logo(), logo_up()) {
+        (true, _) => pl(Msg::NoLogo),
+        (false, true) => pl(Msg::LogoOnScreen),
+        (false, false) => pl(Msg::ShowLogo),
+    };
     view! {
         <div class="pad" data-testid="pad">
             <button
@@ -142,7 +150,7 @@ pub fn Pad(
                 class:active=logo_up
                 data-testid="logo"
                 aria-pressed=move || logo_up().to_string()
-                prop:disabled=move || !connection.up()
+                prop:disabled=move || !connection.up() || no_logo()
                 on:click=toggle_logo
             >
                 {logo_label}
