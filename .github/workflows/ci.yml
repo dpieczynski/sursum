@@ -33,7 +33,11 @@ jobs:
       - name: WebAssembly size report
         run: ls -l apps/*/dist/*.wasm
       - name: Desktop program on Linux (best effort, ADR 0020)
-        run: just desktop && dbus-run-session -- xvfb-run -a scripts/desktop-smoke.sh target/release/sursum
+        # The runner forbids unprivileged user namespaces (AppArmor), which WebKitGTK's
+        # bubblewrap sandbox needs; desktops allow them for bwrap.
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          just desktop && dbus-run-session -- xvfb-run -a scripts/desktop-smoke.sh target/release/sursum
 
   e2e:
     name: End-to-end (Chromium and WPE WebKit)
