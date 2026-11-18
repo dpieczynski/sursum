@@ -6,7 +6,9 @@
 use std::time::Duration;
 
 use anyhow::Context as _;
-use sursum_e2e::{Browser, SCREEN_ROOT, Server, attribute, open_tab, wait_until, with_engine};
+use sursum_e2e::{
+    Browser, SCREEN_ROOT, Server, attribute, open_tab, shown_text, typed, wait_until, with_engine,
+};
 use thirtyfour::prelude::*;
 
 /// The remote on the Zestaw tab, a screen showing the first item.
@@ -17,7 +19,7 @@ async fn with_sets(
     server.remote("organist").await?.command(sursum_protocol::Command::GoToItemNumber { number: 1 }).await?;
     with_engine(Browser::Chromium, 640, 360, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 800, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
             open_tab(remote, "zestaw").await?;
@@ -108,7 +110,9 @@ async fn sets_are_created_renamed_switched_and_deleted() -> anyhow::Result<()> {
     with_sets(async |_, screen, remote| {
         let key = attribute(screen, SCREEN_ROOT, "data-slide-key").await;
         let name = async || {
-            remote.find(By::Css("[data-testid=set-name]")).await?.text().await.map_err(anyhow::Error::from)
+            shown_text(&remote.find(By::Css("[data-testid=set-name]")).await?)
+                .await
+                .map_err(anyhow::Error::from)
         };
         remote.find(By::Css("[data-testid=change-set]")).await?.click().await?;
         remote.find(By::Css("[data-testid=new-set]")).await?.click().await?;
@@ -170,7 +174,9 @@ async fn plain_text_becomes_slides_and_closing_asks_before_losing_it() -> anyhow
         title.send_keys("Pieśń wklejona").await?;
         let lyrics = remote.find(By::Css("[data-testid=editor-lyrics]")).await?;
         lyrics
-            .send_keys("1. Pierwsza zwrotka bez spacji\n\nRef. Refren wklejony\n\n2. Druga zwrotka\n\nRef.")
+            .send_keys(typed(
+                "1. Pierwsza zwrotka bez spacji\n\nRef. Refren wklejony\n\n2. Druga zwrotka\n\nRef.",
+            ))
             .await?;
         wait_until(Duration::from_secs(5), || async {
             remote.find_all(By::Css(".editor-slide")).await.map(|slides| slides.len()).unwrap_or(0) == 4
@@ -193,7 +199,7 @@ async fn plain_text_becomes_slides_and_closing_asks_before_losing_it() -> anyhow
         remote.find(By::Css("[data-testid=save]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async {
             match remote.find(By::Css("[data-testid=editor-status]")).await {
-                Ok(status) => status.text().await.unwrap_or_default() == "Zapisano",
+                Ok(status) => shown_text(&status).await.unwrap_or_default() == "Zapisano",
                 Err(_) => false,
             }
         })

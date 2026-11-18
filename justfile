@@ -47,27 +47,32 @@ test:
 browsers-image:
     podman build -t localhost/sursum-browsers -f e2e/browsers.Containerfile e2e
 
-# Start chromedriver (:9515) and WPEWebDriver (:9516) in the background, on localhost only.
+# Start chromedriver (:9515), WPEWebDriver (:9516) and WebKitGTK's WebDriver (:9517) in the
+# background, on localhost only.
 # `--init` reaps finished browser processes; without it they pile up as zombies until new
 # sessions fail ("Timed out receiving message from renderer").
 browsers:
     podman run -d --rm --init --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
     podman run -d --rm --init --name sursum-wpedriver --network host localhost/sursum-browsers WPEWebDriver --port=9516
+    podman run -d --rm --init --name sursum-webkitgtkdriver --network host localhost/sursum-browsers webkitgtk-webdriver 9517
 
 # Stop the WebDriver containers.
 browsers-stop:
-    -podman stop sursum-chromedriver sursum-wpedriver
+    -podman stop sursum-chromedriver sursum-wpedriver sursum-webkitgtkdriver
 
 # Browser tests of the font fitting in the shared drawing crate (needs `just browsers`).
 test-wasm:
     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CHROMEDRIVER_REMOTE=http://127.0.0.1:9515 \
         cargo test -p sursum-slide --target wasm32-unknown-unknown --test dom
 
-# End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015).
+# End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015), then
+# the remote on WebKitGTK with the screen on Chromium (roadmap P2: WebKit as on an iPad).
 e2e: build-web
     cargo build -p sursum-server --features e2e-hooks
     SURSUM_E2E_BROWSER=chromium cargo test -p sursum-e2e -- --ignored --test-threads=1
     SURSUM_E2E_BROWSER=wpe cargo test -p sursum-e2e -- --ignored --test-threads=1
+    SURSUM_E2E_BROWSER=chromium SURSUM_E2E_REMOTE_BROWSER=webkitgtk cargo test -p sursum-e2e \
+        --test remote --test remote_live --test remote_sets --test remote_library -- --ignored --test-threads=1
 
 # Screenshots of the screen and the remote, for a quick visual check.
 screenshots dir="screenshots": build-web

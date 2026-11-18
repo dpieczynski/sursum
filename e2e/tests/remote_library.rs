@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use anyhow::Context as _;
-use sursum_e2e::{Server, open_tab, wait_until, with_browser};
+use sursum_e2e::{Browser, Server, open_tab, shown_text, typed, wait_until, with_engine};
 use thirtyfour::prelude::*;
 
 async fn shown(driver: &WebDriver, selector: &str) -> bool {
@@ -20,7 +20,7 @@ async fn shown(driver: &WebDriver, selector: &str) -> bool {
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn the_library_offers_songs_and_settings_only() -> anyhow::Result<()> {
     let server = Server::start_library().await?;
-    with_browser(1280, 800, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         remote.query(By::Css("[data-testid=songs-view]")).first().await.context("no Pieśni view")?;
         anyhow::ensure!(shown(remote, "[data-testid=tab-piesni]").await, "no Pieśni tab");
@@ -44,7 +44,7 @@ async fn the_library_offers_songs_and_settings_only() -> anyhow::Result<()> {
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn a_song_written_in_the_library_can_be_found_and_edited() -> anyhow::Result<()> {
     let server = Server::start_library().await?;
-    with_browser(1280, 800, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         let new_song = remote.query(By::Css("[data-testid=new-song]")).first().await?;
         new_song.wait_until().clickable().await?;
@@ -52,13 +52,13 @@ async fn a_song_written_in_the_library_can_be_found_and_edited() -> anyhow::Resu
         remote.find(By::Css("[data-testid=editor-title]")).await?.send_keys("Pieśń napisana w domu").await?;
         let lyrics = remote.find(By::Css("[data-testid=editor-lyrics]")).await?;
         lyrics.clear().await?;
-        lyrics.send_keys("1. Pierwsza zwrotka z domu\n\nRef. Refren z domu").await?;
+        lyrics.send_keys(typed("1. Pierwsza zwrotka z domu\n\nRef. Refren z domu")).await?;
         anyhow::ensure!(!shown(remote, "[data-testid=save-and-show]").await, "nothing to show it on");
         remote.find(By::Css("[data-testid=save]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async {
             let status = remote.find(By::Css("[data-testid=editor-status]")).await;
             match status {
-                Ok(status) => !status.text().await.unwrap_or_default().is_empty(),
+                Ok(status) => !shown_text(&status).await.unwrap_or_default().is_empty(),
                 Err(_) => false,
             }
         })

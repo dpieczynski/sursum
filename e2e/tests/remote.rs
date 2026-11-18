@@ -8,13 +8,14 @@ use std::time::Duration;
 use anyhow::Context as _;
 
 use sursum_e2e::{
-    Browser, SCREEN_ROOT, Server, attribute, open_tab, wait_for_slide, wait_until, with_engine,
+    Browser, SCREEN_ROOT, Server, attribute, open_tab, shown_text, typed, wait_for_slide, wait_until,
+    with_engine,
 };
 use thirtyfour::prelude::*;
 
 const PREVIEW_LIVE: &str = "[data-testid=preview-live] [data-font-px]";
 
-/// The remote is always Chromium; the screen uses the engine under test.
+/// The screen uses the engine under test; the remote uses its own (`Browser::for_remote`).
 fn screen_engine() -> Browser {
     Browser::from_env()
 }
@@ -25,7 +26,7 @@ async fn buttons_on_the_remote_drive_the_screen() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 800, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             let next = remote.query(By::Css("[data-testid=next]")).first().await?;
             next.wait_until().clickable().await?;
@@ -62,7 +63,7 @@ async fn preview_on_the_remote_matches_the_screen() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some(config)).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 800, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             let mut control = server.remote("organist").await?;
             // Walk through the second song (verses of different lengths) and compare each slide.
@@ -118,7 +119,7 @@ async fn search_without_diacritics_and_show_now() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 800, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 800, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             let search = remote.query(By::Css("[data-testid=search]")).first().await?;
             search.wait_until().clickable().await?;
@@ -152,7 +153,7 @@ async fn new_song_typed_in_the_editor_goes_on_screen() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
             open_tab(remote, "zestaw").await?;
@@ -163,7 +164,7 @@ async fn new_song_typed_in_the_editor_goes_on_screen() -> anyhow::Result<()> {
             inputs[0].send_keys("Pieśń wpisana z klawiatury").await?;
             let lyrics = remote.find(By::Css(".editor-form textarea")).await?;
             lyrics.clear().await?;
-            lyrics.send_keys("[V1]\n Pierwsza linia nowej pieśni\n[C]\n Refren nowej pieśni").await?;
+            lyrics.send_keys(typed("[V1]\n Pierwsza linia nowej pieśni\n[C]\n Refren nowej pieśni")).await?;
             // The server-side preview shows two slides.
             wait_until(Duration::from_secs(5), || async {
                 remote.find_all(By::Css(".editor-slide")).await.map(|slides| slides.len()).unwrap_or(0) == 2
@@ -214,7 +215,7 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
             attribute(screen, SCREEN_ROOT, "data-slide-key").await,
             attribute(screen, SCREEN_ROOT, "data-transitions").await,
         );
-        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             let rows = || async {
                 remote
@@ -271,7 +272,7 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> anyhow::Result<()> {
     let server = Server::start_with_pin("246813").await?;
-    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         let pin = remote.query(By::Css(".pairing .pin")).first().await?;
         pin.wait_until().displayed().await?;
@@ -301,7 +302,7 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
         remote.find(By::Css("[data-testid=admin-unlock-submit]")).await?.click().await?;
         wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
         // The banner counts down the minutes admin mode has left.
-        let banner = remote.find(By::Css("[data-testid=admin-on]")).await?.text().await?;
+        let banner = shown_text(&remote.find(By::Css("[data-testid=admin-on]")).await?).await?;
         anyhow::ensure!(banner.contains("wyłączy się za 15 min"), "{banner}");
         // The device list shows this tablet (which cannot revoke itself).
         wait_until(Duration::from_secs(5), || async {
@@ -319,7 +320,7 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow::Result<()> {
     let server = Server::start_new_device().await?;
-    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         let form = remote.query(By::Css("[data-testid=setup]")).first().await?;
         form.wait_until().displayed().await?;
@@ -346,7 +347,7 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
     })
     .await?;
     // A second browser must now pair with that PIN.
-    with_engine(Browser::Chromium, 1280, 800, async |other| {
+    with_engine(Browser::for_remote(), 1280, 800, async |other| {
         other.goto(server.url("/remote/")).await?;
         other.query(By::Css(".pairing .pin")).first().await?.wait_until().displayed().await?;
         anyhow::ensure!(other.find(By::Css("[data-testid=setup]")).await.is_err());
@@ -361,7 +362,7 @@ async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> any
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             wait_until(Duration::from_secs(10), || async {
                 remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
@@ -370,7 +371,10 @@ async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> any
             // Calibration is in Ustawienia and asks first ("only outside Mass").
             open_tab(remote, "ustawienia").await?;
             remote.find(By::Css("[data-testid=calibrate]")).await?.click().await?;
-            remote.find(By::Css("[data-testid=calibrate-start]")).await?.click().await?;
+            // The question is a sheet: wait until its button can be clicked.
+            let start = remote.query(By::Css("[data-testid=calibrate-start]")).first().await?;
+            start.wait_until().clickable().await?;
+            start.click().await?;
             wait_until(Duration::from_secs(5), || async {
                 screen.find(By::Css("[data-calibration]")).await.is_ok()
             })
@@ -424,7 +428,7 @@ async fn display_goes_on_with_a_tap_and_to_standby_only_with_a_long_hold() -> an
     let projector = sursum_e2e::fake_projector().await?;
     let config = format!("[display_power]\nbackend = \"pjlink\"\nhost = \"{projector}\"\n");
     let server = Server::start_with(&[], Some(&config)).await?;
-    with_engine(Browser::Chromium, 1280, 900, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 900, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         // Power control is in the "Ekran" sheet behind the screen status.
         let status = remote.query(By::Css("[data-testid=screen-status]")).first().await?;
@@ -456,7 +460,7 @@ async fn display_goes_on_with_a_tap_and_to_standby_only_with_a_long_hold() -> an
 /// The display power state as the remote shows it (empty if not shown).
 async fn power_state(remote: &WebDriver) -> String {
     match remote.find(By::Css("[data-testid=display-power] .power-state")).await {
-        Ok(element) => element.text().await.unwrap_or_default(),
+        Ok(element) => shown_text(&element).await.unwrap_or_default(),
         Err(_) => String::new(),
     }
 }
@@ -467,7 +471,7 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, 1280, 900, async |remote| {
+        with_engine(Browser::for_remote(), 1280, 900, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             wait_until(Duration::from_secs(10), || async {
                 remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
@@ -489,7 +493,7 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
             remote.action_chain().send_keys(Key::F8).perform().await?;
             wait_until(Duration::from_secs(5), || async {
                 match remote.find(By::Css("[data-action=next] .key-names")).await {
-                    Ok(names) => names.text().await.unwrap_or_default().contains("F8"),
+                    Ok(names) => shown_text(&names).await.unwrap_or_default().contains("F8"),
                     Err(_) => false,
                 }
             })
@@ -530,13 +534,13 @@ async fn about_tells_when_an_update_was_undone_and_hides_installing_where_it_can
         database_restored: false,
     };
     std::fs::write(server.data_dir().join("update.json"), serde_json::to_vec(&outcome)?)?;
-    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         remote.query(By::Css("[data-testid=tab-ustawienia]")).first().await?.wait_until().displayed().await?;
         open_tab(remote, "ustawienia").await?;
         let status = remote.query(By::Css("[data-testid=update-status]")).first().await?;
         status.wait_until().displayed().await?;
-        let text = status.text().await?;
+        let text = shown_text(&status).await?;
         anyhow::ensure!(text.contains("0.3.0") && text.contains("przywrócono wersję 0.2.0"), "{text}");
         // A development build under no service manager cannot take updates: no button.
         let install = By::XPath("//*[contains(text(), 'Zainstaluj aktualizację')]");
@@ -550,7 +554,7 @@ async fn about_tells_when_an_update_was_undone_and_hides_installing_where_it_can
 #[ignore = "needs a browser; run with `just e2e`"]
 async fn settings_offer_a_whole_device_backup_and_count_unused_pictures_first() -> anyhow::Result<()> {
     let server = Server::start().await?;
-    with_engine(Browser::Chromium, 1280, 800, async |remote| {
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         remote.query(By::Css("[data-testid=tab-ustawienia]")).first().await?.wait_until().displayed().await?;
         open_tab(remote, "ustawienia").await?;
@@ -575,7 +579,7 @@ async fn settings_offer_a_whole_device_backup_and_count_unused_pictures_first() 
         remote.find(By::Css("[data-testid=picture-cleanup]")).await?.click().await?;
         let answer = remote.query(By::Css("[data-testid=picture-cleanup-answer]")).first().await?;
         wait_until(Duration::from_secs(5), || async {
-            answer.text().await.is_ok_and(|text| text.contains("Nie ma nieużywanych obrazów"))
+            shown_text(&answer).await.is_ok_and(|text| text.contains("Nie ma nieużywanych obrazów"))
         })
         .await?;
         anyhow::ensure!(remote.find(By::Css("[data-testid=picture-cleanup-confirm]")).await.is_err());
