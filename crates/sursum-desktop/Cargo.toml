@@ -37,3 +37,6 @@ wry = { version = "0.57.2", default-features = false }
 
 [lints]
 workspace = true
+
+[build-dependencies]
+winresource = "0.1.34"

@@ -8,7 +8,7 @@ use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop};
 use tao::platform::run_return::EventLoopExtRunReturn as _;
-use tao::window::WindowBuilder;
+use tao::window::{Icon, WindowBuilder};
 use wry::{NewWindowResponse, WebContext, WebViewBuilder};
 
 use super::{Content, is_web_link, stays_inside};
@@ -22,6 +22,7 @@ pub fn run(title: &str, web_data: Option<&Path>, start: impl FnOnce() -> Content
     let window = WindowBuilder::new()
         .with_title(title)
         .with_inner_size(LogicalSize::new(1280.0, 800.0))
+        .with_window_icon(window_icon())
         .build(&event_loop)
         .context("opening the window")?;
     let mut context = WebContext::new(web_data.map(Path::to_path_buf));
@@ -52,6 +53,14 @@ pub fn run(title: &str, web_data: Option<&Path>, start: impl FnOnce() -> Content
         }
     });
     Ok(())
+}
+
+/// The program's icon for the window's title bar and the taskbar (the `.exe` carries its own, see
+/// `build.rs`).
+fn window_icon() -> Option<Icon> {
+    const SIZE: u32 = 64;
+    let rgba = include_bytes!("../../assets/sursum-64.rgba").to_vec();
+    Icon::from_rgba(rgba, SIZE, SIZE).ok()
 }
 
 /// Hands a web link to the default browser (Explorer opens URLs with it).

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=Sursum
+GenericName=Teksty pieśni
+Comment=Przygotowanie pieśni do wyświetlania w kościele
+Exec=sursum
+Icon=io.github.dpieczynski.Sursum
+Terminal=false
+Categories=Office;
+StartupWMClass=io.github.dpieczynski.Sursum

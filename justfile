@@ -21,6 +21,13 @@ build: build-web
 desktop: build-web
     cargo build --release -p sursum-desktop
 
+# Install the desktop program for this Linux user: the binary in ~/.local/bin, the menu entry and
+# its icon (GTK finds the window's icon by the application id).
+desktop-install: desktop
+    install -Dm755 target/release/sursum ~/.local/bin/sursum
+    install -Dm644 crates/sursum-desktop/assets/io.github.dpieczynski.Sursum.desktop ~/.local/share/applications/io.github.dpieczynski.Sursum.desktop
+    install -Dm644 crates/sursum-desktop/assets/sursum.svg ~/.local/share/icons/hicolor/scalable/apps/io.github.dpieczynski.Sursum.svg
+
 # Start the desktop program with an empty data folder until the remote in its window connects
 # (needs a display; CI runs it under `dbus-run-session -- xvfb-run -a`).
 desktop-smoke: desktop

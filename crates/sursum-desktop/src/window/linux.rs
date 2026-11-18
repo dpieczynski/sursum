@@ -43,6 +43,7 @@ pub fn run(title: &str, web_data: Option<&Path>, start: impl FnOnce() -> Content
         let window = gtk4::ApplicationWindow::builder()
             .application(app)
             .title(title.as_str())
+            .icon_name(APP_ID)
             .default_width(1280)
             .default_height(800)
             .child(&view)
