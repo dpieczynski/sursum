@@ -148,7 +148,7 @@ kiosk unit, Chromium policies, cursors, `sursum.service`, Chromium, cage and the
 the read-only system. Until system updates exist, changing any of them on an imaged device means
 reflashing (with a device backup first). Priority right after the first image works on the Pi.
 
-- [x] Mechanism decided and built (ADR 0019): own updater on the firmware's tryboot and rpi-image-gen's by-slot links; `.sursum-system` (signed ZIP of the raw boot and system images, `just image` writes it), upload from the remote (O programie, admin), root units with the read-only system's verifier write the other slot and reboot with `0 tryboot`, `finish-trial` commits after 30 s of healthy server and kiosk or reboots into the old slot; `panic=10`; unit and integration tests with fake slots; run on the Pi 5 (v0.1.0-36 → v0.1.0-37 committed; the tryboot restart needed `--reboot-argument`, fixed); the remote follows the update in a locked sheet ⚠ still to run: a fully automatic update and a deliberate rollback
+- [x] Mechanism decided and built (ADR 0019): own updater on the firmware's tryboot and rpi-image-gen's by-slot links; `.sursum-system` (signed ZIP of the raw boot and system images, `just image` writes it), upload from the remote (O programie, admin), root units with the read-only system's verifier write the other slot and reboot with `0 tryboot`, `finish-trial` commits after 30 s of healthy server and kiosk or reboots into the old slot; `panic=10`; unit and integration tests with fake slots; run on the Pi 5 (v0.1.0-36 → v0.1.0-37 committed; the tryboot restart needed `--reboot-argument`, fixed); the remote follows program and system updates in one locked sheet over every view; on the Pi 2026-11-18 a fully automatic update (v39 → v40) committed and a deliberately broken system (kiosk `/bin/false`) rolled back to v40 by itself
 - [ ] State shared by both slots (`/var/lib/sursum`) must stay readable by the older slot after a
   rollback (rpi-image-gen warns about this); application releases already handle their own
   database rollback
@@ -157,7 +157,7 @@ reflashing (with a device backup first). Priority right after the first image wo
 
 **Done when:** a changed kiosk unit reaches an imaged Pi from the remote without reflashing, data
 and pairing survive, and a deliberately broken system update boots back into the old slot by
-itself.
+itself. (All three met on the pilot Pi 5, 2026-11-18; CI-built images remain.)
 
 ## Later
 

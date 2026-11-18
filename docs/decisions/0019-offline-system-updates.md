@@ -68,5 +68,8 @@ Our own small updater on the Raspberry Pi firmware's **tryboot** (`autoboot.txt`
   remotes may connect mid-update), which is why the status names the system version being
   installed (`target`); the status tells "installing" (written, restart pending) from "on trial" (the
   new system runs) by the active slot, which the unprivileged server can read.
-- ⚠ Still to run on a Pi: a fully automatic update with the fixed unit, and the rollback after a
-  deliberately broken system.
+- Also run on the Pi 5 (2026-11-18): a fully automatic update (v0.1.0-39 → v0.1.0-40: written,
+  restarted through tryboot by itself, committed 39 s after boot) and a deliberate rollback (a
+  system whose kiosk unit runs `/bin/false`: it booted, was found unhealthy after three minutes,
+  the device restarted into v0.1.0-40 by itself and recorded `rolled_back`; data and pairing
+  untouched).
