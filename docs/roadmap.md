@@ -176,7 +176,7 @@ Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-
 - [x] Local owner access mode (`AccessMode::LocalOwner` replaces the `open_without_pin` flag): admin without a PIN, refused unless the server listens on loopback; `sursum-server --library` (hidden) for the browser tests
 - [ ] Program icon on both platforms (needs an icon)
 - [x] Smoke test for the Linux window (`scripts/desktop-smoke.sh`: empty data folder, waits for the remote's connection in `sursum.log`); passes on the Fedora 45 desktop and headless under `dbus-run-session -- xvfb-run -a` (checked in a Fedora container); runs in CI after the build
-- [ ] Operator guide: "Pieśni przygotowane w domu" (with the SmartScreen warning explained)
+- [x] Operator guide: "Pieśni przygotowane w domu" (download, the SmartScreen warning, write, export, merge in the church, bringing the church's songs home first) — screenshots once the program has run on Windows
 - [ ] Later: the same program on the parish PC with the screen on the projector, replacing `deploy/windows/start-pilot.ps1` (decide after P1)
 
 **Done when:** a parishioner downloads one thing on Windows, starts it without a console or a
