@@ -70,3 +70,18 @@ server is small: about 100 lines per platform pair, no new logic.
   the songs in browser storage.
 - **Bundling Chromium (CEF)** to have one engine everywhere: 150 to 200 MB and a heavy build for
   a best-effort platform.
+
+## Amendment (2026-11-18): one file, unsigned
+- **Windows gets one file**: the MSVC target, built on a Windows runner (CI job
+  `desktop-windows`, and in the release workflow), links the WebView2 loader statically. The
+  loader comes from Microsoft's WebView2 SDK under the BSD 3-Clause license (checked in the SDK
+  package); its text is on `/licenses`. The GNU cross build stays for `just lint`.
+- **Not code-signed** for now: the operator guide shows how to get past the SmartScreen warning.
+  Signing can come later without changing anything else.
+- **Access**: the program runs the server in a named *local owner* mode (`AccessMode::LocalOwner`)
+  that the server refuses on anything but a loopback address. Other users of the same computer can
+  reach the port; that is accepted (they could read the data folder anyway). Web pages in the
+  user's browser cannot: unknown `Host` names are refused, WebSockets check `Origin`, and JSON and
+  upload requests need headers that force a CORS preflight.
+- **iPad**: minimum iPadOS 16.4; the repository is private, so the iPad Simulator job runs by
+  hand or weekly, not on every pull request (roadmap P2).

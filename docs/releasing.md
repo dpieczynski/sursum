@@ -14,8 +14,11 @@
    - checks the bundle against the compiled-in key (`sursum-server bundle verify`), so a secret
      that does not match the variable fails the release instead of producing bundles every device
      refuses;
-   - builds the Windows pilot binary and attaches both files to a GitHub release with generated
-     notes.
+   - builds the Windows pilot binary (`sursum-server-<version>-windows-x86_64.exe`);
+   - takes the desktop program for Windows (`sursum-<version>-windows-x86_64.exe`, ADR 0020),
+     which a separate job builds on a Windows runner with MSVC (one file, the WebView2 loader
+     linked in; unsigned, see the operator guide on SmartScreen);
+   - attaches the three files to a GitHub release with generated notes.
 
 The version is the tag without the leading `v`; it becomes the release folder on the device
 (`releases/<version>`), so it may contain only letters, digits, `.`, `+` and `-`.

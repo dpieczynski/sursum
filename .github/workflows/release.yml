@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# A release for a version tag (`v0.2.0`): the signed application bundle for the Pi (ADR 0013) and
-# the Windows pilot binary, attached to a GitHub release.
+# A release for a version tag (`v0.2.0`): the signed application bundle for the Pi (ADR 0013), the
+# Windows pilot binary and the desktop program for Windows (ADR 0020), attached to a GitHub
+# release.
 #
 # The signing secret is `SURSUM_BUNDLE_SIGNING_KEY` in the `release` environment, which only
 # `main` and `v*` tags may use; it is written to a file readable by the runner user only and
@@ -19,9 +20,36 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # MSVC links the WebView2 loader into the program, so it is one file; only a Windows runner
+  # builds that. Unsigned: SmartScreen warns once, the operator guide explains it.
+  desktop-windows:
+    name: Desktop program for Windows
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: rustup show
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.22.1,wasm-bindgen-cli@0.2.130
+      - name: Build (web apps and program with one build id)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SURSUM_BUILD_ID="$(git describe --always --dirty)"
+          (cd apps/screen && trunk build --release)
+          (cd apps/remote && trunk build --release)
+          cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows
+          path: target/x86_64-pc-windows-msvc/release/sursum.exe
+
   release:
-    name: Signed bundle and Windows binary
+    name: Signed bundle and Windows binaries
     runs-on: ubuntu-24.04
+    needs: desktop-windows
     environment: release
     steps:
       - uses: actions/checkout@v7
@@ -53,12 +81,18 @@ jobs:
       - run: just cross-win
         env:
           SURSUM_BUNDLE_KEY: ${{ vars.SURSUM_BUNDLE_KEY }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: desktop-windows
+          path: target/desktop-windows
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           cp target/x86_64-pc-windows-gnu/release/sursum-server.exe "target/sursum-server-$version-windows-x86_64.exe"
+          cp target/desktop-windows/sursum.exe "target/sursum-$version-windows-x86_64.exe"
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
             "target/sursum-$version.sursum-app" \
-            "target/sursum-server-$version-windows-x86_64.exe"
+            "target/sursum-server-$version-windows-x86_64.exe" \
+            "target/sursum-$version-windows-x86_64.exe"

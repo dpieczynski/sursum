@@ -17,16 +17,23 @@ jobs:
       - uses: actions/checkout@v7
       - name: Rust toolchain from rust-toolchain.toml
         run: rustup show
+      - name: GTK 4 and WebKitGTK 6.0 for the desktop program's Linux window (ADR 0020)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev xvfb dbus libgl1-mesa-dri
       - uses: Swatinem/rust-cache@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
       - uses: taiki-e/install-action@v2
         with:
-          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,leptosfmt@0.1.33,cargo-deny@0.20.2,cargo-about@0.9.3
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,leptosfmt@0.1.33,cargo-deny@0.20.2,cargo-about@0.9.3,cargo-zigbuild@0.24.1
       - run: just lint
       - run: just licenses-check
       - run: just test
       - run: just build
       - name: WebAssembly size report
         run: ls -l apps/*/dist/*.wasm
+      - name: Desktop program on Linux (best effort, ADR 0020)
+        run: just desktop && dbus-run-session -- xvfb-run -a scripts/desktop-smoke.sh target/release/sursum
 
   e2e:
     name: End-to-end (Chromium and WPE WebKit)
@@ -68,3 +75,45 @@ jobs:
           path: |
             target/aarch64-unknown-linux-gnu/release/sursum-server
             target/x86_64-pc-windows-gnu/release/sursum-server.exe
+
+  # The desktop program for Windows (ADR 0020): MSVC links the WebView2 loader statically, so
+  # people get one file. Built here, not cross-compiled, because only MSVC does that.
+  desktop-windows:
+    name: Desktop program (Windows)
+    runs-on: windows-2025
+    needs: check
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.22.1,wasm-bindgen-cli@0.2.130
+      - name: Build (web apps and program with one build id)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SURSUM_BUILD_ID="$(git describe --always --dirty)"
+          (cd apps/screen && trunk build --release)
+          (cd apps/remote && trunk build --release)
+          cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
+      - name: Smoke test (the remote in the WebView2 window connects)
+        # Non-blocking until it has proven reliable on hosted runners.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $env:RUST_LOG = 'info,sursum_server::ws=debug'
+          $program = Start-Process -FilePath target\x86_64-pc-windows-msvc\release\sursum.exe -PassThru
+          $log = Join-Path $env:LOCALAPPDATA 'sursum\sursum.log'
+          $connected = $false
+          for ($i = 0; $i -lt 60 -and -not $connected; $i++) {
+            Start-Sleep -Seconds 1
+            $connected = (Test-Path $log) -and (Select-String -Path $log -Pattern 'client connected.*role=Remote' -Quiet)
+          }
+          Stop-Process -Id $program.Id -ErrorAction SilentlyContinue
+          if (Test-Path $log) { Get-Content $log }
+          if (-not $connected) { throw 'the remote did not connect' }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sursum-windows-${{ github.sha }}
+          path: target/x86_64-pc-windows-msvc/release/sursum.exe

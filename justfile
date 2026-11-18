@@ -16,6 +16,16 @@ build-web:
 build: build-web
     cargo build --release -p sursum-server
 
+# Build the desktop program `sursum` (ADR 0020) for this computer (Linux needs the GTK 4 and
+# WebKitGTK 6.0 development packages; Windows builds it with MSVC, see the CI).
+desktop: build-web
+    cargo build --release -p sursum-desktop
+
+# Start the desktop program with an empty data folder until the remote in its window connects
+# (needs a display; CI runs it under `dbus-run-session -- xvfb-run -a`).
+desktop-smoke: desktop
+    scripts/desktop-smoke.sh target/release/sursum
+
 # Run the server and both apps with auto-reload (server :8080, remote :8081, screen :8082).
 dev:
     #!/usr/bin/env bash
@@ -85,6 +95,7 @@ lint:
     leptosfmt --check crates/sursum-slide apps
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p sursum-slide -p sursum-client -p sursum-screen -p sursum-remote --target wasm32-unknown-unknown -- -D warnings
+    cargo-zigbuild clippy -p sursum-desktop --target x86_64-pc-windows-gnu --all-targets -- -D warnings
     scripts/check-spdx.sh
     cargo deny check
 
