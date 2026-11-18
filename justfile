@@ -71,7 +71,7 @@ remote-sizes dir="remote-sizes": build-web
 
 # Regenerate the third-party license notices served at /licenses (commit the result).
 licenses:
-    cargo about generate --fail -m crates/sursum-server/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs
+    cargo about generate --fail -m crates/sursum-desktop/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs
     cargo about generate --fail -m apps/remote/Cargo.toml -o crates/sursum-server/assets/licenses-web.html about.hbs
     sed -i 's/\r$//' crates/sursum-server/assets/licenses-*.html
 

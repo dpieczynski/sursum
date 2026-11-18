@@ -21,6 +21,9 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 # The window: WebKitGTK 6.0 (GTK 4), which current distributions ship by default.
 [target.'cfg(target_os = "linux")'.dependencies]
 # v4_10: `FileDialog`, and `Accessible`, which webkit6 0.6 needs but does not enable.

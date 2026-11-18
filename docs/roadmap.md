@@ -169,12 +169,12 @@ Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-
 - [x] Spike (branch `spike/desktop-shell`, 2026-11-18): crate `sursum-desktop`; Linux window on GTK 4 + WebKitGTK 6.0 built and run on Fedora 45 (the remote connects and stays connected); Windows window on `tao` + `wry` cross-compiles with `cargo zigbuild` (9.9 MB, GUI subsystem); clippy clean for both targets; `cargo deny` passes with one exception
 - [ ] ⚠ First run on Windows: the window opens, "Eksport bazy" saves a file, "Scal bazę z pliku" opens the file picker, closing the window ends the process; WebView2 present on the parish PC's Windows 10
 - [ ] ⚠ Linux by hand: the "save as" dialog of the export, the file picker of the merge, a second start only raises the first window
-- [ ] The web view's data in its own folder beside the database (the spike mixes them)
-- [ ] Decide GNU target + `WebView2Loader.dll` (check its license) or MSVC target on a Windows runner; then `just` recipes, CI build and the release workflow
+- [x] The window behaves like a program: the web view's data in `webview/` beside the database, `sursum.log` (previous run kept as `sursum.previous.log`), a Polish message page instead of a silent exit (server failed, another copy running), one copy at a time through `sursum.lock` (Linux also hands a second start to the first window over D-Bus), links outside the server open in the system browser; checked on Fedora 45 (first start, second start, lock held by another process)
+- [ ] MSVC target on a Windows runner, one `sursum.exe` (decided 2026-11-18; the WebView2 SDK is BSD-3-Clause, its license is on `/licenses`, which now also lists the desktop program's crates and links back to the remote); `just` recipes, CI build and the release workflow
 - [ ] Devcontainer and CI: GTK 4 and WebKitGTK 6.0 development packages ⚠ (Debian package names), so `just lint` covers the crate
 - [x] Library-only view of the remote for a computer without a screen: `SessionInfo.installation` (`screen` | `library`), Pieśni · Ustawienia tabs (search, new song, editor without "Zapisz i pokaż"; export, merge, OpenSong import, backup, about without updates), no screen status or banners (e2e: `remote_library.rs`)
 - [x] Local owner access mode (`AccessMode::LocalOwner` replaces the `open_without_pin` flag): admin without a PIN, refused unless the server listens on loopback; `sursum-server --library` (hidden) for the browser tests
-- [ ] One copy at a time on Windows; program icon on both platforms
+- [ ] Program icon on both platforms (needs an icon)
 - [ ] Smoke test for the Linux window (starts, the remote connects, the editor opens)
 - [ ] Operator guide: "Pieśni przygotowane w domu" (with the SmartScreen warning explained)
 - [ ] Later: the same program on the parish PC with the screen on the projector, replacing `deploy/windows/start-pilot.ps1` (decide after P1)
