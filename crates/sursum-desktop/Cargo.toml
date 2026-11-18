@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[package]
+name = "sursum-desktop"
+description = "sursum as a desktop program: the server on loopback, the remote in its own window."
+version.workspace = true
+edition.workspace = true
+# gtk4 0.11 needs 1.92.
+rust-version = "1.92"
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "sursum"
+path = "src/main.rs"
+
+[dependencies]
+sursum-server.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# The window: WebKitGTK 6.0 (GTK 4), which current distributions ship by default.
+[target.'cfg(target_os = "linux")'.dependencies]
+# v4_10: `FileDialog`, and `Accessible`, which webkit6 0.6 needs but does not enable.
+gtk4 = { version = "0.11.5", features = ["v4_10"] }
+webkit6 = "0.6.1"
+
+# The window: WebView2, the Edge engine built into Windows.
+[target.'cfg(windows)'.dependencies]
+tao = { version = "0.37.2", default-features = false, features = ["rwh_06"] }
+wry = { version = "0.57.2", default-features = false }
+
+[lints]
+workspace = true

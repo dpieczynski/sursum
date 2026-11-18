@@ -25,3 +25,4 @@ supersedes the old one instead of editing it.
 | [0017](0017-remote-three-views.md) | The remote: three views (Msza, Zestaw, Ustawienia) around a fixed live area |
 | [0018](0018-whole-device-backup.md) | Whole-device backup (`.sursum-backup`) and restore from the remote, credentials stay on the device |
 | [0019](0019-offline-system-updates.md) | Offline system updates: signed `.sursum-system` from the remote, written to the other A/B slot, trial through the firmware's tryboot |
+| [0020](0020-desktop-program.md) | Desktop program `sursum`: the same server on loopback in a window of its own (WebView2 on Windows, WebKitGTK 6.0 on Linux); the window has no features; Windows supported, Linux best effort |

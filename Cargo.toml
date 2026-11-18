@@ -26,6 +26,7 @@ sursum-core = { path = "crates/sursum-core" }
 sursum-formats = { path = "crates/sursum-formats" }
 sursum-slide = { path = "crates/sursum-slide" }
 sursum-client = { path = "crates/sursum-client" }
+sursum-server = { path = "crates/sursum-server" }
 
 # Shared
 serde = { version = "1.0.229", features = ["derive"] }

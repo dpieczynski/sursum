@@ -160,9 +160,49 @@ reflashing (with a device backup first). Priority right after the first image wo
 and pairing survive, and a deliberately broken system update boots back into the old slot by
 itself. (All three met on the pilot Pi 5, 2026-11-18; CI-built images remain.)
 
+## D1 — Desktop program (ADR 0020)
+
+One program, `sursum`, with the server inside and the remote in its own window: for preparing
+songs at home (export, then "Scal bazę z pliku" in the church) and later for the parish PC.
+Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md).
+
+- [x] Spike (branch `spike/desktop-shell`, 2026-11-18): crate `sursum-desktop`; Linux window on GTK 4 + WebKitGTK 6.0 built and run on Fedora 45 (the remote connects and stays connected); Windows window on `tao` + `wry` cross-compiles with `cargo zigbuild` (9.9 MB, GUI subsystem); clippy clean for both targets; `cargo deny` passes with one exception
+- [ ] ⚠ First run on Windows: the window opens, "Eksport bazy" saves a file, "Scal bazę z pliku" opens the file picker, closing the window ends the process; WebView2 present on the parish PC's Windows 10
+- [ ] ⚠ Linux by hand: the "save as" dialog of the export, the file picker of the merge, a second start only raises the first window
+- [ ] The web view's data in its own folder beside the database (the spike mixes them)
+- [ ] Decide GNU target + `WebView2Loader.dll` (check its license) or MSVC target on a Windows runner; then `just` recipes, CI build and the release workflow
+- [ ] Devcontainer and CI: GTK 4 and WebKitGTK 6.0 development packages ⚠ (Debian package names), so `just lint` covers the crate
+- [ ] Library-only view of the remote for a computer without a screen (search, editor, export, merge; no Msza view, no screen settings)
+- [ ] One copy at a time on Windows; program icon on both platforms
+- [ ] Smoke test for the Linux window (starts, the remote connects, the editor opens)
+- [ ] Operator guide: "Pieśni przygotowane w domu" (with the SmartScreen warning explained)
+- [ ] Later: the same program on the parish PC with the screen on the projector, replacing `deploy/windows/start-pilot.ps1` (decide after P1)
+
+**Done when:** a parishioner downloads one thing on Windows, starts it without a console or a
+browser, writes a song with the preview, exports the library, and the church device merges it.
+
+## P2 — iPad as a remote (WebKit)
+
+Prepared without hardware as far as that goes: the engine in CI on Linux, iPadOS itself in the
+iPad Simulator on a macOS runner. Support is only announced after one session on a real device.
+Work packages: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md), section 6.
+
+- [ ] Minimum version: iPadOS 16.4 proposed (unprefixed Fullscreen API, `dvh`, Screen Wake Lock) ⚠ check which iPads the parishes actually have
+- [ ] Remote tests on WebKit on Linux: run `remote*.rs` under `SURSUM_E2E_BROWSER=wpe` (the harness and WPEWebDriver are already there, ADR 0015), skipping the tests that need CDP; make them blocking once green. Catches engine differences (layout, CSS, WebAssembly, fitting), not iPadOS behavior
+- [ ] Audit of the remote against Safari, from the code: `viewport-fit=cover` is set but no `env(safe-area-inset-*)` is used (content can sit under the home indicator); `navigator.vibrate` is missing on iOS (already feature-detected, the setting hides); full screen only where the API exists; text fields at 16 px or more so Safari does not zoom; hold buttons against the long-press menu (`-webkit-touch-callout` is set); the live strip with the on-screen keyboard open; `<input type="file" accept=".sursum">` and the export download through the Files app ⚠; WebAssembly features emitted by the toolchain against the minimum Safari ⚠
+- [ ] iPad Simulator in CI: a macOS runner builds the server natively ⚠ and runs the remote tests through `safaridriver` (`platformName: iOS`, `safari:useSimulator: true`, `safari:deviceType: iPad`; needs Xcode, which the hosted images ship with iPad simulators) as a new `Browser` variant in `e2e`; `remote-sizes` screenshots at iPad sizes kept as artifacts. Non-blocking at first ⚠ `safaridriver --enable` on hosted runners, simulator sessions known to be flaky, runner minutes if the repository is private
+- [ ] ADR: the remote joins the WebKit API contract of ADR 0015 (today it binds only the screen)
+- [ ] Screen stays awake: Screen Wake Lock needs HTTPS (M6); until then the guide says to set Auto-Lock to "Never" for the service
+- [ ] One session on a real device (a borrowed iPad; an iPhone covers everything but the layout; or a real-device cloud service with synthetic songs only), checklist in `docs/testing.md`: pairing through `sursum.local` on the church network, hold buttons, typing in the editor, lock/unlock and switching apps (the remote reconnects), a whole set driven by touch and by the pedal, export and merge
+- [ ] Operator guide section for the iPad; the plan's "furtka" wording updated
+
+**Done when:** the remote tests are blocking on WebKit on Linux and pass in the iPad Simulator,
+and the checklist has passed once on a real iPad. Until that session the guide says "prepared,
+not confirmed".
+
 ## Later
 
 M6 optional HTTPS (device CA) + PWA + wake lock · an x86_64 mini-PC image (`mkosi` +
 `systemd-sysupdate`) ·
 M8 liturgical calendar/readings (licensing!) · M9 video backgrounds (HEVC on Pi 5) · M10 multiple
-screens · M11 internet sync · iPad (WebKit) support. **MIDI: dropped** (ADR 0002).
+screens · M11 internet sync. **MIDI: dropped** (ADR 0002).
