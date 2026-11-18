@@ -14,7 +14,16 @@ use thirtyfour::prelude::*;
 const PIN: &str = "246813";
 /// The connection indicator in the old and in the new remote.
 const CONNECTED: &str = ".status-dot.connected, [data-testid=status-connected]";
-const SIZES: [(&str, u32, u32); 3] = [("phone", 360, 800), ("tablet", 800, 1280), ("landscape", 1280, 800)];
+/// A phone, Android tablets upright and lying, and iPads (roadmap P2): a 10.2" iPad upright and
+/// lying, an 11" iPad Air upright.
+const SIZES: [(&str, u32, u32); 6] = [
+    ("phone", 360, 800),
+    ("tablet", 800, 1280),
+    ("landscape", 1280, 800),
+    ("ipad", 768, 1024),
+    ("ipad-landscape", 1024, 768),
+    ("ipad-air", 820, 1180),
+];
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

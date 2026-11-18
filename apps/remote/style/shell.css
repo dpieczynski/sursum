@@ -4,12 +4,15 @@
    narrow screens), strip (live strip, other views on narrow screens). Only the content and the
    slide list scroll; everything else has a fixed size, so nothing moves under a finger. */
 
+/* `--edge` is the margin around the page; the safe-area insets keep everything clear of rounded
+   corners, notches and the home indicator (iPhone, iPad; `viewport-fit=cover` in index.html). */
 .remote {
+  --edge: 8px;
   display: grid;
   gap: 8px;
   height: 100dvh;
-  padding: 8px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  padding: max(var(--edge), env(safe-area-inset-top)) max(var(--edge), env(safe-area-inset-right))
+    calc(var(--edge) + env(safe-area-inset-bottom)) max(var(--edge), env(safe-area-inset-left));
   overflow: hidden;
 }
 .remote > section {
@@ -62,8 +65,8 @@
 /* ---------- Upright tablet ---------- */
 @media (min-width: 600px) and (not ((orientation: landscape) and (min-width: 1000px))) {
   .remote {
+    --edge: 10px;
     gap: 10px;
-    padding: 10px;
   }
   .remote[data-view="live"]:not([data-editing="true"]) {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
@@ -83,8 +86,8 @@
 @media (orientation: landscape) and (min-width: 1000px) {
   .remote,
   .remote:is([data-view="live"], [data-view="set"], [data-view="settings"]):not([data-editing="true"]) {
+    --edge: 10px;
     gap: 10px;
-    padding: 10px;
     grid-template-columns: minmax(360px, 1fr) minmax(0, 520px) minmax(240px, 300px);
     grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:

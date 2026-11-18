@@ -24,6 +24,12 @@ textarea {
   font: inherit;
   color: inherit;
 }
+/* Safari on iPhone and iPad zooms the whole page into a field under 16px when it gets focus. */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
 
 /* One button: size modifiers --lg/--md/--sm, variants --primary/--danger/--quiet/--live. */
 .btn {
@@ -42,7 +48,9 @@ textarea {
   line-height: 1.15;
   text-align: center;
   text-decoration: none;
-  overflow: hidden;
+  /* `clip`, not `hidden`: the same clipping (the hold fill, the rounded corners) without a
+     scroll container, which WebKit's WebDriver takes for a hidden button. */
+  overflow: clip;
   cursor: pointer;
   transition: transform 60ms ease-out, filter 60ms ease-out;
 }
