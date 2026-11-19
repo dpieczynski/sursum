@@ -13,9 +13,9 @@ use std::io::Write as _;
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use sursum_core::versions::{Body, Heads, Version, VersionId};
-use sursum_protocol::{MergeReport, SongId};
+use sursum_protocol::{ChurchId, MergeReport, SongId};
 
-use crate::db::{Database, song_from_body};
+use crate::db::{Database, church_name, song_from_body};
 
 /// Version of the `.sursum` file format. Format 1 (songs with content hashes, before ADR 0025)
 /// is refused, never converted.
@@ -29,11 +29,13 @@ const MAX_HEADS: usize = 64;
 struct Manifest {
     format: u32,
     songs: usize,
+    #[serde(default)]
+    churches: usize,
 }
 
-/// One song in a file: its id and the heads of its history.
+/// One document (a song or a church) in a file: its id and the heads of its history.
 #[derive(Debug, Serialize, Deserialize)]
-struct FileSong {
+struct FileDocument {
     id: String,
     heads: Vec<FileVersion>,
 }
@@ -42,7 +44,7 @@ struct FileSong {
 /// nothing in the file has to be trusted.
 #[derive(Debug, Serialize, Deserialize)]
 struct FileVersion {
-    /// The song without its id, exactly as stored (JSON text); `null` for a deletion.
+    /// The document without its id, exactly as stored (JSON text); `null` for a deletion.
     body: Option<String>,
     /// Ids of every version this one replaces.
     ancestors: Vec<String>,
@@ -55,42 +57,67 @@ pub struct IncomingSong {
     pub heads: Heads,
 }
 
-/// Writes every song, deleted ones included (a deletion travels too), into a `.sursum` file: a
-/// ZIP with `manifest.json` and `songs.jsonl`.
+/// A church read from a file.
+#[derive(Debug, Clone)]
+pub struct IncomingChurch {
+    pub id: ChurchId,
+    pub heads: Heads,
+}
+
+/// Everything a file holds.
+#[derive(Debug, Clone, Default)]
+pub struct Incoming {
+    pub songs: Vec<IncomingSong>,
+    pub churches: Vec<IncomingChurch>,
+}
+
+/// Writes every song and every church, deleted ones included (a deletion travels too), into a
+/// `.sursum` file: a ZIP with `manifest.json`, `songs.jsonl` and `churches.jsonl`.
 pub fn export(database: &Database) -> anyhow::Result<Vec<u8>> {
     let songs = database.song_documents()?;
+    let churches = database.church_documents()?;
     let mut buffer = std::io::Cursor::new(Vec::new());
     let mut zip = zip::ZipWriter::new(&mut buffer);
     let options =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     zip.start_file("manifest.json", options)?;
-    zip.write_all(&serde_json::to_vec(&Manifest { format: FORMAT_VERSION, songs: songs.len() })?)?;
+    let manifest = Manifest { format: FORMAT_VERSION, songs: songs.len(), churches: churches.len() };
+    zip.write_all(&serde_json::to_vec(&manifest)?)?;
     zip.start_file("songs.jsonl", options)?;
     for (id, heads) in songs {
-        let heads = heads.versions().iter().map(file_version).collect::<anyhow::Result<_>>()?;
-        serde_json::to_writer(&mut zip, &FileSong { id: id.as_str().to_owned(), heads })?;
-        zip.write_all(b"\n")?;
+        write_document(&mut zip, id.as_str(), &heads)?;
+    }
+    zip.start_file("churches.jsonl", options)?;
+    for (id, heads) in churches {
+        write_document(&mut zip, id.as_str(), &heads)?;
     }
     zip.finish()?;
     Ok(buffer.into_inner())
 }
 
+fn write_document(out: &mut impl std::io::Write, id: &str, heads: &Heads) -> anyhow::Result<()> {
+    let heads = heads.versions().iter().map(file_version).collect::<anyhow::Result<_>>()?;
+    serde_json::to_writer(&mut *out, &FileDocument { id: id.to_owned(), heads })?;
+    out.write_all(b"\n")?;
+    Ok(())
+}
+
 fn file_version(version: &Version) -> anyhow::Result<FileVersion> {
     let body = match version.body() {
-        Body::Live(bytes) => Some(String::from_utf8(bytes.clone()).context("a stored song is not UTF-8")?),
+        Body::Live(bytes) => Some(String::from_utf8(bytes.clone()).context("a stored body is not UTF-8")?),
         Body::Deleted => None,
     };
     let ancestors = version.ancestors().iter().map(|id| id.as_str().to_owned()).collect();
     Ok(FileVersion { body, ancestors })
 }
 
-/// Reads the songs of a `.sursum` file.
+/// Reads the songs and churches of a `.sursum` file.
 ///
 /// Nothing in the file is trusted: sizes are capped (see [`crate::limits`]), every version id is
 /// computed here from its body and ancestors, ancestor ids must be well-formed, and every body
-/// must be a song this program can read (a stored song it cannot read would stop the library
-/// from loading).
-pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<IncomingSong>> {
+/// must be a song or a church this program can read (a stored song it cannot read would stop the
+/// library from loading).
+pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Incoming> {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).context("not a .sursum file")?;
     let mut budget = crate::limits::Budget::default();
     let manifest = budget.read(archive.by_name("manifest.json").context("no manifest")?, "manifest.json")?;
@@ -100,25 +127,49 @@ pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<IncomingSong>> {
         "the file is in .sursum format {} (this program reads format {FORMAT_VERSION})",
         manifest.format
     );
-    let lines = budget.read(archive.by_name("songs.jsonl").context("no songs")?, "songs.jsonl")?;
-    let lines = std::str::from_utf8(&lines).context("songs.jsonl is not UTF-8")?;
-    lines
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| incoming(serde_json::from_str(line)?))
-        .collect()
+    let songs = read_lines(&mut archive, &mut budget, "songs.jsonl")?
+        .into_iter()
+        .map(|document| {
+            let id = SongId(document.id.clone());
+            let heads = heads_of(document, |body| song_from_body(&id, body).map(drop))?;
+            Ok(IncomingSong { id, heads })
+        })
+        .collect::<anyhow::Result<_>>()?;
+    let churches = match archive.index_for_name("churches.jsonl") {
+        None => Vec::new(),
+        Some(_) => read_lines(&mut archive, &mut budget, "churches.jsonl")?
+            .into_iter()
+            .map(|document| {
+                let id = ChurchId(document.id.clone());
+                Ok(IncomingChurch { id, heads: heads_of(document, |body| church_name(body).map(drop))? })
+            })
+            .collect::<anyhow::Result<_>>()?,
+    };
+    Ok(Incoming { songs, churches })
 }
 
-fn incoming(song: FileSong) -> anyhow::Result<IncomingSong> {
-    anyhow::ensure!(is_song_id(&song.id), "a song id in the file is malformed");
+/// The documents of one `.jsonl` entry.
+fn read_lines(
+    archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
+    budget: &mut crate::limits::Budget,
+    name: &str,
+) -> anyhow::Result<Vec<FileDocument>> {
+    let lines = budget.read(archive.by_name(name).with_context(|| format!("no {name}"))?, name)?;
+    let lines = std::str::from_utf8(&lines).with_context(|| format!("{name} is not UTF-8"))?;
+    lines.lines().filter(|line| !line.trim().is_empty()).map(|line| Ok(serde_json::from_str(line)?)).collect()
+}
+
+/// A document's heads, checked: a well-formed id, a sane number of heads, well-formed ancestor
+/// ids, and bodies that `readable` accepts.
+fn heads_of(document: FileDocument, readable: impl Fn(&[u8]) -> anyhow::Result<()>) -> anyhow::Result<Heads> {
+    anyhow::ensure!(is_document_id(&document.id), "an id in the file is malformed");
     anyhow::ensure!(
-        (1..=MAX_HEADS).contains(&song.heads.len()),
-        "song {} has {} versions in the file",
-        song.id,
-        song.heads.len()
+        (1..=MAX_HEADS).contains(&document.heads.len()),
+        "{} has {} versions in the file",
+        document.id,
+        document.heads.len()
     );
-    let id = SongId(song.id);
-    let versions = song
+    let versions = document
         .heads
         .into_iter()
         .map(|version| {
@@ -129,7 +180,7 @@ fn incoming(song: FileSong) -> anyhow::Result<IncomingSong> {
                 .collect::<anyhow::Result<_>>()?;
             let body = match version.body {
                 Some(text) => {
-                    song_from_body(&id, text.as_bytes()).with_context(|| format!("song {id} in the file"))?;
+                    readable(text.as_bytes()).with_context(|| format!("{} in the file", document.id))?;
                     Body::Live(text.into_bytes())
                 }
                 None => Body::Deleted,
@@ -137,38 +188,39 @@ fn incoming(song: FileSong) -> anyhow::Result<IncomingSong> {
             Ok(Version::new(body, ancestors))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(IncomingSong { id, heads: Heads::of(versions) })
+    Ok(Heads::of(versions))
 }
 
-/// Song ids are made by this program (`song-<uuid>`, `opensong-<hex>`, `demo-…`): letters,
-/// digits, `-`, `_` and `.`, at most 128 characters.
-fn is_song_id(id: &str) -> bool {
+/// Ids are made by this program (`song-<uuid>`, `opensong-<hex>`, `demo-…`, `church-<hex>`):
+/// letters, digits, `-`, `_` and `.`, at most 128 characters.
+fn is_document_id(id: &str) -> bool {
     (1..=128).contains(&id.len())
         && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
 }
 
-/// Merges a file's songs. With `dry_run` nothing is written, and the report says exactly what a
-/// real merge would do.
+/// Merges a file's songs and churches. With `dry_run` nothing is written, and the report says
+/// exactly what a real merge would do (churches follow the same rules and are not reported).
 ///
 /// Everything happens in one transaction (all or nothing, and one disk sync on the SD card).
-pub fn merge(
-    database: &mut Database,
-    incoming: &[IncomingSong],
-    dry_run: bool,
-) -> anyhow::Result<MergeReport> {
+pub fn merge(database: &mut Database, incoming: &Incoming, dry_run: bool) -> anyhow::Result<MergeReport> {
     if dry_run {
         return merge_in(database, incoming, true);
     }
     database.in_transaction(|database| merge_in(database, incoming, false))
 }
 
-fn merge_in(
-    database: &mut Database,
-    incoming: &[IncomingSong],
-    dry_run: bool,
-) -> anyhow::Result<MergeReport> {
+fn merge_in(database: &mut Database, incoming: &Incoming, dry_run: bool) -> anyhow::Result<MergeReport> {
+    if !dry_run {
+        for church in &incoming.churches {
+            let before = database.church_heads(&church.id)?;
+            let after = before.merge(&church.heads);
+            if after != before {
+                database.store_church_heads(&church.id, &before, &after)?;
+            }
+        }
+    }
     let mut report = MergeReport::default();
-    for song in incoming {
+    for song in &incoming.songs {
         let before = database.song_heads(&song.id)?;
         let after = before.merge(&song.heads);
         match outcome(&before, &song.heads, &after) {
@@ -270,7 +322,7 @@ mod tests {
         database.load_songs().unwrap().into_iter().map(|song| song.id.as_str().to_owned()).collect()
     }
 
-    fn file_of(database: &Database) -> Vec<IncomingSong> {
+    fn file_of(database: &Database) -> Incoming {
         read_bundle(&export(database).unwrap()).unwrap()
     }
 
@@ -374,8 +426,31 @@ mod tests {
         assert_eq!(text_of(&gowarzewo, "d"), "poprawiona w Tulcach");
     }
 
+    #[test]
+    fn churches_travel_in_the_file_and_a_rename_follows() {
+        let (mut tulce, mut gowarzewo) = (Database::in_memory().unwrap(), Database::in_memory().unwrap());
+        let tulce_id = tulce.name_church("Tulce").unwrap().unwrap();
+        gowarzewo.name_church("Gowarzewo").unwrap();
+        sync(&tulce, &mut gowarzewo);
+        sync(&gowarzewo, &mut tulce);
+        let names = |database: &Database| -> Vec<String> {
+            database.churches().unwrap().into_iter().map(|church| church.name).collect()
+        };
+        assert_eq!(names(&tulce), ["Gowarzewo", "Tulce"]);
+        assert_eq!(names(&gowarzewo), ["Gowarzewo", "Tulce"]);
+        assert_eq!(
+            gowarzewo.this_church().unwrap().map(|id| id == tulce_id),
+            Some(false),
+            "each keeps its own"
+        );
+
+        tulce.name_church("Parafia Tulce").unwrap();
+        sync(&tulce, &mut gowarzewo);
+        assert_eq!(names(&gowarzewo), ["Gowarzewo", "Parafia Tulce"]);
+    }
+
     /// Files of Tulce after each of three edits of song "s" (v1, v2, v3).
-    fn three_files() -> Vec<Vec<IncomingSong>> {
+    fn three_files() -> Vec<Incoming> {
         let mut tulce = Database::in_memory().unwrap();
         ["v1", "v2", "v3"]
             .iter()
@@ -459,7 +534,10 @@ mod tests {
         let body = String::from_utf8(crate::db::song_body(&song("a", "z pliku")).unwrap()).unwrap();
         let good = serde_json::json!({ "id": "a", "heads": [{ "body": body, "ancestors": [] }] });
         let read = read_bundle(&file_with_line(&good)).unwrap();
-        assert_eq!(read[0].heads.current().unwrap().id(), Version::first(body.clone().into_bytes()).id());
+        assert_eq!(
+            read.songs[0].heads.current().unwrap().id(),
+            Version::first(body.clone().into_bytes()).id()
+        );
 
         let bad_ancestor =
             serde_json::json!({ "id": "a", "heads": [{ "body": body, "ancestors": ["nie-hash"] }] });

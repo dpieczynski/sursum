@@ -58,6 +58,10 @@ string_id!(
     SlideKey
 );
 string_id!(
+    /// Identity of a church of the parish (ADR 0025), derived from its first name.
+    ChurchId
+);
+string_id!(
     /// Random identity a client picks for itself (used for the `Stale` rule and presence).
     ClientId
 );

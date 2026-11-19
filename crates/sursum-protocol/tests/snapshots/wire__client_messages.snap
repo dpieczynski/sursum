@@ -111,6 +111,24 @@ expression: messages
     }
   },
   {
+    "t": "cmd",
+    "seq": 11,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "name_church",
+      "name": "Tulce"
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 12,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "use_church",
+      "church_id": "church-0123456789abcdef"
+    }
+  },
+  {
     "t": "ping"
   }
 ]

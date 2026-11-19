@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{AssetId, ClientId, ItemId, Rev, SetId, SongId};
+use crate::ids::{AssetId, ChurchId, ClientId, ItemId, Rev, SetId, SongId};
 use crate::layout::ScreenProfile;
 use crate::state::{EndOfItem, Overlay, RemoteState, ScreenState};
 
@@ -92,6 +92,12 @@ pub enum Command {
     Calibrate { on: bool },
     /// Delete a song from the library (admin). Sets keep their items; the live deck is frozen.
     DeleteSong { song_id: SongId },
+    /// Names this device's church (ADR 0025): creates it if the device has none yet, else
+    /// renames it (the new name reaches other devices with the next library file).
+    NameChurch { name: String },
+    /// This device belongs to another church it learned from a library file (its name was typed
+    /// differently on another device).
+    UseChurch { church_id: ChurchId },
     /// Set or remove the parish logo (an uploaded picture, `POST /api/assets`).
     SetLogo { asset_id: Option<AssetId> },
     /// Switch the projector or monitor on, or to standby (ADR 0012).

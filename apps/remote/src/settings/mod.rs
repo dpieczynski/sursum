@@ -4,6 +4,7 @@
 
 mod about;
 mod backup;
+mod church;
 mod device;
 mod display;
 mod library;
@@ -24,6 +25,7 @@ pub fn SettingsView(state: RwSignal<Option<RemoteState>>, commands: Commands) ->
     let has_screen = expect_context::<Installation>() == Installation::Screen;
     let device_sections = move || {
         view! {
+            <church::ChurchSection state commands />
             <screen::ScreenSection state commands />
             <display::DisplaySection state commands />
             <device::DeviceSection />

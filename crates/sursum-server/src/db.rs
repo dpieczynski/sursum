@@ -14,8 +14,11 @@ use serde::{Deserialize, Serialize};
 use sursum_core::model::{ItemKind, ServiceSet, SetItem};
 use sursum_protocol::{ItemId, Overlay, SetId, SlideKey};
 
+mod churches;
 mod songs;
+mod versions;
 
+pub use churches::{Church, church_name};
 pub use songs::{Base, SongImport, SongSave, song_body, song_from_body};
 
 /// Schema versions start above this (`user_version` = this + the number of migrations

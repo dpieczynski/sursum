@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{AssetId, ItemId, Rev, SetId, SongId};
+use crate::ids::{AssetId, ChurchId, ItemId, Rev, SetId, SongId};
 use crate::layout::{ScreenLayout, ScreenProfile};
 use crate::slide::Deck;
 
@@ -178,4 +178,18 @@ pub struct RemoteState {
     /// How many songs were changed in two places and wait for review (ADR 0025).
     #[serde(default)]
     pub songs_to_review: u32,
+    /// The church this device serves; `None` until it is named (and always in the desktop
+    /// program, which serves none).
+    #[serde(default)]
+    pub church: Option<ChurchView>,
+    /// Every church this device knows (its own and those from library files), by name.
+    #[serde(default)]
+    pub churches: Vec<ChurchView>,
+}
+
+/// A church of the parish (ADR 0025).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChurchView {
+    pub church_id: ChurchId,
+    pub name: String,
 }

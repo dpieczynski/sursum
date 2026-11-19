@@ -173,8 +173,11 @@ impl Server {
 
     /// Pairs a device with `pin` (`POST /api/pair`) and returns its cookie (`name=value`).
     pub async fn pair(&self, name: &str, pin: &str) -> anyhow::Result<String> {
-        let body =
-            serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: name.into() })?;
+        let body = serde_json::to_string(&sursum_protocol::PairRequest {
+            pin: pin.into(),
+            name: name.into(),
+            church: String::new(),
+        })?;
         let response = self.http("POST", "/api/pair", None, &body).await?;
         let cookie = response
             .lines()

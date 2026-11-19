@@ -220,12 +220,15 @@ async fn pair(
     }
 }
 
-/// `POST /api/setup`: sets the first PIN (only while none is set) and pairs this browser, so
-/// whoever installs the device can go on configuring it.
+/// `POST /api/setup`: sets the first PIN (only while none is set), names the device's church
+/// (ADR 0025) and pairs this browser, so whoever installs the device can go on configuring it.
 async fn setup(State(app): State<App>, axum::Json(request): axum::Json<PairRequest>) -> Response {
     let pin = request.pin.trim();
     if !auth::valid_pin(pin) {
         return (StatusCode::BAD_REQUEST, axum::Json(PairOutcome::InvalidPin)).into_response();
+    }
+    if sursum_core::churches::church_id(&request.church).is_none() {
+        return (StatusCode::BAD_REQUEST, axum::Json(PairOutcome::ChurchMissing)).into_response();
     }
     let Ok(hash) = auth::PinHash::new(pin) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -236,6 +239,14 @@ async fn setup(State(app): State<App>, axum::Json(request): axum::Json<PairReque
     if !app.state.set_pin(hash).await {
         app.access.release_pin();
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    let name_church = sursum_protocol::Command::NameChurch { name: request.church.clone() };
+    let named = app
+        .state
+        .command(sursum_protocol::ClientId::from("setup"), sursum_protocol::Rev(u32::MAX), name_church)
+        .await;
+    if !matches!(named, sursum_protocol::CmdOutcome::Applied { .. }) {
+        tracing::error!(?named, "could not name the church during setup");
     }
     match pair_this_browser(&app, &request.name).await {
         Ok(cookie) => ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response(),

@@ -143,6 +143,14 @@ pub enum Msg {
     Saved,
     Conflict,
     ReviewTitle,
+    ChurchName,
+    ChurchNameExample,
+    ChurchMissing,
+    ChurchSection,
+    ChurchSave,
+    ChurchNoneYet,
+    ChurchOther,
+    ChurchOtherHint,
     ReviewHint,
     NothingToReview,
     CompareTitle,
@@ -447,6 +455,19 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Saved => "Zapisano",
         Msg::Conflict => "Ktoś zapisał tę pieśń w międzyczasie – otwórz ją ponownie",
         Msg::ReviewTitle => "Pieśni do przejrzenia",
+        Msg::ChurchName => "Nazwa kościoła",
+        Msg::ChurchNameExample => "np. Tulce",
+        Msg::ChurchMissing => "Wpisz nazwę kościoła, w którym stoi to urządzenie",
+        Msg::ChurchSection => "Kościół",
+        Msg::ChurchSave => "Zapisz nazwę",
+        Msg::ChurchNoneYet => {
+            "To urządzenie nie ma jeszcze nazwy kościoła; zestawy będą przypisane do niego."
+        }
+        Msg::ChurchOther => "To urządzenie należy do innego kościoła:",
+        Msg::ChurchOtherHint => {
+            "Wybierz, jeśli nazwę tego kościoła wpisano tu inaczej niż na innym urządzeniu (np. po \
+             wymianie karty)."
+        }
         Msg::ReviewHint => {
             "Te pieśni zmieniono w dwóch miejscach, np. w domu i w kościele. Wszędzie pokazywana jest \
              wersja zmieniana więcej razy, a druga czeka tutaj. Wybierz, która ma zostać; potem możesz \
