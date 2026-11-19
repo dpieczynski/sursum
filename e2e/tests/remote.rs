@@ -305,6 +305,32 @@ async fn remote_pairs_with_the_pin_and_then_may_do_everything() -> anyhow::Resul
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn an_idle_remote_returns_to_the_pairing_form_when_revoked() -> anyhow::Result<()> {
+    let server = Server::start_with_pin("246813").await?;
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
+        remote.goto(server.url("/remote/")).await?;
+        let pin = remote.query(By::Css(".pairing .pin")).first().await?;
+        pin.wait_until().displayed().await?;
+        pin.send_keys("246813").await?;
+        remote.find(By::Css(".pairing button[type=submit]")).await?.click().await?;
+        wait_until(Duration::from_secs(10), || async {
+            remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
+        })
+        .await?;
+        // Another device revokes this tablet while nobody touches it: no command is sent, so the
+        // remote never hears `Forbidden` and has to notice from the refused reconnects.
+        let office = server.pair("office", "246813").await?;
+        server.revoke_others(&office).await?;
+        let pin =
+            remote.query(By::Css(".pairing .pin")).wait(Duration::from_secs(15), Duration::from_millis(250));
+        pin.first().await?.wait_until().displayed().await?;
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow::Result<()> {
     let server = Server::start_new_device().await?;
     with_engine(Browser::for_remote(), 1280, 800, async |remote| {

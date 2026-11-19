@@ -24,7 +24,10 @@ may control the screen: `/api/session` says `setup_needed`, and `POST /api/setup
 sets the PIN once (`invalid_pin` → 400, `already_set` → 409) and pairs that browser. Only the
 development flag `--open-without-pin` (used by `just dev` and the tests) lets everyone in while no
 PIN is set. Refusals: HTTP 401 (not paired); WebSocket commands answer
-`Rejected { code: forbidden }`, after which the remote reloads into the pairing form.
+`Rejected { code: forbidden }`, after which the remote reloads into the pairing form. Revoking a
+device closes its WebSocket and refuses its reconnects with 401, so an idle remote gets no
+`forbidden`: after every lost or refused connection it asks `/api/session` and reloads into the
+pairing form when that says `paired: false` (a network error leaves it waiting to reconnect).
 
 The desktop program (ADR 0020) runs the server in the *local owner* mode: it listens on loopback
 only (the server refuses to start otherwise), there is no PIN and no pairing, and every request is

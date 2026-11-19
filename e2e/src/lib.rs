@@ -167,24 +167,57 @@ impl Server {
 
     /// Pairs a scripted remote with `pin` (`POST /api/pair`) and connects it with the cookie.
     pub async fn paired_remote(&self, name: &str, pin: &str) -> anyhow::Result<Remote> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let cookie = self.pair(name, pin).await?;
+        Remote::connect(self.addr, name, Some(&cookie)).await
+    }
+
+    /// Pairs a device with `pin` (`POST /api/pair`) and returns its cookie (`name=value`).
+    pub async fn pair(&self, name: &str, pin: &str) -> anyhow::Result<String> {
         let body =
             serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: name.into() })?;
+        let response = self.http("POST", "/api/pair", None, &body).await?;
+        let cookie = response
+            .lines()
+            .find_map(|line| line.strip_prefix("set-cookie: "))
+            .and_then(|value| value.split(';').next())
+            .with_context(|| format!("pairing refused: {response}"))?;
+        Ok(cookie.to_owned())
+    }
+
+    /// Revokes every paired device except the one holding `cookie`, through the device list
+    /// (`GET /api/devices`, `POST /api/devices/{id}/revoke`) like an operator would.
+    pub async fn revoke_others(&self, cookie: &str) -> anyhow::Result<()> {
+        let response = self.http("GET", "/api/devices", Some(cookie), "").await?;
+        let body = response.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or_default();
+        let devices: Vec<sursum_protocol::DeviceView> =
+            serde_json::from_str(body).with_context(|| format!("no device list: {response}"))?;
+        for device in devices.iter().filter(|device| !device.this_device) {
+            let path = format!("/api/devices/{}/revoke", device.device_id);
+            let response = self.http("POST", &path, Some(cookie), "").await?;
+            anyhow::ensure!(response.starts_with("HTTP/1.1 2"), "revocation refused: {response}");
+        }
+        Ok(())
+    }
+
+    /// One HTTP/1.1 request with a JSON body; returns the whole response (head and body).
+    async fn http(
+        &self,
+        method: &str,
+        path: &str,
+        cookie: Option<&str>,
+        body: &str,
+    ) -> anyhow::Result<String> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut stream = tokio::net::TcpStream::connect(self.addr).await?;
+        let cookie = cookie.map(|cookie| format!("Cookie: {cookie}\r\n")).unwrap_or_default();
         let request = format!(
-            "POST /api/pair HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "{method} {path} HTTP/1.1\r\nHost: localhost\r\n{cookie}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
         stream.write_all(request.as_bytes()).await?;
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
-        let cookie = response
-            .lines()
-            .find_map(|line| line.strip_prefix("set-cookie: "))
-            .and_then(|value| value.split(';').next())
-            .with_context(|| format!("pairing refused: {response}"))?
-            .to_owned();
-        Remote::connect(self.addr, name, Some(&cookie)).await
+        Ok(response)
     }
 
     /// Uploads a picture like the remote does (`POST /api/assets`) and returns its id.

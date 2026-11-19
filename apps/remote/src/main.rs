@@ -124,6 +124,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         _ => {}
     });
     let status = client.status();
+    reload_when_unpaired(status);
     provide_context(Connection(status));
     let commands =
         Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0), toasts };
@@ -201,6 +202,28 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         {search_sheet}
         {screen_sheet}
     }
+}
+
+/// Reloads into the pairing form once the server says this device is no longer paired.
+///
+/// A revocation closes the socket and every reconnect is refused at the upgrade, so an idle
+/// remote never sees a `Forbidden` command result. After each lost or refused connection it asks
+/// `/api/session`; a network error keeps the disconnected remote as it is.
+fn reload_when_unpaired(status: RwSignal<sursum_client::Status>) {
+    let checking = std::rc::Rc::new(std::cell::Cell::new(false));
+    Effect::new(move || {
+        if status.get() != sursum_client::Status::Disconnected || checking.replace(true) {
+            return;
+        }
+        let checking = checking.clone();
+        leptos::task::spawn_local(async move {
+            let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
+            if info.is_some_and(|info| !info.paired) {
+                reload();
+            }
+            checking.set(false);
+        });
+    });
 }
 
 /// Reloads the page (a new server build, or data replaced from a backup).
