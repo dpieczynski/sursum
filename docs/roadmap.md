@@ -69,7 +69,11 @@ packages: [plan-sync.md](plan-sync.md).
   Not yet run on the pilot Pi (its data folder must be emptied first)
 - [ ] Y1.2 rest: the merge upload streamed to disk (moved to Y1.6, when pictures make files
   large)
-- [ ] Y1.3 Review list and comparison screen for songs
+- [x] Y1.3 Review of songs changed in two places (2026-11-20): `songs_to_review` in the
+  remote's state, a mark in search results, the "Pieśni do przejrzenia" line in the Zestaw and
+  Pieśni views, the comparison of versions with "Zostaw tę" (`/api/songs/review`,
+  `/api/songs/{id}/versions`, `/api/songs/{id}/keep`); server and e2e tests (Chromium,
+  WebKitGTK). Editing a version that lost before keeping one is not offered: keep one, then edit
 - [ ] Y1.4 OpenSong import under the same rules
 - [ ] Y1.5 Churches: id from the name, the first-start form, the device's church
 - [ ] Y1.6 Sets as versions, dates and list order, "Nowy zestaw z tego", sets and pictures in the

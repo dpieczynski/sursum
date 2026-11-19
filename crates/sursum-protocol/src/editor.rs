@@ -100,3 +100,31 @@ pub enum SaveOutcome {
     /// The draft cannot be saved (e.g. no title or no lyrics).
     Invalid { reason: String },
 }
+
+/// A song changed in two places (ADR 0025): every live version it holds, for the comparison
+/// screen. The server puts each version into the editor's text form.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SongVersions {
+    pub song_id: SongId,
+    /// The version every device shows now comes first.
+    pub versions: Vec<SongVersionView>,
+}
+
+/// One version of a song, as the comparison screen shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SongVersionView {
+    pub version: String,
+    /// True for the version every device shows now (the one with more changes).
+    pub shown: bool,
+    pub title: String,
+    /// The lyrics in the editor's text form.
+    pub lyrics: String,
+}
+
+/// `POST /api/songs/{id}/keep`: keep this version and replace all others (the review's
+/// "Zostaw tę"). Answers a [`SaveOutcome`]; `Conflict` if the version is not one of the song's
+/// versions any more.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeepVersion {
+    pub version: String,
+}

@@ -23,6 +23,7 @@ mod pairing;
 mod picture;
 mod power;
 mod prefs;
+mod review;
 mod scroll;
 mod search;
 mod sets;
@@ -161,7 +162,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         (None, View::Live) => view! { <live::LiveSet state commands /> }.into_any(),
         (None, View::Set) => view! { <sets::SetsView state commands /> }.into_any(),
         (None, View::Settings) => view! { <settings::SettingsView state commands /> }.into_any(),
-        (None, View::Songs) => view! { <songs::SongsView /> }.into_any(),
+        (None, View::Songs) => view! { <songs::SongsView state /> }.into_any(),
     };
     let view_attr = move || current.view.get().attribute();
     let installation_attr = match info.installation {

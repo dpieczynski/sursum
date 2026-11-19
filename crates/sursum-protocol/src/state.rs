@@ -129,6 +129,9 @@ pub struct SongSummary {
     /// Number in a songbook, if any.
     pub number: Option<String>,
     pub first_line: String,
+    /// Changed in two places and not reviewed yet (ADR 0025): "do przejrzenia".
+    #[serde(default)]
+    pub review: bool,
 }
 
 /// Power state of the projector or monitor (ADR 0012).
@@ -172,4 +175,7 @@ pub struct RemoteState {
     /// What "next" does after an item's last slide (a device setting).
     #[serde(default)]
     pub end_of_item: EndOfItem,
+    /// How many songs were changed in two places and wait for review (ADR 0025).
+    #[serde(default)]
+    pub songs_to_review: u32,
 }

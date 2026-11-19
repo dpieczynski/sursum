@@ -29,6 +29,7 @@ pub fn SetsView(state: RwSignal<Option<RemoteState>>, commands: Commands) -> imp
     view! {
         <div class="sets-view" data-testid="sets-view">
             <picker::SetHeader state commands />
+            <crate::review::ReviewLine state />
             <add::AddBar query commands />
             <Show when=searching fallback=items>
                 <add::Results query state commands card />

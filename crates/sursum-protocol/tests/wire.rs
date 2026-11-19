@@ -123,6 +123,7 @@ fn remote_state() {
         screen_connected: true,
         next_step: NextStep::Gap,
         end_of_item: EndOfItem::Gap,
+        songs_to_review: 2,
     };
     insta::assert_json_snapshot!(state);
 }
@@ -235,4 +236,29 @@ fn picture_cleanup() {
         PictureCleanupRequest { dry_run: true },
         PictureCleanup { pictures: 12, bytes: 36_700_160 }
     ));
+}
+
+/// The review of songs changed in two places (ADR 0025) goes over REST.
+#[test]
+fn song_review() {
+    let summary = SongSummary {
+        song_id: SongId::from("song-1"),
+        title: "Pieśń".into(),
+        number: Some("12".into()),
+        first_line: "Pierwsza linia".into(),
+        review: true,
+    };
+    let versions = SongVersions {
+        song_id: SongId::from("song-1"),
+        versions: vec![SongVersionView {
+            version: "ab".repeat(32),
+            shown: true,
+            title: "Pieśń".into(),
+            lyrics: "[V1]\nPierwsza linia".into(),
+        }],
+    };
+    insta::assert_json_snapshot!((summary, versions, KeepVersion { version: "cd".repeat(32) }));
+    let old: SongSummary =
+        serde_json::from_str(r#"{"song_id":"s","title":"t","number":null,"first_line":"f"}"#).unwrap();
+    assert!(!old.review);
 }

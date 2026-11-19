@@ -18,7 +18,8 @@ mod update;
 
 pub use backup::{BackupSummary, RestoreOutcome, RestoreRefusal};
 pub use editor::{
-    DraftPreview, ImportReport, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome, SongDraft,
+    DraftPreview, ImportReport, KeepVersion, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome,
+    SongDraft, SongVersionView, SongVersions,
 };
 pub use ids::{AssetId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{

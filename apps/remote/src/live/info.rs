@@ -274,6 +274,7 @@ mod tests {
             screen_connected: true,
             next_step,
             end_of_item: EndOfItem::Gap,
+            songs_to_review: 0,
         }
     }
 
