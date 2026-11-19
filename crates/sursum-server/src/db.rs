@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! SQLite persistence. Only the state actor writes, so there is a single connection.
 //!
-//! Migrations are plain SQL scripts applied in order, tracked with `PRAGMA user_version`.
+//! Migrations are plain SQL scripts applied in order, tracked with `PRAGMA user_version`. Songs
+//! are versioned documents (ADR 0025, the `songs` submodule).
 //! Durability settings follow the plan: WAL with `synchronous=FULL` (writes are rare, so an
 //! fsync per commit costs nothing and survives power loss).
 
@@ -10,14 +11,22 @@ use std::path::{Path, PathBuf};
 use anyhow::Context as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song};
+use sursum_core::model::{ItemKind, ServiceSet, SetItem};
 use sursum_protocol::{ItemId, Overlay, SetId, SlideKey};
 
-/// Schema migrations; index + 1 is the resulting `user_version`. Never edit a released entry,
-/// only append.
+mod songs;
+
+pub use songs::{Base, SongSave, song_body, song_from_body};
+
+/// Schema versions start above this (`user_version` = this + the number of migrations
+/// applied). Databases of earlier builds have 1 to 5 and are refused, never converted: nobody
+/// used them in a church (ADR 0025). Old releases, in turn, refuse these as newer.
+const SCHEMA_BASE: usize = 100;
+
+/// Schema migrations; `SCHEMA_BASE` + index + 1 is the resulting `user_version`. Never edit a
+/// released entry, only append.
 const MIGRATIONS: &[&str] = &[
-    // 1: runtime state (the program position) and settings.
+    // 101: runtime state, settings, sets, paired devices, and the versions of songs (ADR 0025).
     "CREATE TABLE runtime_state (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         json TEXT NOT NULL,
@@ -27,29 +36,8 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE settings (
         key TEXT PRIMARY KEY,
         json TEXT NOT NULL
-    );",
-    // 2: the song library with a history of every revision (edits can be undone, libraries merged).
-    "CREATE TABLE songs (
-        id TEXT PRIMARY KEY,
-        revision INTEGER NOT NULL,
-        content_hash TEXT NOT NULL,
-        title TEXT NOT NULL,
-        body_json TEXT NOT NULL,
-        source TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        deleted_at TEXT
     );
-    CREATE TABLE song_history (
-        song_id TEXT NOT NULL REFERENCES songs(id),
-        revision INTEGER NOT NULL,
-        content_hash TEXT NOT NULL,
-        body_json TEXT NOT NULL,
-        edited_at TEXT NOT NULL DEFAULT (datetime('now')),
-        PRIMARY KEY (song_id, revision)
-    );",
-    // 3: sets (running orders) and their items.
-    "CREATE TABLE sets (
+    CREATE TABLE sets (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -62,22 +50,28 @@ const MIGRATIONS: &[&str] = &[
         item_id TEXT NOT NULL,
         kind_json TEXT NOT NULL,
         PRIMARY KEY (set_id, position)
-    );",
-    // 4: paired remote devices (only a hash of each device's token is stored).
-    "CREATE TABLE devices (
+    );
+    -- Paired remote devices (only a hash of each device's token is stored).
+    CREATE TABLE devices (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         token_hash TEXT NOT NULL UNIQUE,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         revoked_at TEXT
-    );",
-    // 5: content hashes of songs as other devices know them (from merged `.sursum` files), so a
-    // stale file can be recognised as older and never resurrects or duplicates a song.
-    "CREATE TABLE song_known_hashes (
-        song_id TEXT NOT NULL,
-        content_hash TEXT NOT NULL,
-        PRIMARY KEY (song_id, content_hash)
-    );",
+    );
+    -- Every version of every document; `head` marks the versions nothing replaces. `body` is
+    -- NULL for a deletion; `ancestors` are version ids separated by spaces, sorted.
+    CREATE TABLE versions (
+        kind TEXT NOT NULL,
+        document_id TEXT NOT NULL,
+        version_id TEXT NOT NULL,
+        body BLOB,
+        ancestors TEXT NOT NULL,
+        head INTEGER NOT NULL,
+        saved_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (kind, document_id, version_id)
+    );
+    CREATE INDEX versions_heads ON versions (kind, document_id) WHERE head = 1;",
 ];
 
 /// The database file inside the data directory.
@@ -107,14 +101,6 @@ pub struct SavedProgram {
 pub struct RuntimeRecord {
     pub program: SavedProgram,
     pub boot_id: Option<String>,
-}
-
-/// What [`Database::upsert_song`] did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Upsert {
-    Inserted,
-    Updated { revision: i64 },
-    Unchanged,
 }
 
 /// The database connection.
@@ -166,7 +152,7 @@ impl Database {
 
     /// The schema version this program creates and understands.
     pub fn supported_schema() -> i64 {
-        i64::try_from(MIGRATIONS.len()).unwrap_or(i64::MAX)
+        i64::try_from(SCHEMA_BASE + MIGRATIONS.len()).unwrap_or(i64::MAX)
     }
 
     /// A backup of the database in `data_dir` through a plain connection: no migration and no
@@ -234,6 +220,9 @@ impl Database {
         if application != APPLICATION_ID || version < 1 {
             return Err(Unreadable::Damaged);
         }
+        if version <= i64::try_from(SCHEMA_BASE).unwrap_or(i64::MAX) {
+            return Err(Unreadable::Older);
+        }
         if version > Self::supported_schema() {
             return Err(Unreadable::Newer);
         }
@@ -293,72 +282,26 @@ impl Database {
     fn migrate(&mut self) -> anyhow::Result<()> {
         let version: i64 = self.connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
         let version = usize::try_from(version).context("negative schema version")?;
-        if version > MIGRATIONS.len() {
+        let applied = match version {
+            0 => 0,
+            1..=SCHEMA_BASE => return Err(EarlierBuild(version).into()),
+            _ => version - SCHEMA_BASE,
+        };
+        if applied > MIGRATIONS.len() {
             anyhow::bail!(
                 "database schema {version} is newer than this program ({}); refusing to start",
-                MIGRATIONS.len()
+                SCHEMA_BASE + MIGRATIONS.len()
             );
         }
-        for (index, script) in MIGRATIONS.iter().enumerate().skip(version) {
+        for (index, script) in MIGRATIONS.iter().enumerate().skip(applied) {
+            let schema = SCHEMA_BASE + index + 1;
             let transaction = self.connection.transaction()?;
-            transaction.execute_batch(script).with_context(|| format!("applying migration {}", index + 1))?;
-            transaction.pragma_update(None, "user_version", i64::try_from(index + 1)?)?;
+            transaction.execute_batch(script).with_context(|| format!("applying migration {schema}"))?;
+            transaction.pragma_update(None, "user_version", i64::try_from(schema)?)?;
             transaction.pragma_update(None, "application_id", APPLICATION_ID)?;
             transaction.commit()?;
         }
         Ok(())
-    }
-
-    /// All songs that are not deleted.
-    pub fn load_songs(&self) -> anyhow::Result<Vec<Song>> {
-        let mut statement =
-            self.connection.prepare("SELECT body_json FROM songs WHERE deleted_at IS NULL ORDER BY title")?;
-        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
-        rows.map(|json| serde_json::from_str(&json?).context("decoding a stored song")).collect()
-    }
-
-    /// Inserts a song or, if its content changed, stores a new revision (keeping the old one in
-    /// `song_history`). `source` records where it came from (e.g. `opensong:<path>`).
-    pub fn upsert_song(&mut self, song: &Song, source: &str) -> anyhow::Result<Upsert> {
-        let body = serde_json::to_string(song)?;
-        let hash = content_hash(&body);
-        let transaction = self.connection.savepoint()?;
-        let existing: Option<(i64, String)> = transaction
-            .query_row("SELECT revision, content_hash FROM songs WHERE id = ?1", [song.id.as_str()], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })
-            .optional()?;
-        let outcome = match existing {
-            Some((_, existing_hash)) if existing_hash == hash => Upsert::Unchanged,
-            Some((revision, _)) => {
-                let revision = revision + 1;
-                transaction.execute(
-                    "UPDATE songs SET revision = ?2, content_hash = ?3, title = ?4, body_json = ?5, source = ?6,
-                     updated_at = datetime('now'), deleted_at = NULL WHERE id = ?1",
-                    params![song.id.as_str(), revision, hash, song.title(), body, source],
-                )?;
-                Upsert::Updated { revision }
-            }
-            None => {
-                transaction.execute(
-                    "INSERT INTO songs (id, revision, content_hash, title, body_json, source) VALUES (?1, 1, ?2, ?3, ?4, ?5)",
-                    params![song.id.as_str(), hash, song.title(), body, source],
-                )?;
-                Upsert::Inserted
-            }
-        };
-        if outcome != Upsert::Unchanged {
-            let revision = match outcome {
-                Upsert::Updated { revision } => revision,
-                _ => 1,
-            };
-            transaction.execute(
-                "INSERT INTO song_history (song_id, revision, content_hash, body_json) VALUES (?1, ?2, ?3, ?4)",
-                params![song.id.as_str(), revision, hash, body],
-            )?;
-        }
-        transaction.commit()?;
-        Ok(outcome)
     }
 
     /// All sets that are not deleted, items in order.
@@ -485,43 +428,6 @@ impl Database {
         Ok(())
     }
 
-    /// Every song with its content hash, the hashes of all its revisions and whether it was
-    /// deleted (deleted songs stay as tombstones, so a deletion can travel to another device).
-    pub fn stored_songs(&self) -> anyhow::Result<Vec<StoredSong>> {
-        let mut songs = self
-            .connection
-            .prepare("SELECT id, body_json, content_hash, deleted_at IS NOT NULL FROM songs ORDER BY id")?;
-        // Own revisions first (in order), then hashes learned from other devices.
-        let mut history = self.connection.prepare(
-            "SELECT content_hash FROM song_history WHERE song_id = ?1
-             UNION ALL
-             SELECT content_hash FROM song_known_hashes WHERE song_id = ?1
-               AND content_hash NOT IN (SELECT content_hash FROM song_history WHERE song_id = ?1)",
-        )?;
-        let rows: Vec<(String, String, String, bool)> = songs
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
-            .collect::<Result<_, _>>()?;
-        rows.into_iter()
-            .map(|(id, body, content_hash, deleted)| {
-                let song: Song = serde_json::from_str(&body).context("decoding a stored song")?;
-                let history =
-                    history.query_map([&id], |row| row.get(0))?.collect::<Result<Vec<String>, _>>()?;
-                Ok(StoredSong { song, content_hash, history, deleted })
-            })
-            .collect()
-    }
-
-    /// Remembers hashes another device knew for a song (its history in a merged file).
-    pub fn remember_hashes(&self, song_id: &str, hashes: &[String]) -> anyhow::Result<()> {
-        let mut statement = self.connection.prepare_cached(
-            "INSERT OR IGNORE INTO song_known_hashes (song_id, content_hash) VALUES (?1, ?2)",
-        )?;
-        for hash in hashes {
-            statement.execute([song_id, hash])?;
-        }
-        Ok(())
-    }
-
     /// Runs `work` in one transaction: all of it is stored, or nothing. Bulk changes (merge,
     /// import) also need one disk sync instead of one per song, which matters on an SD card.
     pub fn in_transaction<T>(
@@ -539,27 +445,6 @@ impl Database {
                 Err(error)
             }
         }
-    }
-
-    /// Marks a song as deleted (it keeps its history and comes back if a newer version is
-    /// imported or merged); false if there is no such live song.
-    pub fn delete_song(&self, id: &str) -> anyhow::Result<bool> {
-        let changed = self.connection.execute(
-            "UPDATE songs SET deleted_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL",
-            [id],
-        )?;
-        Ok(changed == 1)
-    }
-
-    /// The current revision of a song, if it exists.
-    pub fn song_revision(&self, song_id: &str) -> anyhow::Result<Option<i64>> {
-        let revision = self
-            .connection
-            .query_row("SELECT revision FROM songs WHERE id = ?1 AND deleted_at IS NULL", [song_id], |row| {
-                row.get(0)
-            })
-            .optional()?;
-        Ok(revision)
     }
 
     /// Loads the last saved program position.
@@ -603,18 +488,32 @@ pub(crate) enum Unreadable {
     Damaged,
     #[error("made by a newer version of the program")]
     Newer,
+    #[error("made by an earlier version of the program, whose data is not converted")]
+    Older,
 }
 
+/// A database written by an earlier build of the program (schema 1 to 5). It is not converted
+/// (nobody used those builds in a church, ADR 0025) and not mistaken for a damaged file.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "the database was written by an earlier version of sursum (schema {0}) and is not converted; \
+     move the data folder aside to start with an empty one"
+)]
+pub struct EarlierBuild(usize);
+
 fn contents(connection: &Connection) -> anyhow::Result<Contents> {
-    let count = |table: &str| -> anyhow::Result<u32> {
-        let count: i64 = connection.query_row(
-            &format!("SELECT count(*) FROM {table} WHERE deleted_at IS NULL"),
-            [],
-            |row| row.get(0),
-        )?;
+    let count = |sql: &str| -> anyhow::Result<u32> {
+        let count: i64 = connection.query_row(sql, [], |row| row.get(0))?;
         Ok(u32::try_from(count)?)
     };
-    Ok(Contents { songs: count("songs")?, sets: count("sets")? })
+    Ok(Contents {
+        // A song is live while one of its heads is (a deletion never beats a change).
+        songs: count(
+            "SELECT count(DISTINCT document_id) FROM versions
+             WHERE kind = 'song' AND head = 1 AND body IS NOT NULL",
+        )?,
+        sets: count("SELECT count(*) FROM sets WHERE deleted_at IS NULL")?,
+    })
 }
 
 /// Backups sorted oldest first (names start with a zero-padded timestamp).
@@ -675,30 +574,10 @@ fn restore_newest_backup(data_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A song as stored, for sharing libraries between devices.
-#[derive(Debug, Clone)]
-pub struct StoredSong {
-    pub song: Song,
-    pub content_hash: String,
-    /// Hashes of every revision, oldest first (includes the current one).
-    pub history: Vec<String>,
-    pub deleted: bool,
-}
-
-/// The content hash the database stores for a song (to check hashes from other devices).
-pub fn song_content_hash(song: &Song) -> anyhow::Result<String> {
-    Ok(content_hash(&serde_json::to_string(song)?))
-}
-
-/// SHA-256 of a song's JSON, used to detect real changes.
-fn content_hash(body: &str) -> String {
-    Sha256::digest(body.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sursum_core::model::Verse;
+    use sursum_core::model::{Song, Verse};
     use sursum_protocol::SongId;
 
     fn song(text: &str) -> Song {
@@ -721,7 +600,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         {
             let mut database = Database::open(dir.path()).unwrap();
-            database.upsert_song(&song("zapisana"), "test").unwrap();
+            database.save_song(&song("zapisana"), Base::Current).unwrap();
             for index in 0..BACKUPS_KEPT + 3 {
                 database.backup(dir.path(), &format!("t{index:02}")).unwrap();
             }
@@ -774,17 +653,57 @@ mod tests {
     }
 
     #[test]
-    fn songs_are_versioned_and_unchanged_imports_are_detected() {
+    fn songs_are_versioned_and_unchanged_saves_write_nothing() {
         let mut database = Database::in_memory().unwrap();
-        assert_eq!(database.upsert_song(&song("a"), "test").unwrap(), Upsert::Inserted);
-        assert_eq!(database.upsert_song(&song("a"), "test").unwrap(), Upsert::Unchanged);
-        assert_eq!(database.upsert_song(&song("b"), "test").unwrap(), Upsert::Updated { revision: 2 });
+        let SongSave::Created(first) = database.save_song(&song("a"), Base::Current).unwrap() else {
+            panic!("a new song")
+        };
+        assert_eq!(
+            database.save_song(&song("a"), Base::Current).unwrap(),
+            SongSave::Unchanged(first.clone())
+        );
+        let SongSave::Changed(second) = database.save_song(&song("b"), Base::Loaded(&first)).unwrap() else {
+            panic!("a new version")
+        };
+        assert_eq!(database.song_version("s1").unwrap(), Some(second));
+        assert_eq!(
+            database.save_song(&song("c"), Base::Loaded(&first)).unwrap(),
+            SongSave::Outdated,
+            "the editor's version was replaced meanwhile"
+        );
         let songs = database.load_songs().unwrap();
-        assert_eq!(songs.len(), 1);
-        assert_eq!(songs[0].verses[0].blocks[0].lines[0].text, "b");
-        let history: i64 =
-            database.connection.query_row("SELECT count(*) FROM song_history", [], |row| row.get(0)).unwrap();
-        assert_eq!(history, 2);
+        assert_eq!((songs.len(), songs[0].verses[0].blocks[0].lines[0].text.as_str()), (1, "b"));
+        let versions: i64 =
+            database.connection.query_row("SELECT count(*) FROM versions", [], |row| row.get(0)).unwrap();
+        assert_eq!(versions, 2, "the first version stays as history");
+
+        assert!(database.delete_song("s1").unwrap() && !database.delete_song("s1").unwrap());
+        assert!(database.load_songs().unwrap().is_empty() && database.song_version("s1").unwrap().is_none());
+        assert!(matches!(database.save_song(&song("wraca"), Base::Current).unwrap(), SongSave::Changed(_)));
+        assert_eq!(database.load_songs().unwrap().len(), 1, "saving again brings it back");
+    }
+
+    #[test]
+    fn a_song_body_has_no_id_and_sorted_keys() {
+        let body = song_body(&song("a")).unwrap();
+        let text = std::str::from_utf8(&body).unwrap();
+        assert!(text.starts_with(r#"{"authors":"#) && !text.contains(r#""id""#), "{text}");
+        assert_eq!(song_from_body(&SongId::from("s1"), &body).unwrap(), song("a"));
+    }
+
+    #[test]
+    fn a_database_of_an_earlier_build_is_refused_but_never_quarantined() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let connection = Connection::open(dir.path().join(DATABASE_FILE)).unwrap();
+            connection.execute_batch("CREATE TABLE songs (id TEXT PRIMARY KEY);").unwrap();
+            connection.pragma_update(None, "user_version", 5).unwrap();
+            connection.pragma_update(None, "application_id", APPLICATION_ID).unwrap();
+        }
+        let error = Database::open(dir.path()).err().expect("refused");
+        assert!(error.chain().any(|cause| cause.is::<EarlierBuild>()), "{error:#}");
+        assert!(!dir.path().join("corrupt").exists(), "an old database is not a damaged one");
+        assert_eq!(Database::inspect(&dir.path().join(DATABASE_FILE)).err(), Some(Unreadable::Older));
     }
 
     fn saved(overlay: Overlay) -> SavedProgram {
@@ -821,7 +740,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         drop(Database::open(dir.path()).unwrap());
         let connection = Connection::open(dir.path().join("sursum.db")).unwrap();
-        connection.pragma_update(None, "user_version", 99).unwrap();
+        connection.pragma_update(None, "user_version", Database::supported_schema() + 1).unwrap();
         drop(connection);
         assert!(Database::open(dir.path()).is_err());
     }

@@ -44,12 +44,11 @@ below comes before new features. Order: CI image build, one update path, engine 
   seatd, `wlr-randr`, `kiosk-session`, the cursor theme, the policies; move the WPE tests to
   2.54 with MiniBrowser) or stay on Chromium for good (and delete the WPE tests and cog)
 - [ ] Smaller findings of the audit, not decided, cheapest first: `ImageFit::Cover` is never
-  chosen and `Background` has one variant (both in stored set items and decks);
-  `song_history.body_json` is written and never read; the demo set comes back whenever no set
-  exists; the "build the web apps with one build id" block is copied into each workflow;
-  `OpenForDevelopment` and `LocalOwner` are both "no PIN, everything allowed"; `.sursum` and
-  `.sursum-backup` overlap (and the backup restore swaps the database file, which ties it to
-  systemd)
+  chosen and `Background` has one variant (both in stored set items and decks); the demo set
+  comes back whenever no set exists (fixed in Y1.6); the "build the web apps with one build id"
+  block is copied into each workflow; `OpenForDevelopment` and `LocalOwner` are both "no PIN,
+  everything allowed"; `.sursum` and `.sursum-backup` overlap (and the backup restore swaps the
+  database file, which ties it to systemd)
 
 ## Y1 — Synchronizing songs and sets (ADR 0025)
 
@@ -60,11 +59,16 @@ conflict copies ("kopia ze scalenia") go away. No migration of existing data. Pl
 packages: [plan-sync.md](plan-sync.md).
 
 - [x] Y1.0 ADR 0025 and the plan (2026-11-19)
-- [ ] Y1.1 Versions in `sursum-core` with property tests; the new schema, refusing databases of
-  earlier builds; songs saved and loaded through versions; the editor saves on the version it
-  loaded
-- [ ] Y1.2 File format 2 for songs; merge and report; streamed upload; the two-church scenario
-  as a test; conflict copies removed
+- [x] Y1.1 (with the song part of Y1.2): versions in `sursum-core` with property tests
+  (`versions.rs`); schema numbering restarted above 100, databases and device backups of earlier
+  builds refused (`older_version`); songs saved, loaded and deleted through versions
+  (`db/songs.rs`, bodies as JSON with sorted keys, whatever `serde_json` features the build
+  has); the editor sends `base_version` and gets `Conflict` if it was replaced; `.sursum`
+  format 2 for songs with merge and report; the two-church scenario, the text typed back, a
+  deletion against a change and stale files as tests; conflict copies removed (2026-11-19).
+  Not yet run on the pilot Pi (its data folder must be emptied first)
+- [ ] Y1.2 rest: the merge upload streamed to disk (moved to Y1.6, when pictures make files
+  large)
 - [ ] Y1.3 Review list and comparison screen for songs
 - [ ] Y1.4 OpenSong import under the same rules
 - [ ] Y1.5 Churches: id from the name, the first-start form, the device's church
@@ -122,7 +126,7 @@ manual run on a laptop + tablet and both hardware spikes are still open.
 - [x] `sursum-formats`: OpenSong songs, import report, idempotent re-import; CLI `sursum-server import-opensong <Songs dir>` (875 real songs, 0 failures)
 - [x] ZIP upload of an OpenSong folder from the browser (`POST /api/import/opensong`, backup first, library reloaded, one-line report in the remote)
 - [x] Extended OpenSong conventions checked against a real Polish library (see [opensong-format.md](opensong-format.md)); numbered lines still ⚠
-- [x] SQLite schema (migration 2: `songs` with revisions, `song_history`)
+- [x] SQLite schema (migration 2: `songs` with revisions, `song_history`; replaced by the `versions` table, ADR 0025)
 - [x] Backups (`VACUUM INTO`, 14 kept, at startup and before imports), `quick_check` at startup + automatic restore of the newest backup (damaged file kept in `corrupt/`)
 - [x] Whole-device backup (ADR 0018): `.sursum-backup` with the database (without PIN and paired devices) and all pictures, download from any remote, restore in admin mode staged and applied at the next start (device keeps its own credentials, replaced database kept in `backups/`); unused pictures removed only on request (admin, count first, hold to confirm)
 - [x] In-memory search with Polish folding (ł!) and ranking; ~1.2 ms per query over 5000 songs (laptop); remote search panel with Show now / Add / Edit

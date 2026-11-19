@@ -14,10 +14,10 @@ use sursum_protocol::{DraftPreview, ItemId, MarkupWarning, MarkupWarningCode, So
 const DEFAULT_SONGBOOK: &str = "Śpiewnik parafialny";
 
 /// The editor's view of a stored song.
-pub fn draft_of(song: &Song, revision: u32) -> SongDraft {
+pub fn draft_of(song: &Song, version: &sursum_core::versions::VersionId) -> SongDraft {
     SongDraft {
         song_id: Some(song.id.clone()),
-        base_revision: Some(revision),
+        base_version: Some(version.as_str().to_owned()),
         title: song.title().to_owned(),
         number: song.songbooks.first().map(|entry| entry.entry.clone()),
         presentation: presentation_markup(song),
@@ -124,13 +124,17 @@ mod tests {
         assert_eq!(preview(&with_typo).warnings.len(), 1);
     }
 
+    fn any_version() -> sursum_core::versions::VersionId {
+        sursum_core::versions::Version::first(Vec::new()).id().clone()
+    }
+
     #[test]
     fn hidden_fields_survive_editing() {
         let (original, _) = song_from_draft(&draft("[V1]\n a"), SongId::from("s"), None);
         let mut original = original;
         original.authors = vec!["Autor".into()];
         original.titles.push("Inny tytuł".into());
-        let mut edited = draft_of(&original, 1);
+        let mut edited = draft_of(&original, &any_version());
         edited.lyrics = "[V1]\n b".into();
         let (song, _) = song_from_draft(&edited, SongId::from("s"), Some(&original));
         assert_eq!(song.authors, ["Autor"]);
@@ -148,7 +152,7 @@ mod tests {
         assert_eq!(keys, ["v1#0@0", "c#0@0", "v2#0@0", "c#0@1"]);
         assert!(preview.warnings.is_empty(), "{:?}", preview.warnings);
         let (song, _) = song_from_draft(&typed, SongId::from("s"), None);
-        let shown = draft_of(&song, 1);
+        let shown = draft_of(&song, &any_version());
         assert!(shown.lyrics.starts_with("[V1]\nPierwsza zwrotka"), "no markup spaces: {}", shown.lyrics);
     }
 

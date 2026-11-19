@@ -272,6 +272,7 @@ pub enum Msg {
     BackupNotSupervised,
     BackupNotABackup,
     BackupNewerVersion,
+    BackupOlderVersion,
     BackupTooLarge,
     BackupFailed,
     PictureCleanup,
@@ -472,7 +473,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::MergeConfirm => "Scal",
         Msg::Merging => "Scalanie…",
         Msg::MergeDone => "Scalono.",
-        Msg::MergeFailed => "Scalanie nie powiodło się – czy to plik .sursum?",
+        Msg::MergeFailed => "Scalanie nie powiodło się – czy to plik .sursum z tej wersji programu?",
         Msg::Calibrate => "Kalibracja ekranu",
         Msg::CalibrationTitle => "Kalibracja ekranu",
         Msg::CalibrationHelp => {
@@ -602,6 +603,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::BackupNotSupervised => "Na tym komputerze nie można przywrócić kopii z pilota.",
         Msg::BackupNotABackup => "To nie jest kopia zapasowa sursum albo plik jest uszkodzony.",
         Msg::BackupNewerVersion => "Kopię zrobiła nowsza wersja programu. Najpierw zaktualizuj program.",
+        Msg::BackupOlderVersion => {
+            "Kopię zrobiła wcześniejsza wersja programu, której danych ta wersja nie przenosi."
+        }
         Msg::BackupTooLarge => "Plik jest za duży, by był kopią tego urządzenia.",
         Msg::BackupFailed => {
             "Przywracanie nie powiodło się (np. brak miejsca). Dane urządzenia się nie zmieniły."
@@ -626,6 +630,7 @@ pub fn restore_refusal(reason: sursum_protocol::RestoreRefusal) -> Msg {
         RestoreRefusal::NotSupervised => Msg::BackupNotSupervised,
         RestoreRefusal::NotABackup => Msg::BackupNotABackup,
         RestoreRefusal::NewerVersion => Msg::BackupNewerVersion,
+        RestoreRefusal::OlderVersion => Msg::BackupOlderVersion,
         RestoreRefusal::TooLarge => Msg::BackupTooLarge,
         RestoreRefusal::Failed => Msg::BackupFailed,
     }
@@ -752,19 +757,20 @@ pub fn import_lines(report: &sursum_protocol::ImportReport) -> Vec<String> {
     lines
 }
 
-/// The merge report, one line per number; conflicting titles are listed because they need a
-/// human decision.
+/// The merge report, one line per number; songs changed in two places are listed by title,
+/// because someone should look at the other version.
 pub fn merge_lines(report: &sursum_protocol::MergeReport) -> Vec<String> {
     let mut lines = vec![
         format!("Nowe pieśni: {}", report.added),
         format!("Zaktualizowane: {}", report.updated),
         format!("Usunięte: {}", report.deleted),
         format!("Bez zmian: {}", report.unchanged),
-        format!("Nowsze tutaj (zostają): {}", report.kept_local),
+        format!("Tutaj już nowsze (zostają): {}", report.kept_local),
     ];
     if !report.conflicts.is_empty() {
         lines.push(format!(
-            "Zmienione w obu kościołach (zapisane jako kopie): {}",
+            "Zmienione w dwóch miejscach (pokazana wersja z większą liczbą zmian, druga czeka na \
+             przejrzenie): {}",
             report.conflicts.join(", ")
         ));
     }

@@ -266,7 +266,8 @@ and the list order.
   songs, sets and churches, with property tests of the laws in section 10.
 - `sursum-server`: one `versions` table (document kind and id, version id, ancestors, body or
   "deleted", head or not) instead of `songs`, `song_history`, `song_known_hashes`, `sets` and
-  `set_items` ⚠ to confirm in Y1.1 that search, the set store and backups read it as easily.
+  `set_items`. Built for songs in Y1.1 (`db/songs.rs`); search and backups read it through
+  `load_songs`; sets move to it in Y1.6.
   Old versions of songs stay in the database as local history; old versions of sets are dropped
   (every command makes one).
 - `library.rs`: export and merge are rewritten on the module above; `decide`, the conflict copy
@@ -282,10 +283,11 @@ and the list order.
   (settings, runtime state, devices) are migration 1 of the new list. Nothing reads the old
   tables.
 - A database written by an earlier build is not converted and not mistaken for a damaged one:
-  the server refuses to start and logs "baza z wcześniejszej wersji programu: usuń folder danych
-  albo przenieś go w inne miejsce" ⚠ how it tells the two apart is decided in Y1.1 (for example
-  a marker setting written by the new schema). The automatic restore of the newest backup
-  (`quick_check`) must not run in that case, since every backup has the old schema too.
+  the server refuses to start with a message to move the data folder aside. Built in Y1.1:
+  schema numbers of this line start above 100 (`SCHEMA_BASE`), so 1 to 100 means an earlier
+  build; that is reported as its own error, never as damage, so the automatic restore of the
+  newest backup does not run (every backup has the old schema too). Old releases, in turn, see
+  the new numbers as "newer" and refuse.
 - Device backups (`.sursum-backup`) of earlier builds are refused the same way.
 - The pilot Pi and the development machines start with an empty data folder. The pilot Pi is
   reflashed for ADR 0022 anyway.
@@ -314,8 +316,8 @@ Each is one pull request.
 | # | Package | Depends on |
 |---|---|---|
 | Y1.0 | ADR 0025 from section 2 and 3; roadmap section ✓ | PR #2 merged |
-| Y1.1 | Core module with property tests; the new schema and refusing old databases (section 9.1); songs saved and loaded through it; editor saves on the loaded version | Y1.0 |
-| Y1.2 | File format 2 for songs; merge and report; streamed upload; the section 1 scenario as a test; conflict copies gone | Y1.1 |
+| Y1.1 | Core module with property tests; the new schema and refusing old databases (section 9.1); songs saved and loaded through it; editor saves on the loaded version; file format 2 for songs with merge and report; the section 1 scenario as a test; conflict copies gone ✓ | Y1.0 |
+| Y1.2 | Streamed merge upload (done with Y1.6) | Y1.1 |
 | Y1.3 | Review list and comparison screen | Y1.2 |
 | Y1.4 | OpenSong import under section 7 | Y1.1 |
 | Y1.5 | Churches: the document, the id from the name, the first-start form, the device setting and the choice of a known church | Y1.1 |

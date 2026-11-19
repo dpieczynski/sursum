@@ -135,8 +135,16 @@ rebinding) and file uploads need a custom header (no simple cross-site POSTs).
 ## Persistence
 
 SQLite in WAL mode with `synchronous=FULL`, `foreign_keys=ON`; schema migrations are plain SQL
-scripts applied in order and tracked with `PRAGMA user_version` (`sursum-server/src/db.rs`); backups at every start and before imports, merges, updates and restores with
+scripts applied in order and tracked with `PRAGMA user_version` (`sursum-server/src/db.rs`;
+numbering starts above 100, and databases of earlier builds are refused, never converted:
+ADR 0025); backups at every start and before imports, merges, updates and restores with
 `VACUUM INTO` (14 kept); `quick_check` at startup with automatic restore of the last good backup.
+
+Songs are versioned documents (ADR 0025, `sursum-core::versions`, `db/songs.rs`): one
+`versions` table holds every saved version with its ancestors, and the heads decide what is
+shown (a live version before a deletion, then more changes). Merging a `.sursum` file adds the
+versions this device did not know, so files can travel in any direction and be loaded any
+number of times without duplicating a song.
 
 ## Device image and updates (ADR 0013)
 

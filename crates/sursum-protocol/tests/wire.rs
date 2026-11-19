@@ -224,6 +224,7 @@ fn backup() {
     let outcomes = [
         RestoreOutcome::Restored { summary },
         RestoreOutcome::Refused { reason: RestoreRefusal::NewerVersion },
+        RestoreOutcome::Refused { reason: RestoreRefusal::OlderVersion },
     ];
     insta::assert_json_snapshot!(outcomes);
 }
