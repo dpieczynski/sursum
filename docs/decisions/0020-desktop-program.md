@@ -1,6 +1,7 @@
 # 0020 — Desktop program: the same server in a window of its own
 
-Status: Accepted (2026-11-18). Points marked ⚠ wait for the first run on Windows.
+Status: Accepted (2026-11-18). Points marked ⚠ wait for the first run on Windows. ADR 0023
+(2026-11-19) settles two open points: no projector mode on a parish PC and no macOS build.
 
 ## Context
 The device in the church is offline, so nobody can add or correct songs from home. The pieces

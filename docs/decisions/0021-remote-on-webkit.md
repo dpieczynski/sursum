@@ -1,6 +1,8 @@
 # 0021 — The remote on WebKit: tested, and bound by the WebKit API contract
 
 Status: Accepted (2026-11-18). Extends ADR 0015 (which covers the screen) to the remote.
+Points 1, 4 and 5 (everything about the iPad itself) are superseded by ADR 0023 (2026-11-19);
+points 2 and 3 stand, because the desktop program's Linux window is WebKit.
 
 ## Context
 The plan left the iPad as a "gate left open" (`docs/plan-2026-11.md`): no API without a WebKit

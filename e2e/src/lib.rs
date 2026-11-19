@@ -6,15 +6,13 @@
 //! - `SURSUM_SERVER_BIN`: server binary (default: `target/debug/sursum-server`; build it with
 //!   `--features e2e-hooks` for the first-frame test);
 //! - `SURSUM_E2E_BROWSER`: `chromium` (default) or `wpe`, the engine under test (the screen's);
-//! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default), `webkitgtk` or `safari-ipad`, the remotes'
-//!   engine (roadmap P2: the remote on WebKit; headless WPE cannot, its view is fixed at 800×600;
-//!   `safari-ipad` is Safari in the iPad Simulator through `safaridriver` on macOS, where the
-//!   window is the simulated iPad's screen and cannot be resized);
+//! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default) or `webkitgtk`, the remotes' engine (the
+//!   remote on WebKit, ADR 0021: the desktop program's Linux window is WebKitGTK; headless WPE
+//!   cannot stand in, its view is fixed at 800×600);
 //! - `SURSUM_CHROMIUM_BINARY`: Chromium or Chrome (default `/usr/bin/chromium`, as in the
-//!   browsers image; on macOS Chrome's path);
+//!   browsers image);
 //! - `SURSUM_WEBDRIVER_URL`: WebDriver server (default `http://127.0.0.1:9515` for Chromium,
-//!   `http://127.0.0.1:9516` for WPE, `http://127.0.0.1:9517` for WebKitGTK,
-//!   `http://127.0.0.1:4444` for `safaridriver`).
+//!   `http://127.0.0.1:9516` for WPE, `http://127.0.0.1:9517` for WebKitGTK).
 //!
 //! The browsers run in the `sursum-browsers` container with host networking (`just browsers`).
 
@@ -39,7 +37,7 @@ pub struct Server {
 
 /// How remotes get in on a test server.
 enum Access<'a> {
-    /// No PIN, development mode: every remote is admin (most tests).
+    /// No PIN, development mode: every remote gets in (most tests).
     Open,
     /// Remotes must pair with this PIN.
     Pin(&'a str),
@@ -169,24 +167,57 @@ impl Server {
 
     /// Pairs a scripted remote with `pin` (`POST /api/pair`) and connects it with the cookie.
     pub async fn paired_remote(&self, name: &str, pin: &str) -> anyhow::Result<Remote> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let cookie = self.pair(name, pin).await?;
+        Remote::connect(self.addr, name, Some(&cookie)).await
+    }
+
+    /// Pairs a device with `pin` (`POST /api/pair`) and returns its cookie (`name=value`).
+    pub async fn pair(&self, name: &str, pin: &str) -> anyhow::Result<String> {
         let body =
             serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: name.into() })?;
+        let response = self.http("POST", "/api/pair", None, &body).await?;
+        let cookie = response
+            .lines()
+            .find_map(|line| line.strip_prefix("set-cookie: "))
+            .and_then(|value| value.split(';').next())
+            .with_context(|| format!("pairing refused: {response}"))?;
+        Ok(cookie.to_owned())
+    }
+
+    /// Revokes every paired device except the one holding `cookie`, through the device list
+    /// (`GET /api/devices`, `POST /api/devices/{id}/revoke`) like an operator would.
+    pub async fn revoke_others(&self, cookie: &str) -> anyhow::Result<()> {
+        let response = self.http("GET", "/api/devices", Some(cookie), "").await?;
+        let body = response.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or_default();
+        let devices: Vec<sursum_protocol::DeviceView> =
+            serde_json::from_str(body).with_context(|| format!("no device list: {response}"))?;
+        for device in devices.iter().filter(|device| !device.this_device) {
+            let path = format!("/api/devices/{}/revoke", device.device_id);
+            let response = self.http("POST", &path, Some(cookie), "").await?;
+            anyhow::ensure!(response.starts_with("HTTP/1.1 2"), "revocation refused: {response}");
+        }
+        Ok(())
+    }
+
+    /// One HTTP/1.1 request with a JSON body; returns the whole response (head and body).
+    async fn http(
+        &self,
+        method: &str,
+        path: &str,
+        cookie: Option<&str>,
+        body: &str,
+    ) -> anyhow::Result<String> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut stream = tokio::net::TcpStream::connect(self.addr).await?;
+        let cookie = cookie.map(|cookie| format!("Cookie: {cookie}\r\n")).unwrap_or_default();
         let request = format!(
-            "POST /api/pair HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "{method} {path} HTTP/1.1\r\nHost: localhost\r\n{cookie}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
         stream.write_all(request.as_bytes()).await?;
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
-        let cookie = response
-            .lines()
-            .find_map(|line| line.strip_prefix("set-cookie: "))
-            .and_then(|value| value.split(';').next())
-            .with_context(|| format!("pairing refused: {response}"))?
-            .to_owned();
-        Remote::connect(self.addr, name, Some(&cookie)).await
+        Ok(response)
     }
 
     /// Uploads a picture like the remote does (`POST /api/assets`) and returns its id.
@@ -268,6 +299,16 @@ impl Remote {
     }
 }
 
+/// A screen profile with `margin` on every side and one exclusion zone, set the way the
+/// calibration panel sets it (`Command::SetScreenProfile`).
+pub fn profile_with_zone(margin: u32, zone: sursum_protocol::Rect) -> Command {
+    use sursum_protocol::{ExclusionZone, Insets, MaskMode, ScreenProfile};
+    let zone = ExclusionZone { name: "Strefa 1".into(), rect: zone, mask: MaskMode::Black };
+    Command::SetScreenProfile {
+        profile: ScreenProfile { safe_area: Insets::uniform(margin), exclusions: vec![zone] },
+    }
+}
+
 /// Which browser engine the tests drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Browser {
@@ -275,10 +316,8 @@ pub enum Browser {
     /// WPE WebKit through cog (ADR 0015).
     Wpe,
     /// WebKitGTK's MiniBrowser: WebKit in a window whose size can be set, for the remote
-    /// (roadmap P2).
+    /// (ADR 0021).
     WebKitGtk,
-    /// Safari in the iPad Simulator (macOS with Xcode, roadmap P2).
-    SafariIpad,
 }
 
 impl Browser {
@@ -296,7 +335,6 @@ impl Browser {
         match std::env::var(variable).as_deref() {
             Ok("wpe") => Browser::Wpe,
             Ok("webkitgtk") => Browser::WebKitGtk,
-            Ok("safari-ipad") => Browser::SafariIpad,
             _ => Browser::Chromium,
         }
     }
@@ -306,7 +344,6 @@ impl Browser {
             Browser::Chromium => "http://127.0.0.1:9515".to_owned(),
             Browser::Wpe => "http://127.0.0.1:9516".to_owned(),
             Browser::WebKitGtk => "http://127.0.0.1:9517".to_owned(),
-            Browser::SafariIpad => "http://127.0.0.1:4444".to_owned(),
         })
     }
 
@@ -328,12 +365,6 @@ impl Browser {
                     "binary": "cog",
                     "args": ["--automation", "--platform=headless", "--bg-color=black"],
                 },
-            }),
-            Browser::SafariIpad => serde_json::json!({
-                "browserName": "safari",
-                "platformName": "iOS",
-                "safari:useSimulator": true,
-                "safari:deviceType": "iPad",
             }),
             Browser::WebKitGtk => serde_json::json!({
                 "webkitgtk:browserOptions": {

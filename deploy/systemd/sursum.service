@@ -2,7 +2,7 @@
 # The sursum server on the device (ADR 0013). Runs the release that `sursum-server bundle install`
 # made current; data lives on the persistent partition, shared by both system slots.
 # Verified on a desktop with systemd 258: Type=notify readiness and the watchdog pings.
-# ⚠ Not yet run on the Pi image: user, paths and hardening options are to be checked in M4.
+# Runs in the device image on the pilot Pi 5 since 2026-11-17 (roadmap M4).
 
 [Unit]
 Description=sursum lyrics server

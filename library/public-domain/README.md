@@ -27,7 +27,7 @@ with a parish's own songbook numbering.
 ## Importing
 
 In the remote: `just library-zip` makes `target/biblioteka-domena-publiczna.zip`; import it with
-**Ustawienia → Import z OpenSong** (admin mode).
+**Ustawienia → Import z OpenSong**.
 
 From the command line:
 

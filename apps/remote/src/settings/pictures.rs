@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! "Usuń nieużywane obrazy" (admin): the server counts the pictures nothing uses, the sheet says
+//! "Usuń nieużywane obrazy": the server counts the pictures nothing uses, the sheet says
 //! how many and how much space, and only a hold removes them. Nothing is removed automatically.
 
 use leptos::prelude::*;

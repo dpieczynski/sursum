@@ -27,11 +27,11 @@ pub use layout::{
 pub use message::{
     ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, PowerAction, Role, ServerMsg,
 };
-pub use pairing::{AdminRequest, DeviceView, Installation, PairOutcome, PairRequest, SessionInfo};
+pub use pairing::{DeviceView, Installation, PairOutcome, PairRequest, SessionInfo};
 pub use pictures::{PictureCleanup, PictureCleanupRequest};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
-    DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SectionJump,
-    SetItemKind, SetItemView, SetSummary, SetView, SongSummary, TextAlign, Theme,
+    DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SetItemKind,
+    SetItemView, SetSummary, SetView, SongSummary,
 };
 pub use update::{InstallOutcome, InstallRefusal, LastSystemUpdate, LastUpdate, SystemStatus, UpdateStatus};

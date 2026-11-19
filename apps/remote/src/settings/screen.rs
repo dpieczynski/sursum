@@ -4,7 +4,7 @@
 use leptos::prelude::*;
 use sursum_protocol::{Command, DisplayPowerState, PowerAction, RemoteState};
 
-use super::{AdminOnly, Section};
+use super::Section;
 use crate::Commands;
 use crate::calibration::Calibrating;
 use crate::messages::{Msg, pl};
@@ -73,20 +73,12 @@ pub fn ScreenSection(state: RwSignal<Option<RemoteState>>, commands: Commands) -
             <div class="setting-row">
                 <span class="setting-label">{pl(Msg::ParishLogo)}</span>
                 {logo_view}
-                <AdminOnly label=Msg::UploadLogo>
-                    <crate::picture::LogoButton commands />
-                </AdminOnly>
+                <crate::picture::LogoButton commands />
             </div>
             <div class="setting-row">
-                <AdminOnly label=Msg::Calibrate>
-                    <button
-                        class="btn btn--sm"
-                        data-testid="calibrate"
-                        on:click=move |_| confirming.set(true)
-                    >
-                        {pl(Msg::Calibrate)}
-                    </button>
-                </AdminOnly>
+                <button class="btn btn--sm" data-testid="calibrate" on:click=move |_| confirming.set(true)>
+                    {pl(Msg::Calibrate)}
+                </button>
             </div>
         </Section>
         {confirm}

@@ -8,6 +8,7 @@
 //! - [`fit`]: choosing one font size per deck (pure algorithm + DOM measuring).
 //! - [`stage`]: the fixed 1920×1080 stage scaled to its container.
 //! - [`slide_view`]: one slide.
+//! - [`theme`]: the one fixed text style.
 //! - [`layered`]: the screen: two crossfading layers, masks and the black/logo overlay.
 //! - [`preview`]: a static preview for the remote.
 
@@ -21,6 +22,7 @@ pub mod preview;
 pub mod shown;
 pub mod slide_view;
 pub mod stage;
+pub mod theme;
 
 mod dom;
 

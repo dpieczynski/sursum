@@ -32,7 +32,7 @@ change or otherwise have the right to submit it under the project license.
 ## Conventions
 
 - Code, comments, commit messages and technical docs: **English**. User interface: **Polish**,
-  through the i18n layer (never hard-coded strings).
+  through the message enum in `apps/remote/src/messages.rs` (never hard-coded strings).
 - Readable code over clever code. See the principles in [CLAUDE.md](CLAUDE.md).
 - A change is done when tests pass, `cargo fmt`, `leptosfmt --check` and `clippy -D warnings`
   (native and `wasm32-unknown-unknown`) are clean, and [docs/roadmap.md](docs/roadmap.md)

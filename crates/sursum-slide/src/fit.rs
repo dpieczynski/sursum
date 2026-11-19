@@ -10,17 +10,18 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use sursum_protocol::{Deck, Rect, SlideBody, Theme};
+use sursum_protocol::{Deck, Rect, SlideBody};
 use wasm_bindgen::JsCast;
 
 use crate::dom;
 use crate::slide_view::{lines_class, text_box_style};
+use crate::theme::THEME;
 
 /// The chosen size for a deck.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fit {
     pub font_px: u32,
-    /// True when even `min_font_px` was too large and lines must wrap.
+    /// True when even the theme's smallest size was too large and lines must wrap.
     pub wrap: bool,
 }
 
@@ -48,8 +49,6 @@ pub fn fit_font_size(min: u32, max: u32, mut fits: impl FnMut(u32) -> bool) -> O
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct FitKey {
     fit_group: String,
-    font: (String, u16, u16),
-    size_range: (u32, u32),
     content: (u32, u32),
 }
 
@@ -58,33 +57,28 @@ thread_local! {
 }
 
 /// Fits a deck into the content rectangle, using `measurer` (an element inside a stage with the
-/// `sursum-measure` class) to measure text. Results are cached per deck, theme and rectangle.
+/// `sursum-measure` class) to measure text. Results are cached per deck and rectangle.
 ///
 /// A measurer that is not laid out (inside `display: none`, e.g. a preview hidden on a narrow
 /// layout) has no size, so everything would seem to fit: then the smallest size is returned and
 /// nothing is cached, so a hidden preview never spoils the size of a visible one. Callers fit
 /// again when the measurer is laid out (`SlidePreview` watches for that).
-pub async fn fit_deck(deck: &Deck, theme: &Theme, content: Rect, measurer: &web_sys::HtmlElement) -> Fit {
+pub async fn fit_deck(deck: &Deck, content: Rect, measurer: &web_sys::HtmlElement) -> Fit {
     if measurer.client_width() == 0 || measurer.client_height() == 0 {
-        return Fit { font_px: theme.min_font_px, wrap: false };
+        return Fit { font_px: THEME.min_font_px, wrap: false };
     }
-    let key = FitKey {
-        fit_group: deck.fit_group.clone(),
-        font: (theme.font_family.clone(), theme.font_weight, theme.line_height_permille),
-        size_range: (theme.min_font_px, theme.max_font_px),
-        content: (content.width, content.height),
-    };
+    let key = FitKey { fit_group: deck.fit_group.clone(), content: (content.width, content.height) };
     if let Some(fit) = CACHE.with(|cache| cache.borrow().get(&key).copied()) {
         return fit;
     }
-    dom::fonts_ready(theme).await;
-    let fit = measure(deck, theme, content, measurer);
+    dom::fonts_ready().await;
+    let fit = measure(deck, content, measurer);
     CACHE.with(|cache| cache.borrow_mut().insert(key, fit));
     fit
 }
 
 /// Builds hidden text boxes for every text slide and searches for the largest size that fits.
-fn measure(deck: &Deck, theme: &Theme, content: Rect, measurer: &web_sys::HtmlElement) -> Fit {
+fn measure(deck: &Deck, content: Rect, measurer: &web_sys::HtmlElement) -> Fit {
     let boxes: Vec<web_sys::HtmlElement> = deck
         .slides
         .iter()
@@ -92,18 +86,18 @@ fn measure(deck: &Deck, theme: &Theme, content: Rect, measurer: &web_sys::HtmlEl
             SlideBody::Lyrics { lines } | SlideBody::Text { lines, .. } => Some(lines),
             SlideBody::Image { .. } => None,
         })
-        .filter_map(|lines| text_box(measurer, theme, lines))
+        .filter_map(|lines| text_box(measurer, lines))
         .collect();
     let fits = |size: u32| {
         boxes.iter().all(|element| {
-            set_style(element, &text_box_style(theme, Rect::new(0, 0, content.width, content.height), size));
+            set_style(element, &text_box_style(Rect::new(0, 0, content.width, content.height), size));
             element.scroll_width() <= element.client_width()
                 && element.scroll_height() <= element.client_height()
         })
     };
-    let fit = match fit_font_size(theme.min_font_px, theme.max_font_px, fits) {
+    let fit = match fit_font_size(THEME.min_font_px, THEME.max_font_px, fits) {
         Some(font_px) => Fit { font_px, wrap: false },
-        None => Fit { font_px: theme.min_font_px, wrap: true },
+        None => Fit { font_px: THEME.min_font_px, wrap: true },
     };
     for element in boxes {
         element.remove();
@@ -112,14 +106,10 @@ fn measure(deck: &Deck, theme: &Theme, content: Rect, measurer: &web_sys::HtmlEl
 }
 
 /// Creates one hidden text box with the same markup as [`crate::slide_view::SlideView`].
-fn text_box(
-    measurer: &web_sys::HtmlElement,
-    theme: &Theme,
-    lines: &[String],
-) -> Option<web_sys::HtmlElement> {
+fn text_box(measurer: &web_sys::HtmlElement, lines: &[String]) -> Option<web_sys::HtmlElement> {
     let document = web_sys::window()?.document()?;
     let container: web_sys::HtmlElement = document.create_element("div").ok()?.dyn_into().ok()?;
-    container.set_class_name(&lines_class(theme, false));
+    container.set_class_name(lines_class(false));
     for line in lines {
         let row = document.create_element("div").ok()?;
         row.set_class_name("sursum-line");

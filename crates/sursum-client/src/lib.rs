@@ -99,11 +99,6 @@ pub fn needs_reload(message: &ServerMsg) -> bool {
     matches!(message, ServerMsg::Welcome { protocol, build_id } if *protocol != PROTOCOL_VERSION || build_id != BUILD_ID)
 }
 
-/// Reports a client-side problem to the server log (never shown on the screen).
-pub fn report(client: &Client, message: impl Into<String>) {
-    let _ = client.send(&ClientMsg::Log { message: message.into() });
-}
-
 fn open(inner: &Rc<Inner>) {
     let Some(url) = socket_url(inner.role) else { return };
     let Ok(socket) = web_sys::WebSocket::new(&url) else {

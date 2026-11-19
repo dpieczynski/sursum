@@ -31,8 +31,10 @@ which works but is slow and not officially supported; native arm64 (a Pi 5 or an
 is the supported way.
 
 Results land in `target/image/work/`: the image `sursum.img` (and its zstd-compressed copy, SBOM
-and manifest in `deploy-*/`) and the A/B update bundle `sursum.update.tar.zst` for later system
-updates (M7).
+and manifest in `deploy-*/`) and rpi-image-gen's own A/B bundle `sursum.update.tar.zst`, which
+nothing of ours uses (ADR 0019). The system update for devices already running an image is
+`target/sursum-system-<system version>.sursum-system`, written and verified by the same command
+(see below).
 
 Flash `sursum.img` with Raspberry Pi Imager ("Use custom", and answer "No" to OS customisation)
 or `dd`. The image is about 4 GB; on first boot the data partition grows to fill the card, so use a
@@ -62,7 +64,7 @@ kernel for it).
   `sursum-kiosk-restart.path` (the server itself has no privileges).
 - **System updates** (ADR 0019): `just image` also writes
   `target/sursum-system-<version>.sursum-system`. Upload it in the remote (O programie →
-  Zainstaluj aktualizację systemu, admin mode): the device writes it to the other A/B slot,
+  Zainstaluj aktualizację systemu): the device writes it to the other A/B slot,
   restarts into it once (tryboot) and keeps it only if the server and the kiosk come up healthy;
   otherwise the next restart brings the old system back by itself. Data and the application are
   not touched.

@@ -71,3 +71,56 @@ Decision:
    FFI exception.
 3. Until then the screen stays engine-portable (ADR 0015): its e2e tests keep running on WPE
    WebKit in CI, so the switch stays cheap.
+
+## Amendment (2026-11-19): a WPE-on-DRM spike now, with a rebuilt package and the shipped launcher
+The maintainer remains unconvinced by Chromium and asked whether a current WebKit could simply be
+bundled. Checked on 2026-11-19 against the Debian and Raspberry Pi archives, the WebKit source at
+`wpewebkit-2.54.3` and the upstream sites:
+
+- **The decisive reason of this ADR no longer holds.** "All remotes use Blink" stopped being true
+  with the desktop program's Linux window (WebKitGTK, ADR 0020); the remote is tested on two
+  engines anyway (ADR 0021), and a cross-engine test keeps the fitted size within 1 px.
+- **Chromium's cost in the repository is small and paid**: 17 lines of policies and a dozen
+  flags, all confirmed on the pilot Pi. The larger part of `deploy/kiosk/` (the transparent
+  cursor theme, `kiosk-session` with `wlr-randr`, seatd) is there for cage, not for Chromium.
+  cage plus Chromium is also Raspberry Pi's own kiosk recipe (rpi-image-gen's `webkiosk`), with
+  their patched builds of both.
+- **WebKitGTK 6.0 under cage** would be free to install (2.54.0 in trixie-security, which
+  Debian rebases to new upstream series) but keeps cage and everything written for it, removes
+  only the policies, needs a GTK launcher cross-built for arm64, and has an open rendering bug
+  on the Pi 5 with the same engine version (WebKit bug 329376, reported for the GTK 3 API; the
+  workaround costs a CPU core). Rejected.
+- **WPE WebKit on DRM** is the only candidate that removes something: no compositor, so no cage,
+  seatd, `wlr-randr`, `kiosk-session`, cursor theme or policies (about 150 lines), and a smaller
+  system. Since 2.54 WPEPlatform with its DRM platform is stable and built by default.
+- **Getting 2.54 onto trixie**: trixie stays at 2.48.3 (not security-supported; Debian never
+  rebases it), there is no backport, no upstream or Igalia package repository and no arm64
+  bundle, and forky's package cannot be installed on trixie (glibc 2.43, ICU 78 and more). But
+  Debian's own source package (2.54.3 in sid) can be rebuilt against trixie: about one hour on
+  Debian's arm64 build machines, about 2.5 hours reported on a 4-core arm64 CI runner, a day on
+  the Pi itself. Security support matters little here: the kiosk loads only our own page from
+  localhost and its unit can reach nothing else.
+- **No launcher of ours is needed to start.** Debian's library package ships WebKit's
+  `MiniBrowser` (`/usr/lib/<triplet>/wpe-webkit-2.0/MiniBrowser`), which uses WPEPlatform by
+  default and takes `--fullscreen` and `--bg-color` (its default background is white). The
+  hand-written FFI launcher with its `unsafe` exception (point 2 of the amendment of
+  2026-11-17) is written only if MiniBrowser turns out unsuitable.
+
+Decision: **do not wait for Debian 14. Run the spike now**; Chromium stays the shipped engine
+until its measurements are in, and the switch still needs its own ADR.
+
+1. Rebuild sid's `wpewebkit` source package for trixie arm64 in CI (an arm64 runner, available
+   once the repository is public) and keep the packages as a build artifact the image installs.
+2. A spike image whose kiosk unit runs `MiniBrowser --fullscreen --bg-color=black
+   http://localhost/screen/` with `WPE_PLATFORM=drm`, without cage; delivered to the pilot Pi as
+   a system update, so a failure rolls back by itself (ADR 0019).
+3. ⚠ To find out on the Pi 5, none of it reported anywhere yet: that the DRM platform starts at
+   all without a logind session and picks the right card; that it keeps the kernel's forced
+   1080p60 (it takes the current CRTC mode and has no option to set one) also after the TV is
+   switched on late or the cable is replugged; that no cursor shows (it draws one only when the
+   page asks; the screen should set `cursor: none`); what happens when the web process dies
+   (the screen guard restarts the unit); the measurements from the Consequences above (boot to
+   first frame, RAM after 8 h, 1080p60 crossfade, white frame at start); the size of the system
+   image.
+4. If the spike fails, Chromium under cage stays for good, and the WPE tests and the launcher
+   plan are dropped with an ADR.

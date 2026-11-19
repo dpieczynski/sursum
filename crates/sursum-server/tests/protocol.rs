@@ -492,7 +492,7 @@ async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
     let late = post_pin(&server, "/api/setup", "135792").await;
     assert!(late.starts_with("HTTP/1.1 409"), "the PIN cannot be set twice: {late}");
 
-    // Whoever set the PIN is paired and in admin mode, to go on configuring the device.
+    // Whoever set the PIN is paired, to go on configuring the device.
     let mut request =
         tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(&url).unwrap();
     request.headers_mut().insert("cookie", cookie.parse().unwrap());
@@ -504,7 +504,7 @@ async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
         ),
     )
     .await;
-    assert!(devices.starts_with("HTTP/1.1 200"), "admin right after setup: {devices}");
+    assert!(devices.starts_with("HTTP/1.1 200"), "everything right after setup: {devices}");
     server.stop().await.unwrap();
 
     // The PIN was stored: after a restart others must pair with it.
@@ -533,9 +533,7 @@ async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() 
         sursum_protocol::SessionInfo {
             pin_required: true,
             paired: false,
-            admin: false,
             setup_needed: false,
-            admin_remaining_s: None,
             installation: sursum_protocol::Installation::Screen,
         }
     );
@@ -707,8 +705,8 @@ async fn connect_as(server: &RunningServer, cookie: &str, client: &str) -> Socke
 }
 
 #[tokio::test]
-async fn operators_need_admin_mode_for_setup_and_revoked_remotes_are_cut_off() {
-    use sursum_protocol::{AdminRequest, DeviceView, ErrorCode, PairOutcome, SessionInfo};
+async fn paired_remotes_may_change_the_setup_and_revoked_remotes_are_cut_off() {
+    use sursum_protocol::DeviceView;
     let dir = tempfile::tempdir().unwrap();
     {
         let database = sursum_server::db::Database::open(dir.path()).unwrap();
@@ -721,27 +719,14 @@ async fn operators_need_admin_mode_for_setup_and_revoked_remotes_are_cut_off() {
     let mut organist_socket = connect_as(&server, &organist, "organist").await;
     let mut sacristan_socket = connect_as(&server, &sacristan, "sacristan").await;
 
-    // A paired remote operates the service but cannot change the setup.
-    assert!(http_as(&server, &organist, "GET", "/api/devices", "").await.starts_with("HTTP/1.1 403"));
-    let import = http_as(&server, &organist, "POST", "/api/import/opensong", "").await;
-    assert!(import.starts_with("HTTP/1.1 403"), "{import}");
-    let outcome = command(&mut organist_socket, 1, Rev(u32::MAX), Command::Calibrate { on: true }).await;
-    assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::Forbidden });
-    let outcome = command(&mut organist_socket, 2, Rev(u32::MAX), Command::Next).await;
-    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
-
-    // The PIN again unlocks admin mode on this device only.
-    let wrong = serde_json::to_string(&AdminRequest { pin: "1111".into() }).unwrap();
-    assert!(http_as(&server, &organist, "POST", "/api/admin", &wrong).await.starts_with("HTTP/1.1 401"));
-    let right = serde_json::to_string(&AdminRequest { pin: "2468".into() }).unwrap();
-    let unlocked = http_as(&server, &organist, "POST", "/api/admin", &right).await;
-    assert!(unlocked.ends_with(&serde_json::to_string(&PairOutcome::Unlocked).unwrap()), "{unlocked}");
-    let session = http_as(&server, &organist, "GET", "/api/session", "").await;
-    let session: SessionInfo = serde_json::from_str(session.split("\r\n\r\n").nth(1).unwrap()).unwrap();
-    assert!(session.admin);
-    assert!(http_as(&server, &sacristan, "GET", "/api/devices", "").await.starts_with("HTTP/1.1 403"));
-    let outcome = command(&mut organist_socket, 3, Rev(u32::MAX), Command::Calibrate { on: false }).await;
-    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    // A paired remote runs the service and changes the setup alike (ADR 0024).
+    for (seq, cmd) in
+        [(1, Command::Calibrate { on: true }), (2, Command::Next), (3, Command::Calibrate { on: false })]
+    {
+        let outcome = command(&mut organist_socket, seq, Rev(u32::MAX), cmd).await;
+        assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+    }
+    assert!(http_as(&server, &sacristan, "GET", "/api/devices", "").await.starts_with("HTTP/1.1 200"));
 
     let listing = http_as(&server, &organist, "GET", "/api/devices", "").await;
     let devices: Vec<DeviceView> = serde_json::from_str(listing.split("\r\n\r\n").nth(1).unwrap()).unwrap();
@@ -1146,7 +1131,7 @@ async fn the_local_owner_mode_is_a_library_on_loopback_only() {
     config.listen = "127.0.0.1:0".parse().unwrap();
     let server = sursum_server::start(config, &FixedPlatform(None)).await.unwrap();
     let session: SessionInfo = serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
-    assert!(session.paired && session.admin && !session.setup_needed && !session.pin_required);
+    assert!(session.paired && !session.setup_needed && !session.pin_required);
     assert_eq!(session.installation, Installation::Library);
     server.stop().await.unwrap();
 }

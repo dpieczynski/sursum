@@ -112,9 +112,5 @@ expression: messages
   },
   {
     "t": "ping"
-  },
-  {
-    "t": "log",
-    "message": "font missing"
   }
 ]

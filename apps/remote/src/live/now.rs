@@ -15,21 +15,13 @@ pub fn Now(state: RwSignal<Option<RemoteState>>) -> impl IntoView {
         state.with(|state| {
             let state = state.as_ref()?;
             let program = &state.program;
-            Some(PreviewData {
-                live: program.live.clone()?,
-                theme: program.theme.clone(),
-                layout: program.layout.clone(),
-            })
+            Some(PreviewData { live: program.live.clone()?, layout: program.layout.clone() })
         })
     });
     let next = Signal::derive(move || {
         state.with(|state| {
             let state = state.as_ref()?;
-            Some(PreviewData {
-                live: state.next.clone()?,
-                theme: state.program.theme.clone(),
-                layout: state.program.layout.clone(),
-            })
+            Some(PreviewData { live: state.next.clone()?, layout: state.program.layout.clone() })
         })
     });
     let shows = move || state.with(|state| state.as_ref().map_or(Shows::Nothing, screen_shows));

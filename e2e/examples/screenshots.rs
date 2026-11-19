@@ -12,12 +12,13 @@ use sursum_protocol::Command;
 async fn main() -> anyhow::Result<()> {
     let output = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "screenshots".to_owned()));
     std::fs::create_dir_all(&output)?;
-    let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 48, right = 48, bottom = 48, left = 48 }\n\n\
-                  [[screen_profile.exclusions]]\nname = \"Strefa 1\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
     // A fake PJLink projector, so the display power controls show too.
     let projector = sursum_e2e::fake_projector().await?;
-    let config = format!("{config}\n[display_power]\nbackend = \"pjlink\"\nhost = \"{projector}\"\n");
+    let config =
+        format!("transition_ms = 0\n\n[display_power]\nbackend = \"pjlink\"\nhost = \"{projector}\"\n");
     let server = Server::start_with(&[], Some(&config)).await?;
+    let zone = sursum_e2e::profile_with_zone(48, sursum_protocol::Rect::new(1500, 0, 420, 1080));
+    server.remote("calibration").await?.command(zone).await?;
     let browser = Browser::from_env();
     let screen = browser.open(1920, 1080).await?;
     screen.goto(server.url("/screen/")).await?;

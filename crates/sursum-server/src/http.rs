@@ -13,10 +13,10 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use rust_embed::Embed;
 use serde::Deserialize;
-use sursum_protocol::{AdminRequest, DeviceView, PairOutcome, PairRequest, Role, SessionInfo};
+use sursum_protocol::{DeviceView, PairOutcome, PairRequest, Role, SessionInfo};
 
 use crate::actor::StateHandle;
-use crate::auth::{self, Access, PinCheck, Rights};
+use crate::auth::{self, Access, PinCheck};
 use crate::config::Config;
 use crate::ws;
 
@@ -73,8 +73,23 @@ pub fn router(
         updates,
         installation: config.installation,
     };
-    // Bulk changes and device management need admin mode (once a PIN is set).
-    let admin = Router::new()
+    // Everything that controls the screen or changes data needs a paired device (once a PIN is
+    // set); a paired device may do all of it (ADR 0024).
+    let protected = Router::new()
+        .route("/ws/remote", get(remote_socket))
+        .route("/api/songs", get(search_songs))
+        .route("/api/songs/preview", axum::routing::post(preview_song))
+        .route("/api/songs/save", axum::routing::post(save_song))
+        .route("/api/songs/{id}/draft", get(song_draft))
+        .route("/api/library/export", get(export_library))
+        .route("/api/backup", get(download_backup))
+        .route("/api/update/status", get(update_status))
+        .route(
+            "/api/assets",
+            axum::routing::post(upload_asset)
+                .layer(axum::extract::DefaultBodyLimit::max(crate::assets::MAX_ASSET_BYTES + 1))
+                .layer(middleware::from_fn(require_upload_header)),
+        )
         .route(
             "/api/import/opensong",
             axum::routing::post(import_opensong)
@@ -108,25 +123,6 @@ pub fn router(
         .route("/api/assets/cleanup", axum::routing::post(clean_up_pictures))
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{id}/revoke", axum::routing::post(revoke_device))
-        .route_layer(middleware::from_fn_with_state(app.clone(), require_admin));
-    // Everything that controls the screen or changes data needs a paired device (once a PIN is set).
-    let protected = Router::new()
-        .route("/ws/remote", get(remote_socket))
-        .route("/api/songs", get(search_songs))
-        .route("/api/songs/preview", axum::routing::post(preview_song))
-        .route("/api/songs/save", axum::routing::post(save_song))
-        .route("/api/songs/{id}/draft", get(song_draft))
-        .route("/api/library/export", get(export_library))
-        .route("/api/backup", get(download_backup))
-        .route("/api/update/status", get(update_status))
-        .route(
-            "/api/assets",
-            axum::routing::post(upload_asset)
-                .layer(axum::extract::DefaultBodyLimit::max(crate::assets::MAX_ASSET_BYTES + 1))
-                .layer(middleware::from_fn(require_upload_header)),
-        )
-        .route("/api/admin", axum::routing::post(unlock_admin).delete(lock_admin))
-        .merge(admin)
         .route_layer(middleware::from_fn_with_state(app.clone(), require_pairing));
     Router::new()
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
@@ -158,67 +154,15 @@ async fn require_pairing(State(app): State<App>, request: Request, next: Next) -
     }
 }
 
-/// Refuses bulk changes and device management outside admin mode.
-async fn require_admin(State(app): State<App>, request: Request, next: Next) -> Response {
-    if app.access.rights(request.headers(), std::time::Instant::now()) == Rights::Admin {
-        next.run(request).await
-    } else {
-        StatusCode::FORBIDDEN.into_response()
-    }
-}
-
-/// `GET /api/session`: whether a PIN is set, whether this browser is paired and is admin.
+/// `GET /api/session`: whether a PIN is set and whether this browser is paired.
 async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
-    let now = std::time::Instant::now();
-    let rights = app.access.rights(&headers, now);
-    let remaining = app.access.admin_remaining(&headers, now).filter(|_| rights == Rights::Admin);
     let info = SessionInfo {
         pin_required: app.access.pin_required(),
-        paired: rights >= Rights::Operator,
-        admin: rights == Rights::Admin,
+        paired: app.access.allows(&headers),
         setup_needed: app.access.setup_needed(),
-        // Rounded up, so the remote never says "0 min" while admin mode still works.
-        admin_remaining_s: remaining.map(|left| {
-            let seconds = left.as_secs() + u64::from(left.subsec_nanos() > 0);
-            u32::try_from(seconds).unwrap_or(u32::MAX)
-        }),
         installation: app.installation,
     };
     axum::Json(info).into_response()
-}
-
-/// `POST /api/admin`: unlocks admin mode on this paired device with the PIN (rate-limited per
-/// device).
-async fn unlock_admin(
-    State(app): State<App>,
-    headers: HeaderMap,
-    axum::Json(request): axum::Json<AdminRequest>,
-) -> Response {
-    let now = std::time::Instant::now();
-    let Some(device) = app.access.device(&headers) else {
-        // Not paired past `require_pairing`: the open development mode, everyone is admin.
-        return axum::Json(PairOutcome::Unlocked).into_response();
-    };
-    match app.access.check_admin_pin(&device, &request.pin, now) {
-        PinCheck::Correct => {
-            app.access.grant_admin(device, now);
-            tracing::info!("admin mode unlocked on a remote");
-            axum::Json(PairOutcome::Unlocked).into_response()
-        }
-        PinCheck::Wrong => (StatusCode::UNAUTHORIZED, axum::Json(PairOutcome::WrongPin)).into_response(),
-        PinCheck::Locked(wait) => {
-            let retry_after_s = u32::try_from(wait.as_secs().max(1)).unwrap_or(u32::MAX);
-            (StatusCode::TOO_MANY_REQUESTS, axum::Json(PairOutcome::Locked { retry_after_s })).into_response()
-        }
-    }
-}
-
-/// `DELETE /api/admin`: ends admin mode on this device.
-async fn lock_admin(State(app): State<App>, headers: HeaderMap) -> Response {
-    if let Some(device) = app.access.device(&headers) {
-        app.access.drop_admin(&device);
-    }
-    StatusCode::NO_CONTENT.into_response()
 }
 
 /// `GET /api/devices`: paired remotes.
@@ -268,13 +212,13 @@ async fn pair(
         }
     }
     match pair_this_browser(&app, &request.name).await {
-        Ok((_, cookie)) => ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response(),
+        Ok(cookie) => ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response(),
         Err(status) => status.into_response(),
     }
 }
 
-/// `POST /api/setup`: sets the first PIN (only while none is set) and pairs this browser with
-/// admin mode unlocked, so whoever installs the device can go on configuring it.
+/// `POST /api/setup`: sets the first PIN (only while none is set) and pairs this browser, so
+/// whoever installs the device can go on configuring it.
 async fn setup(State(app): State<App>, axum::Json(request): axum::Json<PairRequest>) -> Response {
     let pin = request.pin.trim();
     if !auth::valid_pin(pin) {
@@ -291,24 +235,20 @@ async fn setup(State(app): State<App>, axum::Json(request): axum::Json<PairReque
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     match pair_this_browser(&app, &request.name).await {
-        Ok((device, cookie)) => {
-            app.access.grant_admin(device, std::time::Instant::now());
-            ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response()
-        }
+        Ok(cookie) => ([(header::SET_COOKIE, cookie)], axum::Json(PairOutcome::Paired)).into_response(),
         Err(status) => status.into_response(),
     }
 }
 
-/// Stores a new device and returns its token hash and the cookie that pairs the browser.
-async fn pair_this_browser(app: &App, name: &str) -> Result<(String, HeaderValue), StatusCode> {
+/// Stores a new device and returns the cookie that pairs the browser.
+async fn pair_this_browser(app: &App, name: &str) -> Result<HeaderValue, StatusCode> {
     let (token, hash) = auth::new_token().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let name = if name.trim().is_empty() { "Pilot".to_owned() } else { name.trim().to_owned() };
     if !app.state.add_device(name, hash.clone()).await {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    app.access.add_token(hash.clone());
-    let cookie = HeaderValue::from_str(&auth::cookie_header(&token)).expect("token is hex");
-    Ok((hash, cookie))
+    app.access.add_token(hash);
+    Ok(HeaderValue::from_str(&auth::cookie_header(&token)).expect("token is hex"))
 }
 
 #[derive(Deserialize)]
@@ -373,7 +313,7 @@ async fn update_status(State(app): State<App>) -> Response {
     }
 }
 
-/// `POST /api/update` (admin): installs a signed bundle, answers, then restarts into it.
+/// `POST /api/update`: installs a signed bundle, answers, then restarts into it.
 async fn install_update(State(app): State<App>, body: axum::body::Bytes) -> Response {
     use sursum_protocol::{InstallOutcome, InstallRefusal};
     let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
@@ -424,7 +364,7 @@ async fn upload_asset(State(app): State<App>, body: axum::body::Bytes) -> Respon
     }
 }
 
-/// `POST /api/system/update` (admin, ADR 0019): receives a `.sursum-system` into the data
+/// `POST /api/system/update` (ADR 0019): receives a `.sursum-system` into the data
 /// directory (streamed: it is hundreds of megabytes), verifies it and asks the root unit to write
 /// it to the other slot; the device then restarts into it on trial.
 async fn install_system_update(State(app): State<App>, body: axum::body::Body) -> Response {
@@ -494,7 +434,7 @@ async fn install_system_update(State(app): State<App>, body: axum::body::Body) -
     }
 }
 
-/// `POST /api/assets/cleanup` (admin): removes pictures nothing uses (or counts them first).
+/// `POST /api/assets/cleanup`: removes pictures nothing uses (or counts them first).
 async fn clean_up_pictures(
     State(app): State<App>,
     axum::Json(request): axum::Json<sursum_protocol::PictureCleanupRequest>,
@@ -586,7 +526,7 @@ async fn download_backup(State(app): State<App>) -> Response {
         .into_response()
 }
 
-/// `POST /api/backup/restore` (admin): checks and stages a backup, answers, then restarts so the
+/// `POST /api/backup/restore`: checks and stages a backup, answers, then restarts so the
 /// next start puts it in place.
 async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Response {
     use futures_util::StreamExt as _;

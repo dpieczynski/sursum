@@ -29,8 +29,6 @@ pub enum Msg {
     WarnTwice,
     WarnUnknownInOrder,
     Line,
-    AdminOn,
-    NeedsAdmin,
     SectionDisplay,
     SectionDevice,
     SectionLibrary,
@@ -84,7 +82,6 @@ pub enum Msg {
     NoLogo,
     NoLogoYet,
     UploadLogo,
-    ShowDevices,
     AddAgain,
     DevicePhone,
     DeviceTablet,
@@ -176,14 +173,10 @@ pub enum Msg {
     MarginLeft,
     MarginRight,
     InvalidProfile,
-    AdminMode,
-    AdminPin,
-    Unlock,
-    EndAdmin,
     Devices,
     ThisDevice,
     Revoke,
-    AdminRequired,
+    NotPaired,
     Picture,
     PictureFailed,
     Pause,
@@ -215,7 +208,6 @@ pub enum Msg {
     SetOnScreen,
     UndoShort,
     Create,
-    AdminHint,
     HoldToConfirm,
     ShowPin,
     HidePin,
@@ -323,8 +315,6 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::WarnTwice => "występuje dwa razy – połączono",
         Msg::WarnUnknownInOrder => "kolejność zawiera nieznaną sekcję",
         Msg::Line => "Linia",
-        Msg::AdminOn => "Tryb administratora jest włączony (wyłączy się sam po 15 minutach)",
-        Msg::NeedsAdmin => "wymaga trybu administratora",
         Msg::SectionDisplay => "Wyświetlanie",
         Msg::SectionDevice => "To urządzenie",
         Msg::SectionLibrary => "Baza pieśni",
@@ -386,7 +376,6 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::NoLogo => "Brak logo",
         Msg::NoLogoYet => "nie wgrano",
         Msg::UploadLogo => "Wgraj logo",
-        Msg::ShowDevices => "Pokaż urządzenia",
         Msg::AddAgain => "Dodaj jeszcze raz",
         Msg::DevicePhone => "Telefon",
         Msg::DeviceTablet => "Tablet",
@@ -468,7 +457,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::SetupTitle => "Pierwsze uruchomienie: ustaw PIN",
         Msg::SetupHint => {
             "PIN (6–12 cyfr) chroni sterowanie ekranem. Będzie potrzebny przy łączeniu \
-                           kolejnych pilotów i w trybie administratora – zapisz go w bezpiecznym miejscu."
+                           kolejnych pilotów – zapisz go w bezpiecznym miejscu."
         }
         Msg::RepeatPin => "Powtórz PIN",
         Msg::SetPin => "Ustaw PIN",
@@ -504,14 +493,10 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::MarginLeft => "lewo",
         Msg::MarginRight => "prawo",
         Msg::InvalidProfile => "Ta strefa zasłoniłaby cały ekran – zmiana nie została zapisana",
-        Msg::AdminMode => "Tryb administratora",
-        Msg::AdminPin => "PIN administratora",
-        Msg::Unlock => "Odblokuj",
-        Msg::EndAdmin => "Zakończ tryb administratora",
         Msg::Devices => "Urządzenia",
         Msg::ThisDevice => "to urządzenie",
         Msg::Revoke => "Odłącz",
-        Msg::AdminRequired => "To wymaga trybu administratora",
+        Msg::NotPaired => "To urządzenie nie jest już połączone – wpisz PIN ponownie",
         Msg::Picture => "Obraz",
         Msg::PictureFailed => "Nie udało się dodać obrazu (PNG, JPEG lub WebP, do 25 MB)",
         Msg::Pause => "Przerwa",
@@ -546,7 +531,6 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::SetOnScreen => "Tego zestawu nie można usunąć – jego pozycja jest na ekranie",
         Msg::UndoShort => "Cofnij",
         Msg::Create => "Utwórz",
-        Msg::AdminHint => "Wpisz PIN jeszcze raz. Tryb administratora wyłączy się sam po 15 minutach.",
         Msg::HoldToConfirm => "Przytrzymaj przycisk, aby potwierdzić",
         Msg::ShowPin => "Pokaż",
         Msg::HidePin => "Ukryj",
@@ -680,11 +664,6 @@ pub fn song_number(number: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-/// "Tryb administratora włączony – wyłączy się za 14 min".
-pub fn admin_minutes_left(minutes: u32) -> String {
-    format!("Tryb administratora włączony – wyłączy się za {minutes} min")
-}
-
 /// Why the server did not install an update.
 pub fn install_refusal(reason: sursum_protocol::InstallRefusal) -> Msg {
     use sursum_protocol::InstallRefusal;
@@ -750,7 +729,7 @@ pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
     match code {
         ErrorCode::InvalidProfile => Msg::InvalidProfile,
         ErrorCode::SetOnScreen => Msg::SetOnScreen,
-        ErrorCode::Forbidden => Msg::AdminRequired,
+        ErrorCode::Forbidden => Msg::NotPaired,
         ErrorCode::DisplayBusy => Msg::DisplayBusy,
         ErrorCode::DisplayAuthFailed => Msg::DisplayAuthFailed,
         ErrorCode::DisplayUnreachable => Msg::DisplayNoAnswer,

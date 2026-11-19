@@ -73,7 +73,7 @@ test-wasm:
         cargo test -p sursum-slide --target wasm32-unknown-unknown --test dom
 
 # End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015), then
-# the remote on WebKitGTK with the screen on Chromium (roadmap P2: WebKit as on an iPad).
+# the remote on WebKitGTK with the screen on Chromium (ADR 0021: the Linux window is WebKit).
 e2e: build-web
     cargo build -p sursum-server --features e2e-hooks
     SURSUM_E2E_BROWSER=chromium cargo test -p sursum-e2e -- --ignored --test-threads=1
@@ -175,7 +175,3 @@ deploy host version: (app-bundle version)
     echo "waiting for the trial to end (30 s of healthy running)…"
     ssh {{host}} 'for i in $(seq 1 90); do test -e /var/lib/sursum/trial.json || break; sleep 1; done; \
         cat /var/lib/sursum/update.json; echo'
-
-# Cross-compile the server for Windows (needs zig and cargo-zigbuild).
-cross-win: build-web
-    cargo zigbuild --release -p sursum-server --target x86_64-pc-windows-gnu

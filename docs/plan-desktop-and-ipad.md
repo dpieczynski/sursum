@@ -1,9 +1,14 @@
 # Implementation plan: desktop program (D1) and iPad remote (P2)
 
-Written 2026-11-18 from the spike on branch `spike/desktop-shell`. **Status (same day):** D1.1,
-D1.3 to D1.8 and P2.1 to P2.6 are implemented as far as they can be without Windows, an iPad or a
-GitHub run; what is left is in the roadmap's D1 and P2 sections (marked ⚠ or unchecked). The
-findings below still hold; section 3 describes the spike as it was. The decisions are in
+Written 2026-11-18 from the spike on branch `spike/desktop-shell`. **Status (2026-11-19):** the
+branch is merged into `main` (pull request #1). D1.1, D1.3 to D1.8 and P2.1 to P2.6 are
+implemented; D1.2 has started (the program starts on a real Windows; Windows Defender deletes the
+downloaded CI artifact). What is left is in the roadmap's D1 and P2 sections (marked ⚠ or
+unchecked). This file is kept as the record of the plan: the findings in section 4 still hold,
+section 3 describes the spike as it was, and sections 5 and 6 list work that is mostly done.
+**The iPad was taken out of scope on 2026-11-19 (ADR 0023):** of section 6 only P2.1, P2.2 and
+P2.5 stand (the remote on WebKitGTK, for the Linux window); P2.3, P2.4 and P2.6 are dropped, and
+so are the macOS build and the parish PC with a projector named in section 8. The decisions are in
 [ADR 0020](decisions/0020-desktop-program.md); the checkboxes are in
 [roadmap.md](roadmap.md) (sections D1 and P2). Where this plan and those two differ, they win.
 ⚠ marks something nobody has verified yet: check it before relying on it.
@@ -33,9 +38,9 @@ D1 comes first. P2 does not depend on D1, except that both make the remote run o
 - UI text is Polish and lives in one place per crate (the remote uses
   `apps/remote/src/messages.rs`); code, comments and docs are English.
 
-## 3. Where the spike stands
+## 3. Where the spike stood (2026-11-18, before the merge)
 
-Nothing is committed. The branch holds:
+Nothing was committed at the time. The branch held:
 
 | File | State |
 |---|---|

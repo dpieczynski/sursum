@@ -4,7 +4,7 @@
   data type, so it can be unit-tested and reasoned about in isolation. Time and platform facts
   come in as parameters.
 - Every public type and function has a `///` comment explaining why it exists.
-- Newtypes for identifiers and units (`SongId`, `ItemId`, `SlideKey`, `Px`); enums instead of
+- Newtypes for identifiers and counters (`SongId`, `ItemId`, `SlideKey`, `Rev`); enums instead of
   boolean flags.
 - Every new parser/markup rule gets a synthetic fixture and a test. Fixtures must be listed in
   `fixtures/LICENSES.md`.

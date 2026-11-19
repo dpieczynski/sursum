@@ -69,7 +69,7 @@ jobs:
         run: just browsers-stop
 
   cross:
-    name: Cross-compile (Raspberry Pi, Windows)
+    name: Cross-compile (Raspberry Pi)
     runs-on: ubuntu-24.04
     needs: check
     steps:
@@ -83,13 +83,10 @@ jobs:
         with:
           tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
       - run: just cross-pi
-      - run: just cross-win
       - uses: actions/upload-artifact@v7
         with:
           name: sursum-server-${{ github.sha }}
-          path: |
-            target/aarch64-unknown-linux-gnu/release/sursum-server
-            target/x86_64-pc-windows-gnu/release/sursum-server.exe
+          path: target/aarch64-unknown-linux-gnu/release/sursum-server
 
   # The desktop program for Windows (ADR 0020): MSVC links the WebView2 loader statically, so
   # people get one file. Built here, not cross-compiled, because only MSVC does that.

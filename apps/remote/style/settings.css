@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* The Ustawienia view: cards with sections, choices, locked admin items. */
+/* The Ustawienia view: cards with sections and choices. */
 
 .settings-view {
   display: flex;
@@ -56,13 +56,6 @@
   height: 26px;
   accent-color: var(--accent);
 }
-/* Full width, so a column of locked items lines up instead of following each label's length. */
-.locked {
-  width: 100%;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  text-align: left;
-}
 .setting-value {
   color: var(--muted);
   font-style: italic;
@@ -74,31 +67,6 @@
 }
 .disclosure[aria-expanded="true"]::after {
   content: "▴";
-}
-.lock-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--warn);
-}
-.locked-hint {
-  width: 100%;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 400;
-}
-.admin-on {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: #3b2a06;
-  color: var(--warn);
-  font-weight: 700;
-}
-.admin-on .btn {
-  margin-left: auto;
 }
 .logo-thumb {
   height: 48px;

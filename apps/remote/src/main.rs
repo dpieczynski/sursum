@@ -7,11 +7,11 @@
 // Leptos components take their props by value; clippy's pass-by-value lint does not fit them.
 #![allow(clippy::needless_pass_by_value)]
 
-mod admin;
 mod api;
 mod bundle;
 mod calibration;
 mod calibration_form;
+mod devices;
 mod editor;
 mod import;
 mod key_settings;
@@ -50,7 +50,7 @@ fn Root() -> impl IntoView {
     leptos::task::spawn_local(async move {
         let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
         // If the question itself fails, try to connect anyway; the server decides.
-        let open = sursum_protocol::SessionInfo { paired: true, admin: true, ..Default::default() };
+        let open = sursum_protocol::SessionInfo { paired: true, ..Default::default() };
         session.set(Some(info.unwrap_or(open)));
     });
     move || match session.get() {
@@ -107,8 +107,6 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     let state = RwSignal::new(None::<RemoteState>);
     let toasts = ui::Toasts::default();
     provide_context(toasts);
-    let session = admin::Session(RwSignal::new(info));
-    provide_context(session);
 
     let client = Client::connect(Role::Remote, move |message| match message {
         ServerMsg::Welcome { .. } if needs_reload(&message) => reload(),
@@ -119,13 +117,14 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         ServerMsg::CmdResult { outcome: CmdOutcome::Rejected { code }, .. } => {
             toasts.show(pl(messages::rejection(code)));
             if code == sursum_protocol::ErrorCode::Forbidden {
-                // Perhaps admin mode expired: show the right tools again.
-                session.refresh();
+                // This device is no longer paired: the reloaded page asks for the PIN.
+                reload();
             }
         }
         _ => {}
     });
     let status = client.status();
+    reload_when_unpaired(status);
     provide_context(Connection(status));
     let commands =
         Commands { client: StoredValue::new_local(client), state, seq: StoredValue::new(0), toasts };
@@ -203,6 +202,28 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         {search_sheet}
         {screen_sheet}
     }
+}
+
+/// Reloads into the pairing form once the server says this device is no longer paired.
+///
+/// A revocation closes the socket and every reconnect is refused at the upgrade, so an idle
+/// remote never sees a `Forbidden` command result. After each lost or refused connection it asks
+/// `/api/session`; a network error keeps the disconnected remote as it is.
+fn reload_when_unpaired(status: RwSignal<sursum_client::Status>) {
+    let checking = std::rc::Rc::new(std::cell::Cell::new(false));
+    Effect::new(move || {
+        if status.get() != sursum_client::Status::Disconnected || checking.replace(true) {
+            return;
+        }
+        let checking = checking.clone();
+        leptos::task::spawn_local(async move {
+            let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
+            if info.is_some_and(|info| !info.paired) {
+                reload();
+            }
+            checking.set(false);
+        });
+    });
 }
 
 /// Reloads the page (a new server build, or data replaced from a backup).

@@ -1,6 +1,8 @@
 # Hand-installed pilot on a Raspberry Pi 5
 
-An interim way to run sursum on a Pi 5 until the device image exists (ADR 0013, M4). It uses a
+An interim way to run sursum on a Pi 5 from before the device image existed (ADR 0013, M4). The
+image (`image/`, `just image <version>`) has run on the pilot Pi 5 since 2026-11-17 and is the
+way to set up a device now. It uses a
 stock Raspberry Pi OS, so it has none of the image's guarantees: the root filesystem is writable,
 boot is not silent (the rainbow and console are visible), the HDMI mode is not forced, there is no
 firewall or kiosk watchdog. Use it to try the release, the remote and the screen, not for Mass.
@@ -58,7 +60,6 @@ through the remote (Ustawienia → O programie → Zainstaluj aktualizację).
 | How the last update ended | `cat /var/lib/sursum/update.json` |
 | Go back to the previous release | `sudo -u sursum /var/lib/sursum/current/sursum-server --data-dir /var/lib/sursum bundle rollback && sudo systemctl restart sursum` |
 
-⚠ Not yet tried on a Pi: the Chromium flags under cage (`--ozone-platform=wayland` in
-particular), access to the display through seatd for the `sursum-kiosk` user, the cursor, and the
-`sursum.service` hardening options. If the screen stays black, start with
-`journalctl -u sursum-kiosk -b` and `journalctl -u seatd -b`.
+Run on the pilot Pi 5 on 2026-11-17 (roadmap M4): the screen and the remote worked with these
+flags under cage, with no cursor, no browser UI and no background requests after the network
+block. If the screen stays black, start with `journalctl -u sursum-kiosk -b` and `journalctl -u seatd -b`.

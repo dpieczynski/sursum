@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Dane urządzenia (ADR 0018): downloading a whole-device backup (any paired remote) and
-//! restoring one (admin). The server checks the file, answers what it holds, and restarts with
+//! restoring one. The server checks the file, answers what it holds, and restarts with
 //! it; the remote reloads once the sheet is closed, so nothing it shows is from before. Removing
 //! unused pictures lives here too ([`super::pictures`]).
 
@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use sursum_protocol::RestoreOutcome;
 use wasm_bindgen::JsCast;
 
-use super::{AdminOnly, Section};
+use super::Section;
 use crate::api::post_file;
 use crate::messages::{Msg, backup_summary_lines, pl, restore_refusal};
 use crate::ui::Sheet;
@@ -35,14 +35,10 @@ pub fn BackupSection() -> impl IntoView {
                 </a>
             </div>
             <div class="setting-row">
-                <AdminOnly label=Msg::BackupRestore>
-                    <RestoreButton />
-                </AdminOnly>
+                <RestoreButton />
             </div>
             <div class="setting-row">
-                <AdminOnly label=Msg::PictureCleanup>
-                    <super::pictures::PictureCleanupButton />
-                </AdminOnly>
+                <super::pictures::PictureCleanupButton />
             </div>
         </Section>
     }

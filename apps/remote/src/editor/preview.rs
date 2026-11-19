@@ -4,7 +4,7 @@
 
 use leptos::prelude::*;
 use sursum_protocol::{
-    DraftPreview, LiveSlide, MarkupWarning, MarkupWarningCode, RemoteState, ScreenLayout, SongDraft, Theme,
+    DraftPreview, LiveSlide, MarkupWarning, MarkupWarningCode, RemoteState, ScreenLayout, SongDraft,
 };
 use sursum_slide::{PreviewData, SlidePreview};
 
@@ -35,19 +35,17 @@ pub fn EditorPreview(draft: RwSignal<SongDraft>, state: RwSignal<Option<RemoteSt
     });
     let look = move || {
         state.with(|state| match state {
-            Some(state) => (state.program.theme.clone(), state.program.layout.clone()),
-            None => {
-                (Theme::default(), ScreenLayout { content: sursum_protocol::Rect::SCENE, masks: Vec::new() })
-            }
+            Some(state) => state.program.layout.clone(),
+            None => ScreenLayout { content: sursum_protocol::Rect::SCENE, masks: Vec::new() },
         })
     };
     let slide_views = move || {
         let Some(preview) = preview.get() else { return Vec::new() };
-        let (theme, layout) = look();
+        let layout = look();
         (0..preview.deck.slides.len())
             .map(|index| {
                 let live = LiveSlide { deck: preview.deck.clone(), slide_index: index as u32, gap: false };
-                let data = PreviewData { live, theme: theme.clone(), layout: layout.clone() };
+                let data = PreviewData { live, layout: layout.clone() };
                 view! {
                     <div class="editor-slide">
                         <SlidePreview data=Signal::stored(Some(data)) />

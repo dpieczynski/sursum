@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Screenshots of the remote on a phone, an upright tablet and a landscape tablet, as an operator
-//! and in admin mode, while a song is live, in every tab: `just remote-sizes [dir]` (needs
+//! Screenshots of the remote on a phone, an upright tablet and a landscape tablet, paired, while a
+//! song is live, in every tab: `just remote-sizes [dir]` (needs
 //! `just browsers`).
 //! Used to compare layouts before and after a change.
 
@@ -14,8 +14,8 @@ use thirtyfour::prelude::*;
 const PIN: &str = "246813";
 /// The connection indicator in the old and in the new remote.
 const CONNECTED: &str = ".status-dot.connected, [data-testid=status-connected]";
-/// A phone, Android tablets upright and lying, and iPads (roadmap P2): a 10.2" iPad upright and
-/// lying, an 11" iPad Air upright.
+/// A phone, Android tablets upright and lying, and 4:3 tablets (the sizes of a 10.2" iPad upright
+/// and lying and an 11" iPad Air upright; kept as layout checks, the iPad itself is out of scope).
 const SIZES: [(&str, u32, u32); 6] = [
     ("phone", 360, 800),
     ("tablet", 800, 1280),
@@ -52,12 +52,6 @@ async fn main() -> anyhow::Result<()> {
             tokio::time::sleep(Duration::from_millis(500)).await;
             page.screenshot(&output.join(format!("{name}-{tab}-operator.png"))).await?;
         }
-        unlock_admin(&page).await?;
-        tokio::time::sleep(Duration::from_millis(800)).await;
-        page.screenshot(&output.join(format!("{name}-ustawienia-admin.png"))).await?;
-        sursum_e2e::open_tab(&page, "msza").await?;
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        page.screenshot(&output.join(format!("{name}-admin.png"))).await?;
         page.quit().await?;
     }
     screen.quit().await?;
@@ -71,16 +65,5 @@ async fn pair(page: &WebDriver) -> anyhow::Result<()> {
     pin.wait_until().displayed().await?;
     pin.send_keys(PIN).await?;
     page.find(By::Css(".pairing button[type=submit]")).await?.click().await?;
-    wait_until(Duration::from_secs(10), || async { page.find(By::Css(CONNECTED)).await.is_ok() }).await
-}
-
-/// Unlocks admin mode through the API from the page itself (the UI path differs between layouts).
-async fn unlock_admin(page: &WebDriver) -> anyhow::Result<()> {
-    let script = format!(
-        "return fetch('/api/admin', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, \
-         body: JSON.stringify({{pin: '{PIN}'}})}}).then(r => r.status);"
-    );
-    page.execute(&script, Vec::new()).await?;
-    page.refresh().await?;
     wait_until(Duration::from_secs(10), || async { page.find(By::Css(CONNECTED)).await.is_ok() }).await
 }

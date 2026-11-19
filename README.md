@@ -3,9 +3,12 @@
 Offline song-lyrics display for churches: a small appliance (Raspberry Pi 5 next to the projector)
 shows lyrics to the congregation, and a one-hand remote in a tablet or PC browser controls it.
 
-> **Status: pre-alpha.** Runs on a Linux PC (and should on Windows) with the screen and the
-> remote in browsers; not yet used in a service. A desktop program (`sursum`, ADR 0020) lets
-> parishioners prepare songs at home and bring them to the church as a file. See
+> **Status: pre-alpha.** Runs on a pilot Raspberry Pi 5 from its own device image (application and
+> system updates from the remote, with automatic rollback) and on a Linux PC with the screen and
+> the remote in browsers; not yet used in a service. A desktop program (`sursum`, ADR 0020) lets
+> parishioners prepare songs at home and bring them to the church as a file; its Windows build
+> starts, the rest of the first run is still to be checked. Supported: Android tablets and
+> Linux/Windows PCs as remotes, Windows and Linux for the desktop program (ADR 0023). See
 > [docs/roadmap.md](docs/roadmap.md) and, for operators, [docs/operator-guide-pl.md](docs/operator-guide-pl.md).
 
 ## Goals
@@ -28,9 +31,11 @@ preview is the same component as the screen. Details: [docs/architecture.md](doc
 
 ## Development
 
-Requirements: rustup (the toolchain comes from `rust-toolchain.toml`), `trunk` 0.22,
-`wasm-bindgen-cli` 0.2.130 (must match `Cargo.lock`), `just`, and podman for the browser tests.
-The devcontainer in `.devcontainer/` has all of them. No Node or npm.
+Requirements: rustup (the toolchain comes from `rust-toolchain.toml`), `just`, `trunk` 0.22,
+`wasm-bindgen-cli` 0.2.130 (must match `Cargo.lock`), `leptosfmt`, `cargo-deny`, `cargo-about`,
+zig with `cargo-zigbuild` (cross builds and the Windows lint), the GTK 4 and WebKitGTK 6.0
+development packages (the desktop program's Linux window), and podman for the browser tests. The
+exact versions are pinned in `.github/workflows/ci.yml`. No Node or npm.
 
 ```sh
 just build                       # web apps (Trunk) + release server with the apps embedded
@@ -44,11 +49,12 @@ just browsers-image && just browsers && just e2e
 
 The demo set contains a public-domain hymn, a synthetic song and an announcement. A
 `config.toml` in the data directory sets the listen address, allowed host names, the crossfade
-duration, the screen profile (safe area, exclusion zones), display power (`[display_power]`,
-PJLink) and the screen guard (`[screen_guard]`); see `crates/sursum-server/src/config.rs`.
+duration, display power (`[display_power]`,
+HDMI-CEC or PJLink) and the screen guard (`[screen_guard]`); see `crates/sursum-server/src/config.rs`.
 
 Until a PIN is set nobody can control the screen: the first remote that opens the page sets it
-(or run `sursum-server --data-dir … set-pin 123456`). `just dev` passes `--open-without-pin`, which
+(or run `sursum-server --data-dir … set-pin 123456`). A paired remote may do everything
+(ADR 0024). The screen's margins and exclusion zones are set in the remote's calibration panel. `just dev` passes `--open-without-pin`, which
 lets every device in while no PIN is set — for development only.
 
 ## Contributing
@@ -68,4 +74,4 @@ even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE
 [GNU General Public License](LICENSE) for more details.
 
 SPDX-License-Identifier: `GPL-3.0-or-later`. Third-party licenses are listed in the app under
-`/licenses` (from milestone M0).
+`/licenses`.

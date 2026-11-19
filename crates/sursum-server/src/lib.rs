@@ -91,13 +91,13 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     }
     let pin: Option<auth::PinHash> = database.setting(auth::PIN_SETTING).context("loading the PIN")?;
     match (&pin, config.access) {
-        (_, auth::AccessMode::LocalOwner) => tracing::info!("desktop program: this computer's user is admin"),
+        (_, auth::AccessMode::LocalOwner) => tracing::info!("desktop program: no PIN, loopback only"),
         (Some(_), _) => {}
         (None, auth::AccessMode::Pin) => {
             tracing::warn!("no PIN is set: the first remote to open the page must set one");
         }
         (None, auth::AccessMode::OpenForDevelopment) => tracing::warn!(
-            "no PIN is set and --open-without-pin is on: any device on the local network is admin"
+            "no PIN is set and --open-without-pin is on: any device on the local network may control everything"
         ),
     }
     let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?, config.access));

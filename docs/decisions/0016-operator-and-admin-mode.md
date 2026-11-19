@@ -1,6 +1,7 @@
 # 0016 — Operator rights by pairing, admin mode by entering the PIN again
 
-Status: Accepted (2026-11-16)
+Status: Accepted (2026-11-16). Admin mode is superseded by ADR 0024 (2026-11-19): a paired
+remote may do everything; pairing, the PIN and revocation stand.
 
 ## Context
 The plan (§11.1) asks for two roles: operators run the service (navigation, sets, songs) and

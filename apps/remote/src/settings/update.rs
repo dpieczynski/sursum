@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Updates in "O programie" (admin): the program (`.sursum-app`, ADR 0013, second amendment) and,
+//! Updates in "O programie": the program (`.sursum-app`, ADR 0013, second amendment) and,
 //! on devices running the sursum image, the system (`.sursum-system`, ADR 0019). Both are signed
 //! files the server checks before anything changes; both end on trial and are undone by the
 //! device itself if the new version does not come up. The remote shows how the last ones ended
@@ -9,7 +9,6 @@ use leptos::prelude::*;
 use sursum_protocol::{InstallOutcome, UpdateStatus};
 use wasm_bindgen::JsCast;
 
-use super::AdminOnly;
 use crate::api::{get_json, post_file};
 use crate::maintenance::{Maintenance, UpdateKind};
 use crate::messages::{Msg, install_refusal, installed_version, last_update, pl, system_lines};
@@ -88,16 +87,12 @@ pub fn Updates() -> impl IntoView {
         {lines}
         <Show when=can_install>
             <div class="setting-row">
-                <AdminOnly label=PROGRAM.label>
-                    <InstallButton kind=PROGRAM />
-                </AdminOnly>
+                <InstallButton kind=PROGRAM />
             </div>
         </Show>
         <Show when=can_install_system>
             <div class="setting-row">
-                <AdminOnly label=SYSTEM.label>
-                    <InstallButton kind=SYSTEM />
-                </AdminOnly>
+                <InstallButton kind=SYSTEM />
             </div>
         </Show>
     }

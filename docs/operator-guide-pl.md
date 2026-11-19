@@ -29,8 +29,7 @@ kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia 
    - **Zmień zestaw** pokazuje zestawy od najnowszego i pozwala utworzyć **Nowy zestaw**;
      **Zmień nazwę** poprawia nazwę bieżącego. **Usuń zestaw** trzeba przytrzymać; zaraz potem
      można go przywrócić przyciskiem **Cofnij** w dymku na dole. Nie da się usunąć zestawu, którego
-     pozycja jest właśnie na ekranie. Tworzenie i usuwanie zestawów nie wymaga trybu
-     administratora.
+     pozycja jest właśnie na ekranie.
    - W polu wyszukiwania wpisz numer, początek tytułu albo kilka słów z tekstu. Polskie znaki nie
      są potrzebne („zdrowas” znajdzie „Zdrowaś”). **+ Dodaj** dopisuje pieśń na koniec zestawu i
      wyszukiwanie zostaje otwarte, więc można dodać kilka pieśni po kolei. Pieśni, które już są
@@ -146,7 +145,7 @@ urządzenia z kościoła; nie wyświetla niczego na ekranie, służy tylko do pi
    [Nowa pieśń](#nowa-pieśń)), a obok widać, jak slajdy będą wyglądać na ekranie.
 4. Gdy skończysz: **Ustawienia → Baza pieśni → Eksport bazy**. Zapisz plik
    `biblioteka.sursum` (np. na pendrive albo wyślij go sobie pocztą).
-5. W kościele, na pilocie: **Ustawienia → Baza pieśni → Scal bazę z pliku** 🔒 i wybierz ten
+5. W kościele, na pilocie: **Ustawienia → Baza pieśni → Scal bazę z pliku** i wybierz ten
    plik. Najpierw zobaczysz, co się zmieni; dopiero **Scal** zapisuje. Nic nie znika: jeśli tę
    samą pieśń zmieniono i w domu, i w kościele, druga wersja trafi do bazy jako kopia
    „(kopia ze scalenia)”.
@@ -176,7 +175,6 @@ spróbuj za chwilę”). To normalne.
 | Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. Bez wgranego logo „logo” jest czarnym ekranem, więc pilot nazywa je „Ekran wygaszony”. |
 | Adres `http://sursum.local/` się nie otwiera | Wpisz adres IP urządzenia (np. `http://192.168.1.50/`; najlepiej ustawić go na stałe w routerze parafii). Nazwę `sursum.local` blokują często aplikacje VPN (np. Tailscale) – wyłącz je na tablecie – oraz Firefox zainstalowany jako Flatpak na Linuksie; Chrome i Chromium radzą sobie z nią. |
 | Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę. Wpisz PIN parafii. |
-| Przy przycisku jest kłódka „wymaga trybu administratora” | Dotknij go i wpisz PIN; tryb administratora działa 15 minut. |
 | Tablet gaśnie w trakcie mszy | W ustawieniach Androida wydłuż czas wygaszania ekranu. |
 | Nic nie pomaga | Plan B: dotychczasowy komputer z OpenSong. Zapisz, co się stało, i zgłoś. |
 
@@ -184,22 +182,22 @@ spróbuj za chwilę”). To normalne.
 
 ![Zakładka Ustawienia](images/remote/tablet-ustawienia.png)
 
-- **Ekran**: zasilanie projektora lub monitora, **Logo parafii** 🔒, **Kalibracja ekranu** 🔒.
+- **Ekran**: zasilanie projektora lub monitora, **Logo parafii**, **Kalibracja ekranu**.
 - **Wyświetlanie**: czy po ostatnim slajdzie pieśni najpierw jest pusty ekran (domyślnie), czy od
   razu następna pozycja. Dotyczy wszystkich pilotów.
 - **To urządzenie**: strona przycisków (prawa lub lewa), wibracja, **Pełny ekran** (chowa paski
   przeglądarki), **Pedał i klawisze**.
 - **Baza pieśni**: **Eksport bazy** (same pieśni, do wymiany z drugim kościołem), **Scal bazę
-  z pliku** 🔒, **Import z OpenSong (ZIP)** 🔒.
+  z pliku**, **Import z OpenSong (ZIP)**.
 - **Dane urządzenia**: **Pobierz kopię** (wszystko: pieśni, zestawy, logo, obrazy, kalibracja
-  i ustawienia), **Przywróć z kopii** 🔒 i **Usuń nieużywane obrazy** 🔒.
-- **Urządzenia** 🔒 i **O programie** (wersja, **Zainstaluj aktualizację** 🔒).
+  i ustawienia), **Przywróć z kopii** i **Usuń nieużywane obrazy**.
+- **Urządzenia** i **O programie** (wersja, **Zainstaluj aktualizację**).
 
-### Dla administratora (🔒)
+### Rzadziej używane
 
-Pozycje z kłódką wymagają ponownego wpisania PIN-u. Tryb administratora działa 15 minut na tym
-urządzeniu; u góry zakładki Ustawienia widać wtedy żółty pasek z liczbą minut do końca i
-przyciskiem **Zakończ tryb administratora**.
+Każdy sparowany pilot może używać wszystkich ustawień, także tych poniżej. Dlatego zgubiony albo
+obcy tablet trzeba od razu odłączyć w **Urządzeniach**, a PIN-u nie podawać osobom, które nie
+obsługują ekranu.
 
 - **Import z OpenSong (ZIP)**: spakuj cały folder OpenSong (z podfolderami *Songs* i *Sets*) i
   wybierz plik. Po imporcie okno pokazuje, ile pieśni i zestawów dodano lub zmieniono, oraz uwagi
@@ -245,5 +243,4 @@ przyciskiem **Zakończ tryb administratora**.
 
 **Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,
 który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy). To urządzenie
-zostaje od razu sparowane i jest w trybie administratora, więc można dalej konfigurować (import,
-kalibracja, logo). Instalator może też ustawić PIN poleceniem `sursum-server set-pin <PIN>`.
+zostaje od razu sparowane, więc można dalej konfigurować (import, kalibracja, logo). Instalator może też ustawić PIN poleceniem `sursum-server set-pin <PIN>`.

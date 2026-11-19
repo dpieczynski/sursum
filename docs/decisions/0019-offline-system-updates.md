@@ -1,6 +1,7 @@
 # 0019 — Offline system updates through the firmware's tryboot
 
-Status: Accepted (2026-11-17)
+Status: Accepted (2026-11-17). ADR 0022 (2026-11-19, not built yet) makes this the only update
+path: the server moves into the system, and the database copy and restore join the trial.
 
 ## Context
 The device image (ADR 0013) has a read-only A/B system. Application bundles (`.sursum-app`) only

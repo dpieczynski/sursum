@@ -9,10 +9,9 @@
 //! installer runs `sursum-server set-pin`). Only an explicit development flag
 //! (`--open-without-pin`) lets everyone in without a PIN.
 //!
-//! Two levels of rights: a paired device is an **operator** (navigation, sets, songs). Entering
-//! the PIN again on a paired device unlocks **admin** mode for [`ADMIN_SESSION`] (import, merge,
-//! calibration, device list); it lives only in memory, so a restart ends it too. Revoking a
-//! device removes its token at once and wakes its open WebSocket sessions to close them.
+//! One level of rights (ADR 0024): a paired device may do everything the remote offers, from
+//! navigation to imports, calibration, updates and the device list. Revoking a device removes its
+//! token at once and wakes its open WebSocket sessions to close them.
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -38,8 +37,6 @@ const MAX_LOCKOUT: Duration = Duration::from_secs(15 * 60);
 /// Paired remotes are not affected (they do not enter the PIN to work).
 const GLOBAL_FAILURES: usize = 30;
 const GLOBAL_WINDOW: Duration = Duration::from_secs(10 * 60);
-/// How long admin mode stays unlocked after entering the PIN.
-pub const ADMIN_SESSION: Duration = Duration::from_secs(15 * 60);
 
 /// The stored PIN: a random salt and SHA-256(salt ‖ PIN), both hex.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,18 +82,6 @@ pub fn cookie_header(token: &str) -> String {
     format!("{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=315360000")
 }
 
-/// What a request may do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Rights {
-    /// Not paired: may only see the pairing form.
-    None,
-    /// A paired remote: navigation, sets, songs.
-    Operator,
-    /// Admin mode unlocked (or the development open mode): import, merge, calibration, device
-    /// list.
-    Admin,
-}
-
 /// Who may use the server, decided once at startup (never from `config.toml`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum AccessMode {
@@ -105,10 +90,10 @@ pub enum AccessMode {
     #[default]
     Pin,
     /// Development and tests (`--open-without-pin`): as long as no PIN is set, every device on
-    /// the local network is admin.
+    /// the local network may do everything.
     OpenForDevelopment,
     /// The desktop program (ADR 0020): the server listens on loopback only, so whoever sits at
-    /// this computer is its owner and admin; there is no PIN and no pairing.
+    /// this computer is its owner; there is no PIN and no pairing.
     LocalOwner,
 }
 
@@ -117,20 +102,12 @@ pub struct Access {
     pin: RwLock<Option<PinHash>>,
     mode: AccessMode,
     tokens: RwLock<HashSet<String>>,
-    /// Token hash → end of its admin session.
-    admin_until: Mutex<HashMap<String, Instant>>,
-    attempts: Mutex<HashMap<Attempter, Attempts>>,
+    /// Wrong PIN attempts per address.
+    attempts: Mutex<HashMap<IpAddr, Attempts>>,
     /// Times of recent wrong attempts from any address, for [`GLOBAL_FAILURES`].
     recent_failures: Mutex<std::collections::VecDeque<Instant>>,
     /// Bumped on every revocation so open sessions re-check their device.
     revocations: watch::Sender<u64>,
-}
-
-/// Who is entering a PIN: an address (pairing) or a paired device (unlocking admin mode).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Attempter {
-    Address(IpAddr),
-    Device(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -154,33 +131,20 @@ impl Access {
             pin: RwLock::new(pin),
             mode,
             tokens: RwLock::new(token_hashes.into_iter().collect()),
-            admin_until: Mutex::new(HashMap::new()),
             attempts: Mutex::new(HashMap::new()),
             recent_failures: Mutex::new(std::collections::VecDeque::new()),
             revocations: watch::Sender::new(0),
         }
     }
 
-    /// What a request with these headers may do at `now`.
-    pub fn rights(&self, headers: &HeaderMap, now: Instant) -> Rights {
-        if self.mode == AccessMode::LocalOwner {
-            return Rights::Admin;
+    /// True if a request with these headers may use the remote: a paired device, the desktop
+    /// program's owner, or anyone while the development mode runs without a PIN.
+    pub fn allows(&self, headers: &HeaderMap) -> bool {
+        match self.mode {
+            AccessMode::LocalOwner => true,
+            mode if !self.pin_required() => mode == AccessMode::OpenForDevelopment,
+            _ => self.device(headers).is_some(),
         }
-        if !self.pin_required() {
-            return if self.mode == AccessMode::OpenForDevelopment { Rights::Admin } else { Rights::None };
-        }
-        let Some(hash) = self.device(headers) else { return Rights::None };
-        let admin =
-            self.admin_until.lock().expect("not poisoned").get(&hash).is_some_and(|until| *until > now);
-        if admin { Rights::Admin } else { Rights::Operator }
-    }
-
-    /// How long admin mode still lasts for the device sending these headers (`None` when it is
-    /// off, or when the open development mode makes everyone admin for good).
-    pub fn admin_remaining(&self, headers: &HeaderMap, now: Instant) -> Option<Duration> {
-        let hash = self.device(headers)?;
-        let until = *self.admin_until.lock().expect("not poisoned").get(&hash)?;
-        until.checked_duration_since(now).filter(|left| !left.is_zero())
     }
 
     /// The token hash of the paired device sending these headers, if it is paired.
@@ -189,20 +153,9 @@ impl Access {
         self.tokens.read().expect("not poisoned").contains(&hash).then_some(hash)
     }
 
-    /// Unlocks admin mode for a device (after its PIN was checked) until `now + ADMIN_SESSION`.
-    pub fn grant_admin(&self, device: String, now: Instant) {
-        self.admin_until.lock().expect("not poisoned").insert(device, now + ADMIN_SESSION);
-    }
-
-    /// Ends admin mode for a device.
-    pub fn drop_admin(&self, device: &str) {
-        self.admin_until.lock().expect("not poisoned").remove(device);
-    }
-
     /// Forgets a device: its requests are refused from now on and its sessions close.
     pub fn revoke(&self, device: &str) {
         self.tokens.write().expect("not poisoned").remove(device);
-        self.drop_admin(device);
         self.revocations.send_modify(|generation| *generation += 1);
     }
 
@@ -237,11 +190,6 @@ impl Access {
         *self.pin.write().expect("not poisoned") = None;
     }
 
-    /// True if the request may control the screen (operator or admin).
-    pub fn allows(&self, headers: &HeaderMap) -> bool {
-        self.rights(headers, Instant::now()) >= Rights::Operator
-    }
-
     /// Checks a PIN attempt from `address`, counting failures for the lockout.
     pub fn check_pin(&self, address: IpAddr, pin: &str, now: Instant) -> PinCheck {
         let mut recent = self.recent_failures.lock().expect("not poisoned");
@@ -253,31 +201,24 @@ impl Access {
         {
             return PinCheck::Locked(GLOBAL_WINDOW.saturating_sub(now.saturating_duration_since(*oldest)));
         }
-        let check = self.check(&Attempter::Address(address), pin, now);
+        let check = self.check(address, pin, now);
         if check != PinCheck::Correct {
             recent.push_back(now);
         }
         check
     }
 
-    /// Checks the PIN entered on a paired device to unlock admin mode. Counted per device and
-    /// outside the global budget: guests guessing at the pairing form must not lock the parish's
-    /// own tablets out of admin mode.
-    pub fn check_admin_pin(&self, device: &str, pin: &str, now: Instant) -> PinCheck {
-        self.check(&Attempter::Device(device.to_owned()), pin, now)
-    }
-
-    /// One attempt with the per-attempter lockout (doubling after [`FREE_ATTEMPTS`]).
-    fn check(&self, attempter: &Attempter, pin: &str, now: Instant) -> PinCheck {
+    /// One attempt with the per-address lockout (doubling after [`FREE_ATTEMPTS`]).
+    fn check(&self, address: IpAddr, pin: &str, now: Instant) -> PinCheck {
         let mut attempts = self.attempts.lock().expect("not poisoned");
-        let entry = attempts.entry(attempter.clone()).or_insert(Attempts { failures: 0, locked_until: None });
+        let entry = attempts.entry(address).or_insert(Attempts { failures: 0, locked_until: None });
         if let Some(until) = entry.locked_until.filter(|until| *until > now) {
             return PinCheck::Locked(until - now);
         }
         let correct =
             self.pin.read().expect("not poisoned").as_ref().is_some_and(|stored| stored.matches(pin));
         if correct {
-            attempts.remove(attempter);
+            attempts.remove(&address);
             return PinCheck::Correct;
         }
         entry.failures += 1;
@@ -373,8 +314,6 @@ mod tests {
             assert_eq!(access.check_pin(address, "000000", now), PinCheck::Wrong);
         }
         let fresh: IpAddr = "192.168.1.200".parse().unwrap();
-        // The parish's own paired tablet can still unlock admin mode.
-        assert_eq!(access.check_admin_pin("tablet", "246813", now), PinCheck::Correct);
         assert!(
             matches!(access.check_pin(fresh, "246813", now), PinCheck::Locked(_)),
             "even the right PIN waits"
@@ -384,28 +323,15 @@ mod tests {
     }
 
     #[test]
-    fn admin_mode_is_per_device_expires_and_ends_on_revocation() {
+    fn revoking_a_device_cuts_it_off_and_wakes_its_sessions() {
         let (token, hash) = new_token().unwrap();
         let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()], AccessMode::Pin);
         let request = headers(&format!("{COOKIE}={token}"));
-        let now = Instant::now();
-        assert_eq!(access.rights(&request, now), Rights::Operator);
-        access.grant_admin(hash.clone(), now);
-        assert_eq!(access.rights(&request, now + Duration::from_secs(60)), Rights::Admin);
-        assert_eq!(access.rights(&request, now + ADMIN_SESSION), Rights::Operator, "expired");
-        let minute = Duration::from_secs(60);
-        assert_eq!(access.admin_remaining(&request, now + minute), Some(ADMIN_SESSION - minute));
-        assert_eq!(access.admin_remaining(&request, now + ADMIN_SESSION), None);
-        assert_eq!(access.rights(&headers("x=1"), now), Rights::None);
-
+        assert!(access.allows(&request) && !access.allows(&headers("x=1")));
         let revocations = access.revocations();
         access.revoke(&hash);
         assert!(revocations.has_changed().unwrap());
-        assert_eq!(access.rights(&request, now), Rights::None);
-        assert_eq!(
-            Access::new(None, vec![], AccessMode::OpenForDevelopment).rights(&HeaderMap::new(), now),
-            Rights::Admin
-        );
+        assert!(!access.allows(&request));
     }
 
     #[test]
@@ -428,14 +354,13 @@ mod tests {
     }
 
     #[test]
-    fn the_local_owner_is_admin_without_a_pin() {
-        let now = Instant::now();
+    fn the_local_owner_needs_no_pin() {
         let owner = Access::new(None, vec![], AccessMode::LocalOwner);
-        assert_eq!(owner.rights(&HeaderMap::new(), now), Rights::Admin);
+        assert!(owner.allows(&HeaderMap::new()));
         assert!(!owner.setup_needed() && !owner.pin_required());
         // A PIN that came with an old database changes nothing: there is nobody to pair.
         let with_pin = Access::new(Some(PinHash::new("246813").unwrap()), vec![], AccessMode::LocalOwner);
-        assert_eq!(with_pin.rights(&HeaderMap::new(), now), Rights::Admin);
+        assert!(with_pin.allows(&HeaderMap::new()));
         assert!(!with_pin.pin_required());
     }
 }

@@ -245,7 +245,6 @@ mod tests {
             }),
             upcoming: None,
             overlay: Overlay::None,
-            theme: Theme::default(),
             transition_ms: 0,
             layout: ScreenLayout { content: Rect::SCENE, masks: vec![] },
             calibration: None,
@@ -263,7 +262,6 @@ mod tests {
             rev: Rev(1),
             program,
             next: Some(LiveSlide { deck: deck("i2", "Pan kiedyś stanął"), slide_index: 0, gap: false }),
-            sections: vec![],
             active_set: Some(SetView {
                 set_id: SetId::from("s"),
                 name: "Msza".into(),

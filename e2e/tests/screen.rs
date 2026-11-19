@@ -5,8 +5,8 @@
 use std::time::Duration;
 
 use sursum_e2e::{
-    SCREEN_ROOT, Server, attribute, difference, is_black, screenshot, wait_for_slide, wait_until,
-    with_browser,
+    SCREEN_ROOT, Server, attribute, difference, is_black, profile_with_zone, screenshot, wait_for_slide,
+    wait_until, with_browser,
 };
 use sursum_protocol::{Command, Overlay};
 
@@ -143,12 +143,12 @@ async fn black_overlay_hides_content_and_navigation_under_it_stays_hidden() -> a
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn text_stays_out_of_exclusion_zones_and_zones_are_black() -> anyhow::Result<()> {
-    let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 40, right = 40, bottom = 40, left = 40 }\n\n\
-                  [[screen_profile.exclusions]]\nname = \"Strefa 1\"\nrect = { x = 0, y = 0, width = 600, height = 1080 }\n";
-    let server = Server::start_with(&[], Some(config)).await?;
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let mut organist = server.remote("organist").await?;
+    organist.command(profile_with_zone(40, sursum_protocol::Rect::new(0, 0, 600, 1080))).await?;
     with_browser(WIDTH, HEIGHT, async |driver| {
         driver.goto(server.url("/screen/")).await?;
-        server.remote("organist").await?.command(Command::Next).await?;
+        organist.command(Command::Next).await?;
         wait_for_slide(driver, "v1#").await?;
         // Convert client coordinates to scene coordinates through the stage's real scale: the
         // browser window may be smaller than 1920×1080 (e.g. headless WPE).

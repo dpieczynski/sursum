@@ -83,14 +83,8 @@
   text-rendering: geometricPrecision;
   -webkit-text-size-adjust: none;
   text-size-adjust: none;
-}
-.sursum-lines.align-center {
   align-items: center;
   text-align: center;
-}
-.sursum-lines.align-left {
-  align-items: flex-start;
-  text-align: left;
 }
 .sursum-line {
   white-space: pre;

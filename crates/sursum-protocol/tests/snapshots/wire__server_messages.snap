@@ -40,15 +40,6 @@ expression: messages
       },
       "upcoming": null,
       "overlay": "black",
-      "theme": {
-        "font_family": "Lato",
-        "font_weight": 700,
-        "text_color": "#ffffff",
-        "line_height_permille": 1250,
-        "text_align": "center",
-        "min_font_px": 36,
-        "max_font_px": 120
-      },
       "transition_ms": 250,
       "layout": {
         "content": {

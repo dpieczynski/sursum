@@ -34,15 +34,6 @@ expression: state
     },
     "upcoming": null,
     "overlay": "black",
-    "theme": {
-      "font_family": "Lato",
-      "font_weight": 700,
-      "text_color": "#ffffff",
-      "line_height_permille": 1250,
-      "text_align": "center",
-      "min_font_px": 36,
-      "max_font_px": 120
-    },
     "transition_ms": 250,
     "layout": {
       "content": {
@@ -89,12 +80,6 @@ expression: state
     "slide_index": 0,
     "gap": true
   },
-  "sections": [
-    {
-      "label": "v1",
-      "slide_index": 0
-    }
-  ],
   "active_set": {
     "set_id": "set",
     "name": "Msza",

@@ -32,8 +32,8 @@ struct Args {
     /// Print the license notice and exit.
     #[arg(long)]
     license: bool,
-    /// Development only: while no PIN is set, let every device on the local network in as admin
-    /// (without it, the first remote must set the PIN).
+    /// Development only: while no PIN is set, let every device on the local network in (without
+    /// it, the first remote must set the PIN).
     #[arg(long)]
     open_without_pin: bool,
     /// Run as the desktop program's library (ADR 0020): no screen, no PIN, loopback only. The
