@@ -11,8 +11,9 @@ first users (Tulce, Gowarzewo). License: GPL-3.0-or-later.
 Start of every session: read [docs/roadmap.md](docs/roadmap.md) (where we are) and skim
 [docs/decisions/](docs/decisions/) (what is already decided — do not re-litigate without a
 strong reason; if you have one, propose a new ADR). The roadmap's section S1 lists decisions that
-are made but not built yet (one update path, ADR 0022; the WPE-on-DRM spike, ADR 0009): do not
-extend what they remove. The planning document (Polish) is
+are made but not built yet (one update path, ADR 0022; the WPE-on-DRM spike, ADR 0009), and
+section Y1 the synchronization of songs and sets (ADR 0025): do not extend what they remove
+(application bundles, cage workarounds, conflict copies in `library.rs`). The planning document (Polish) is
 [docs/plan-2026-11.md](docs/plan-2026-11.md); roadmap and ADRs win where they differ.
 
 ## Map

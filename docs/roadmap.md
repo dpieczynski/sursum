@@ -51,6 +51,29 @@ below comes before new features. Order: CI image build, one update path, engine 
   `.sursum-backup` overlap (and the backup restore swaps the database file, which ties it to
   systemd)
 
+## Y1 — Synchronizing songs and sets (ADR 0025)
+
+A song or a set keeps its identity and gets versions; when it was changed in two places the
+version with more changes is current on every device and the other waits on a review list. Sets
+belong to a church, have a date and travel with their pictures in the same `.sursum` file;
+conflict copies ("kopia ze scalenia") go away. No migration of existing data. Plan and work
+packages: [plan-sync.md](plan-sync.md).
+
+- [x] Y1.0 ADR 0025 and the plan (2026-11-19)
+- [ ] Y1.1 Versions in `sursum-core` with property tests; the new schema, refusing databases of
+  earlier builds; songs saved and loaded through versions; the editor saves on the version it
+  loaded
+- [ ] Y1.2 File format 2 for songs; merge and report; streamed upload; the two-church scenario
+  as a test; conflict copies removed
+- [ ] Y1.3 Review list and comparison screen for songs
+- [ ] Y1.4 OpenSong import under the same rules
+- [ ] Y1.5 Churches: id from the name, the first-start form, the device's church
+- [ ] Y1.6 Sets as versions, dates and list order, "Nowy zestaw z tego", sets and pictures in the
+  file, set review
+- [ ] Y1.7 Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden
+  there
+- [ ] Y1.8 Operator guide
+
 ## M0 — Skeleton
 
 - [x] Git repository, `.gitignore`, `.gitattributes`, `.editorconfig`
@@ -120,7 +143,7 @@ without a mouse.
 - [x] PIN pairing: `sursum-server set-pin`, salted hash, rate-limited `/api/pair` with doubling lockout, `HttpOnly; SameSite=Strict` device cookie (only its hash stored), protected `/ws/remote` and `/api/*`, pairing screen in the remote; screen stays open; a device without a PIN is closed and its first remote sets the PIN (`/api/setup`, ADR 0016 amendment), `--open-without-pin` for development only
 - [x] Roles (admin mode removed 2026-11-19, ADR 0024): paired remote = operator; admin mode by entering the PIN again (15 min, memory only) for import, merge, calibration and the device list; revocation closes the remote's session at once (ADR 0016)
 - [x] Deleting songs (admin, hold in the editor): soft delete with history kept; tombstones travel in `.sursum` files and delete only the same or an older version on the other device; histories from merged files are remembered, so stale files never resurrect or duplicate songs; merge and import run as one transaction
-- [x] `.sursum` library file: export (`GET /api/library/export`, ZIP with `manifest.json` + `songs.jsonl` incl. revision history), merge with mandatory dry run in the remote; fast-forward by ancestor hashes, newer-local kept, conflicts stored as a copy, backup before merging (sets, the logo and pictures are not carried yet; songs and their deletions are)
+- [x] `.sursum` library file (merge rules superseded by ADR 0025, roadmap Y1): export (`GET /api/library/export`, ZIP with `manifest.json` + `songs.jsonl` incl. revision history), merge with mandatory dry run in the remote; fast-forward by ancestor hashes, newer-local kept, conflicts stored as a copy, backup before merging (sets, the logo and pictures are not carried yet; songs and their deletions are)
 - [x] Screen calibration panel: hold to open, test card on the screen and the tablet, drag a zone or type exact numbers, safe area margins; stored in settings, validated on the server (ADR 0008 amendment)
 
 **Done when:** WebDriver tests prove set edits never change the screen; simultaneous "next" from two

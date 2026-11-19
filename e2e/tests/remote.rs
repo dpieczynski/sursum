@@ -8,8 +8,8 @@ use std::time::Duration;
 use anyhow::Context as _;
 
 use sursum_e2e::{
-    Browser, SCREEN_ROOT, Server, attribute, open_tab, shown_text, typed, wait_for_slide, wait_until,
-    with_engine,
+    Browser, SCREEN_ROOT, Server, attribute, click_until_shown, open_tab, shown_text, typed, wait_for_slide,
+    wait_until, with_engine,
 };
 use thirtyfour::prelude::*;
 
@@ -383,9 +383,13 @@ async fn exclusion_zone_is_drawn_on_the_remote_and_masked_on_the_screen() -> any
             .await?;
             // Calibration is in Ustawienia and asks first ("only outside Mass").
             open_tab(remote, "ustawienia").await?;
-            remote.find(By::Css("[data-testid=calibrate]")).await?.click().await?;
             // The question is a sheet: wait until its button can be clicked.
-            let start = remote.query(By::Css("[data-testid=calibrate-start]")).first().await?;
+            let start = click_until_shown(
+                remote,
+                By::Css("[data-testid=calibrate]"),
+                By::Css("[data-testid=calibrate-start]"),
+            )
+            .await?;
             start.wait_until().clickable().await?;
             start.click().await?;
             wait_until(Duration::from_secs(5), || async {

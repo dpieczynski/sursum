@@ -447,6 +447,21 @@ pub async fn shown_text(element: &WebElement) -> WebDriverResult<String> {
     Ok(element.prop("innerText").await?.unwrap_or_default())
 }
 
+/// Clicks `button` until `shown` appears, up to three times, and returns what appeared. Right
+/// after a view opens, WebKit's driver can lose a click on a button that is still being laid
+/// out (seen in CI on WebKitGTK); the remote itself is fine, a person taps again anyway.
+pub async fn click_until_shown(driver: &WebDriver, button: By, shown: By) -> anyhow::Result<WebElement> {
+    for _ in 0..3 {
+        driver.find(button.clone()).await?.click().await?;
+        let found =
+            wait_until(Duration::from_secs(3), || async { driver.find(shown.clone()).await.is_ok() }).await;
+        if found.is_ok() {
+            return Ok(driver.find(shown).await?);
+        }
+    }
+    bail!("{shown:?} did not appear after three clicks on {button:?}")
+}
+
 /// Opens a tab of the remote: "msza", "zestaw" or "ustawienia".
 pub async fn open_tab(driver: &WebDriver, tab: &str) -> anyhow::Result<()> {
     driver.find(By::Css(format!("[data-testid=tab-{tab}]"))).await?.click().await?;
