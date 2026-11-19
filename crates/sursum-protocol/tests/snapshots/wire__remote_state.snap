@@ -129,5 +129,19 @@ expression: state
   "screen_connected": true,
   "next_step": "gap",
   "end_of_item": "gap",
-  "songs_to_review": 2
+  "songs_to_review": 2,
+  "church": {
+    "church_id": "church-0123456789abcdef",
+    "name": "Tulce"
+  },
+  "churches": [
+    {
+      "church_id": "church-fedcba9876543210",
+      "name": "Gowarzewo"
+    },
+    {
+      "church_id": "church-0123456789abcdef",
+      "name": "Tulce"
+    }
+  ]
 }

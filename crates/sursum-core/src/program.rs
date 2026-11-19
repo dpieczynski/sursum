@@ -166,7 +166,9 @@ impl Program {
             | Command::Calibrate { .. }
             | Command::DisplayPower { .. }
             | Command::SetLogo { .. }
-            | Command::DeleteSong { .. } => Err(Rejection::NotAProgramCommand),
+            | Command::DeleteSong { .. }
+            | Command::NameChurch { .. }
+            | Command::UseChurch { .. } => Err(Rejection::NotAProgramCommand),
         }
     }
 

@@ -79,7 +79,12 @@ packages: [plan-sync.md](plan-sync.md).
   device; importing an old folder again never undoes a correction nor brings back a deleted
   song; a new text next to a correction made in sursum waits for review
   (`ImportReport.to_review`)
-- [ ] Y1.5 Churches: id from the name, the first-start form, the device's church
+- [x] Y1.5 Churches (2026-11-20): a church is a versioned document (`db/churches.rs`) whose
+  id comes from its first name (`sursum-core::churches::church_id`, folded like the search);
+  the first-start form asks for the church's name (`PairRequest.church`, `church_missing`);
+  `RemoteState.church` and `churches`; commands `NameChurch` (create or rename) and `UseChurch`;
+  Ustawienia → Kościół; churches travel in `.sursum` files (`churches.jsonl`). Sets are not yet
+  tied to churches (Y1.6)
 - [ ] Y1.6 Sets as versions, dates and list order, "Nowy zestaw z tego", sets and pictures in the
   file, set review
 - [ ] Y1.7 Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden

@@ -53,6 +53,9 @@ pub struct PairRequest {
     pub pin: String,
     /// A name for the device list, e.g. "Tablet organisty".
     pub name: String,
+    /// Setup only: the name of the church this device serves, e.g. "Tulce" (ADR 0025).
+    #[serde(default)]
+    pub church: String,
 }
 
 /// Result of a pairing attempt.
@@ -65,6 +68,8 @@ pub enum PairOutcome {
     InvalidPin,
     /// Setup only: another remote set the PIN first; pair with it instead.
     AlreadySet,
+    /// Setup only: a device with a screen needs the name of its church.
+    ChurchMissing,
     /// Too many wrong attempts from this address; try again after the given time.
     Locked {
         retry_after_s: u32,

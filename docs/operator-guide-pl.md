@@ -260,5 +260,9 @@ obsługują ekranu.
   nie usuwa obrazów sam.
 
 **Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,
-który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy). To urządzenie
-zostaje od razu sparowane, więc można dalej konfigurować (import, kalibracja, logo). Instalator może też ustawić PIN poleceniem `sursum-server set-pin <PIN>`.
+który otworzy stronę, pokazuje formularz „Ustaw PIN” (6–12 cyfr, wpisany dwa razy) z polem
+**Nazwa kościoła** (np. „Tulce”); zestawy tego urządzenia będą należeć do tego kościoła. Przy
+wymianie karty wpisz tę samą nazwę, a urządzenie będzie tym samym kościołem co wcześniej. Nazwę
+można poprawić w **Ustawienia → Kościół**. Pilot, z którego to zrobiono, zostaje od razu
+sparowany, więc można dalej konfigurować (import, kalibracja, logo). Instalator może też ustawić
+PIN poleceniem `sursum-server set-pin <PIN>`; nazwę kościoła wpisuje się wtedy w Ustawieniach.

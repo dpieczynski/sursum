@@ -169,13 +169,13 @@ the program keeps its ghost position.
 - **Named with the PIN** (decision 14): the first-start form ("Ustaw PIN") also asks for the
   church's name. A device with a screen keeps "this device's church" as a local setting and
   lists, activates and creates sets of that church only. The name can be changed later in
-  Ustawienia → To urządzenie.
+  Ustawienia → Kościół.
 - **The church's id comes from the name typed at first start** (lower case, without Polish
   letters and spaces at the ends, as the search folds text), not from chance. A device set up
   again (new SD card, no backup) where someone types "Tulce" again is the same church as before,
   so its sets and the old ones are one list, with no question to answer. A later rename changes
   the name, not the id.
-- **When the name was typed differently** ("Tulec"): Ustawienia → To urządzenie → Kościół lists
+- **When the name was typed differently** ("Tulec"): Ustawienia → Kościół lists
   the churches known from loaded files; choosing one moves this device and the sets it made to
   that church. A church with no sets is not offered anywhere.
 - Restoring a device backup carries the setting, as it carries everything else.
@@ -330,7 +330,7 @@ Each is one pull request.
 | Y1.2 | Streamed merge upload (done with Y1.6) | Y1.1 |
 | Y1.3 | Review list and comparison screen (keep one version; editing comes after keeping) ✓ | Y1.1 |
 | Y1.4 | OpenSong import under section 7 ✓ | Y1.1 |
-| Y1.5 | Churches: the document, the id from the name, the first-start form, the device setting and the choice of a known church | Y1.1 |
+| Y1.5 | Churches: the document, the id from the name, the first-start form, the device setting and the choice of a known church ✓ (the section is Ustawienia → Kościół, not To urządzenie: that one is about the tablet) | Y1.1 |
 | Y1.6 | Sets as versions: every command saves one; date and list order; "Nowy zestaw z tego" (5.1); sets and pictures in the file; report lines; set review and its comparison screen | Y1.2, Y1.3, Y1.5 |
 | Y1.7 | Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden there (it cannot work without a service manager) | Y1.6 |
 | Y1.8 | Operator guide: Synchronizacja, review, sets at home, dates, "Nowy zestaw z tego"; new screenshots | Y1.3, Y1.7 |

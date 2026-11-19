@@ -81,6 +81,12 @@ fn client_messages() {
             base_rev: Rev(7),
             cmd: Command::SetEndOfItem { mode: EndOfItem::Continue },
         },
+        ClientMsg::Cmd { seq: 11, base_rev: Rev(7), cmd: Command::NameChurch { name: "Tulce".into() } },
+        ClientMsg::Cmd {
+            seq: 12,
+            base_rev: Rev(7),
+            cmd: Command::UseChurch { church_id: ChurchId::from("church-0123456789abcdef") },
+        },
         ClientMsg::Ping,
     ];
     insta::assert_json_snapshot!(messages);
@@ -124,6 +130,14 @@ fn remote_state() {
         next_step: NextStep::Gap,
         end_of_item: EndOfItem::Gap,
         songs_to_review: 2,
+        church: Some(ChurchView {
+            church_id: ChurchId::from("church-0123456789abcdef"),
+            name: "Tulce".into(),
+        }),
+        churches: vec![
+            ChurchView { church_id: ChurchId::from("church-fedcba9876543210"), name: "Gowarzewo".into() },
+            ChurchView { church_id: ChurchId::from("church-0123456789abcdef"), name: "Tulce".into() },
+        ],
     };
     insta::assert_json_snapshot!(state);
 }
@@ -176,6 +190,7 @@ fn pairing() {
         PairOutcome::WrongPin,
         PairOutcome::InvalidPin,
         PairOutcome::AlreadySet,
+        PairOutcome::ChurchMissing,
         PairOutcome::Locked { retry_after_s: 30 },
     ];
     insta::assert_json_snapshot!((session, paired, library, outcomes));

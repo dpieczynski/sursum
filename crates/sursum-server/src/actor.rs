@@ -145,11 +145,11 @@ impl StateHandle {
     /// Merges a `.sursum` file (or only reports what would happen, with `dry_run`).
     pub async fn merge_library(
         &self,
-        songs: Vec<crate::library::IncomingSong>,
+        incoming: crate::library::Incoming,
         dry_run: bool,
     ) -> Option<sursum_protocol::MergeReport> {
         let (reply, report) = oneshot::channel();
-        self.requests.send(Request::Merge { songs, dry_run, reply }).await.ok()?;
+        self.requests.send(Request::Merge { incoming, dry_run, reply }).await.ok()?;
         report.await.ok().flatten()
     }
 
@@ -226,7 +226,7 @@ enum Request {
         reply: oneshot::Sender<Option<Vec<u8>>>,
     },
     Merge {
-        songs: Vec<crate::library::IncomingSong>,
+        incoming: crate::library::Incoming,
         dry_run: bool,
         reply: oneshot::Sender<Option<sursum_protocol::MergeReport>>,
     },
@@ -285,6 +285,8 @@ pub fn spawn(
     let active_set: Option<SetId> = database.setting(ACTIVE_SET_KEY).context("loading the active set")?;
     let songs = database.load_songs().context("loading the song library")?;
     let reviews = database.songs_in_review().context("loading the songs in review")?.into_iter().collect();
+    let churches = database.churches().context("loading the churches")?;
+    let church = database.this_church().context("loading this device's church")?;
     tracing::info!(songs = songs.len(), "song library loaded");
     let saved_profile: Option<ScreenProfile> =
         database.setting(SCREEN_PROFILE_KEY).context("loading the screen profile")?;
@@ -298,6 +300,8 @@ pub fn spawn(
         data_dir: config.data_dir.clone(),
         songs: songs.into_iter().map(|song| (song.id.clone(), song)).collect(),
         reviews,
+        churches,
+        church,
         sets: SetStore::new(sets, active_set),
         program: Program::default(),
         rev: Rev(1),
@@ -374,8 +378,8 @@ pub fn spawn(
                         }
                         let _ = reply.send(cleanup.ok());
                     }
-                    Request::Merge { songs, dry_run, reply } => {
-                        let report = state.merge(&songs, dry_run);
+                    Request::Merge { incoming, dry_run, reply } => {
+                        let report = state.merge(&incoming, dry_run);
                         if !dry_run {
                             screen_tx.send_replace(Arc::new(state.screen_state()));
                             remote_tx.send_replace(Arc::new(state.remote_state()));
@@ -470,6 +474,10 @@ struct AppState {
     songs: HashMap<SongId, Song>,
     /// Songs changed in two places that wait for review (ADR 0025).
     reviews: BTreeSet<SongId>,
+    /// Every church this device knows, by name (ADR 0025).
+    churches: Vec<crate::db::Church>,
+    /// The church this device serves; `None` until it is named.
+    church: Option<sursum_protocol::ChurchId>,
     index: SearchIndex,
     data_dir: std::path::PathBuf,
     sets: SetStore,
@@ -582,6 +590,28 @@ impl AppState {
                 self.calibrating = *on;
                 Ok(None)
             }
+            Command::NameChurch { name } => match self.database.name_church(name) {
+                Ok(Some(_)) => {
+                    self.reload_churches();
+                    Ok(None)
+                }
+                Ok(None) => Err(ErrorCode::Unsupported),
+                Err(error) => {
+                    tracing::error!(?error, "could not name the church");
+                    Err(ErrorCode::NotFound)
+                }
+            },
+            Command::UseChurch { church_id } => match self.database.use_church(church_id) {
+                Ok(true) => {
+                    self.reload_churches();
+                    Ok(None)
+                }
+                Ok(false) => Err(ErrorCode::NotFound),
+                Err(error) => {
+                    tracing::error!(?error, "could not change the church");
+                    Err(ErrorCode::NotFound)
+                }
+            },
             _ => return self.run_program_command(actor, base_rev, command),
         };
         match result {
@@ -751,20 +781,32 @@ impl AppState {
     /// Merges a library file after backing up the database, then reloads the library.
     fn merge(
         &mut self,
-        songs: &[crate::library::IncomingSong],
+        incoming: &crate::library::Incoming,
         dry_run: bool,
     ) -> Option<sursum_protocol::MergeReport> {
         if !dry_run && let Err(error) = self.database.backup(&self.data_dir, "before-merge") {
             tracing::error!(?error, "could not back up before merging");
         }
-        let report = crate::library::merge(&mut self.database, songs, dry_run);
+        let report = crate::library::merge(&mut self.database, incoming, dry_run);
         if let Err(error) = &report {
             tracing::error!(?error, "merging failed");
         }
         if !dry_run {
             self.reload_library();
+            self.reload_churches();
         }
         report.ok()
+    }
+
+    /// Re-reads the churches and which one this device serves.
+    fn reload_churches(&mut self) {
+        match (self.database.churches(), self.database.this_church()) {
+            (Ok(churches), Ok(church)) => {
+                self.churches = churches;
+                self.church = church;
+            }
+            (Err(error), _) | (_, Err(error)) => tracing::error!(?error, "could not read the churches"),
+        }
     }
 
     /// Re-reads all songs from the database and rebuilds the search index.
@@ -967,6 +1009,12 @@ impl AppState {
             next_step: self.program.next_step(&context),
             end_of_item: self.end_of_item,
             songs_to_review: u32::try_from(self.reviews.len()).unwrap_or(u32::MAX),
+            church: self
+                .church
+                .as_ref()
+                .and_then(|id| self.churches.iter().find(|church| &church.id == id))
+                .map(church_view),
+            churches: self.churches.iter().map(church_view).collect(),
         }
     }
 
@@ -1029,6 +1077,10 @@ impl AppState {
 }
 
 /// How a song is listed in search results.
+fn church_view(church: &crate::db::Church) -> sursum_protocol::ChurchView {
+    sursum_protocol::ChurchView { church_id: church.id.clone(), name: church.name.clone() }
+}
+
 fn song_summary(song: &Song, review: bool) -> SongSummary {
     let first_line =
         song.verses.iter().flat_map(|verse| &verse.blocks).flat_map(|block| block.texts()).next();

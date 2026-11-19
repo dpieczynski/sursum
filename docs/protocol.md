@@ -20,8 +20,9 @@ they cannot drift apart within one build.
 | paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
 
 There is one level of rights (ADR 0024): a paired remote may do everything. Without a PIN nobody
-may control the screen: `/api/session` says `setup_needed`, and `POST /api/setup { pin, name }`
-sets the PIN once (`invalid_pin` → 400, `already_set` → 409) and pairs that browser. Only the
+may control the screen: `/api/session` says `setup_needed`, and `POST /api/setup { pin, name, church }`
+sets the PIN once (`invalid_pin` or `church_missing` → 400, `already_set` → 409), names the
+device's church (ADR 0025) and pairs that browser. Only the
 development flag `--open-without-pin` (used by `just dev` and the tests) lets everyone in while no
 PIN is set. Refusals: HTTP 401 (not paired); WebSocket commands answer
 `Rejected { code: forbidden }`, after which the remote reloads into the pairing form. Revoking a
@@ -145,6 +146,10 @@ restart after a server restart, so clients apply every snapshot instead of compa
 - **OpenSong import** (`POST /api/import/opensong`) answers `ImportReport { inserted, updated,
   unchanged, failed, sets, to_review, problems }`; `to_review` names songs whose file text met a
   correction made in sursum since the last import (both versions stay, ADR 0025).
+- **Churches** (ADR 0025): `RemoteState.church` is the church this device serves (named at
+  setup, `None` in the desktop program), `RemoteState.churches` every church it knows; commands
+  `NameChurch { name }` (create or rename) and `UseChurch { church_id }` (join a church learned
+  from a file). Library files carry them in `churches.jsonl`.
 - **Review** of songs changed in two places: `RemoteState.songs_to_review` counts them and
   `SongSummary.review` marks them in search results; `GET /api/songs/review` lists them,
   `GET /api/songs/{id}/versions` answers `SongVersions` (every live version in the editor's text

@@ -453,9 +453,12 @@ async fn pair_with(server: &RunningServer, pin: &str) -> String {
 }
 
 async fn post_pin(server: &RunningServer, path: &str, pin: &str) -> String {
-    let body =
-        serde_json::to_string(&sursum_protocol::PairRequest { pin: pin.into(), name: "Tablet".into() })
-            .unwrap();
+    let body = serde_json::to_string(&sursum_protocol::PairRequest {
+        pin: pin.into(),
+        name: "Tablet".into(),
+        church: "Tulce".into(),
+    })
+    .unwrap();
     http_raw(
         server,
         &format!(
@@ -488,6 +491,14 @@ async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
     assert!(session.setup_needed && !session.paired && !session.pin_required);
 
     assert!(post_pin(&server, "/api/setup", "1234").await.starts_with("HTTP/1.1 400"), "too short");
+    let nameless = serde_json::to_string(&sursum_protocol::PairRequest {
+        pin: "246813".into(),
+        name: "Tablet".into(),
+        church: " ".into(),
+    })
+    .unwrap();
+    let refused = http_post(&server, "/api/setup", &nameless).await;
+    assert!(refused.contains("church_missing"), "a device needs its church: {refused}");
     let response = post_pin(&server, "/api/setup", "246813").await;
     assert!(response.starts_with("HTTP/1.1 200"), "{response}");
     let cookie = session_cookie(&response);
@@ -507,6 +518,9 @@ async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
     )
     .await;
     assert!(devices.starts_with("HTTP/1.1 200"), "everything right after setup: {devices}");
+    let mut remote = connect_as(&server, &cookie, "installer").await;
+    let state = next_remote_state(&mut remote).await;
+    assert_eq!(state.church.map(|church| church.name).as_deref(), Some("Tulce"), "named with the PIN");
     server.stop().await.unwrap();
 
     // The PIN was stored: after a restart others must pair with it.

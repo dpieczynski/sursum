@@ -348,6 +348,7 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
         .await?;
         let fields = form.find_all(By::Css(".pin")).await?;
         fields[1].send_keys("246813").await?;
+        form.find(By::Css("[data-testid=setup-church]")).await?.send_keys("Tulce").await?;
         form.find(By::Css("button[type=submit]")).await?.click().await?;
         // The page reloads into the remote, with every tool to go on with the setup.
         wait_until(Duration::from_secs(10), || async {
@@ -356,6 +357,12 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
         .await?;
         open_tab(remote, "ustawienia").await?;
         remote.find(By::XPath("//label[contains(text(), 'Import z OpenSong')]")).await?;
+        let church = remote.query(By::Css("[data-testid=church-name]")).first().await?;
+        wait_until(Duration::from_secs(5), || async {
+            church.prop("value").await.ok().flatten().as_deref() == Some("Tulce")
+        })
+        .await
+        .context("the church named at setup is shown in Ustawienia")?;
         Ok(())
     })
     .await?;

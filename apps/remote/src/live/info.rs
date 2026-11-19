@@ -275,6 +275,8 @@ mod tests {
             next_step,
             end_of_item: EndOfItem::Gap,
             songs_to_review: 0,
+            church: None,
+            churches: vec![],
         }
     }
 

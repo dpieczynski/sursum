@@ -16,7 +16,8 @@ pub fn Pairing() -> impl IntoView {
     let status = RwSignal::new(None::<String>);
     let submit = move |event: leptos::ev::SubmitEvent| {
         event.prevent_default();
-        let request = PairRequest { pin: pin.get_untracked(), name: name.get_untracked() };
+        let request =
+            PairRequest { pin: pin.get_untracked(), name: name.get_untracked(), church: String::new() };
         leptos::task::spawn_local(async move {
             match post_json::<_, PairOutcome>("/api/pair", &request).await {
                 Some(PairOutcome::Paired) => reload(),
@@ -26,7 +27,8 @@ pub fn Pairing() -> impl IntoView {
                 // The PIN is set; pairing with it is what this form does anyway.
                 Some(PairOutcome::AlreadySet) => status.set(Some(pl(Msg::PinAlreadySet).to_owned())),
                 Some(PairOutcome::Locked { retry_after_s }) => status.set(Some(locked_for(retry_after_s))),
-                None => status.set(Some(pl(Msg::Disconnected).to_owned())),
+                // Pairing never asks for a church; only the first setup does.
+                Some(PairOutcome::ChurchMissing) | None => status.set(Some(pl(Msg::Disconnected).to_owned())),
             }
             pin.set(String::new());
         });
@@ -53,6 +55,7 @@ pub fn Setup() -> impl IntoView {
     let pin = RwSignal::new(String::new());
     let repeat = RwSignal::new(String::new());
     let name = RwSignal::new(suggested_name());
+    let church = RwSignal::new(String::new());
     let status = RwSignal::new(None::<&'static str>);
     let submit = move |event: leptos::ev::SubmitEvent| {
         event.prevent_default();
@@ -61,12 +64,17 @@ pub fn Setup() -> impl IntoView {
             repeat.set(String::new());
             return;
         }
-        let request = PairRequest { pin: pin.get_untracked(), name: name.get_untracked() };
+        let request = PairRequest {
+            pin: pin.get_untracked(),
+            name: name.get_untracked(),
+            church: church.get_untracked(),
+        };
         leptos::task::spawn_local(async move {
             match post_json::<_, PairOutcome>("/api/setup", &request).await {
                 Some(PairOutcome::Paired) => reload(),
                 Some(PairOutcome::AlreadySet) => reload(),
                 Some(PairOutcome::InvalidPin) => status.set(Some(pl(Msg::InvalidPin))),
+                Some(PairOutcome::ChurchMissing) => status.set(Some(pl(Msg::ChurchMissing))),
                 Some(_) | None => status.set(Some(pl(Msg::Disconnected))),
             }
         });
@@ -80,6 +88,15 @@ pub fn Setup() -> impl IntoView {
             </label>
             <label>
                 {pl(Msg::RepeatPin)} <crate::ui::PinField value=repeat autocomplete="new-password" />
+            </label>
+            <label>
+                {pl(Msg::ChurchName)}
+                <input
+                    data-testid="setup-church"
+                    placeholder=pl(Msg::ChurchNameExample)
+                    prop:value=church
+                    on:input=move |event| church.set(event_target_value(&event))
+                />
             </label>
             <label>
                 {pl(Msg::DeviceName)}

@@ -35,6 +35,9 @@ expression: "(session, paired, library, outcomes)"
       "outcome": "already_set"
     },
     {
+      "outcome": "church_missing"
+    },
+    {
       "outcome": "locked",
       "retry_after_s": 30
     }

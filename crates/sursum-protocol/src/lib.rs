@@ -21,7 +21,7 @@ pub use editor::{
     DraftPreview, ImportReport, KeepVersion, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome,
     SongDraft, SongVersionView, SongVersions,
 };
-pub use ids::{AssetId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
+pub use ids::{AssetId, ChurchId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{
     ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH, ScreenLayout, ScreenProfile,
 };
@@ -32,7 +32,7 @@ pub use pairing::{DeviceView, Installation, PairOutcome, PairRequest, SessionInf
 pub use pictures::{PictureCleanup, PictureCleanupRequest};
 pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
 pub use state::{
-    DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState, SetItemKind,
-    SetItemView, SetSummary, SetView, SongSummary,
+    ChurchView, DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState,
+    SetItemKind, SetItemView, SetSummary, SetView, SongSummary,
 };
 pub use update::{InstallOutcome, InstallRefusal, LastSystemUpdate, LastUpdate, SystemStatus, UpdateStatus};
