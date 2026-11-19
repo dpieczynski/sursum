@@ -8,6 +8,7 @@ RUN apt-get update \
       build-essential ca-certificates curl git pkg-config just \
       binaryen \
       chromium chromium-driver cog wpewebkit-webdriver libgles2 libegl1 libgl1-mesa-dri fonts-dejavu-core \
+      libgtk-4-dev libwebkitgtk-6.0-dev xvfb dbus \
  && rm -rf /var/lib/apt/lists/*
 
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH

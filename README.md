@@ -4,7 +4,8 @@ Offline song-lyrics display for churches: a small appliance (Raspberry Pi 5 next
 shows lyrics to the congregation, and a one-hand remote in a tablet or PC browser controls it.
 
 > **Status: pre-alpha.** Runs on a Linux PC (and should on Windows) with the screen and the
-> remote in browsers; not yet on the Pi, not yet used in a service. See
+> remote in browsers; not yet used in a service. A desktop program (`sursum`, ADR 0020) lets
+> parishioners prepare songs at home and bring them to the church as a file. See
 > [docs/roadmap.md](docs/roadmap.md) and, for operators, [docs/operator-guide-pl.md](docs/operator-guide-pl.md).
 
 ## Goals
@@ -36,6 +37,7 @@ just build                       # web apps (Trunk) + release server with the ap
 target/release/sursum-server --data-dir sursum-data --listen 127.0.0.1:8080
 # screen: http://127.0.0.1:8080/screen/   remote: http://127.0.0.1:8080/remote/
 just dev                         # server + both apps with auto-reload (:8080, :8081, :8082)
+just desktop                     # the desktop program target/release/sursum (Linux: GTK 4, WebKitGTK 6.0 dev packages)
 just test && just lint
 just browsers-image && just browsers && just e2e
 ```

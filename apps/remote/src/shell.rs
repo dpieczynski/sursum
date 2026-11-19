@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The frame around every view: tabs (Msza · Zestaw · Ustawienia) and the screen status in the
-//! top bar, problem banners, and the regions the stylesheet arranges for phone, upright tablet
-//! and wide screens. The live regions (what is on screen, the slides, the controls) stay put
+//! The frame around every view: tabs (Msza · Zestaw · Ustawienia, or Pieśni · Ustawienia in the
+//! desktop program's library) and the screen status in the top bar, problem banners, and the
+//! regions the stylesheet arranges for phone, upright tablet and wide screens. The live regions (what is on screen, the slides, the controls) stay put
 //! when the tab changes; on narrow screens other tabs show the live strip instead. Problem
 //! banners take a line under the top bar, so they push the live text down a little but never
 //! the controls at the bottom.
 
 use leptos::prelude::*;
 use sursum_client::Status;
-use sursum_protocol::{DisplayPowerState, RemoteState};
+use sursum_protocol::{DisplayPowerState, Installation, RemoteState};
 
 use crate::Commands;
 use crate::live::info::screen_shows;
@@ -16,17 +16,26 @@ use crate::messages::{Msg, pl};
 use crate::prefs::Prefs;
 use crate::ui::{Banner, BannerKind};
 
-/// The three views.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// The views.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
-    #[default]
     Live,
     Set,
     Settings,
+    /// The desktop program's library (no screen): search, new song, editor.
+    Songs,
 }
 
 impl View {
-    const ALL: [View; 3] = [View::Live, View::Set, View::Settings];
+    const ALL: [View; 4] = [View::Live, View::Set, View::Settings, View::Songs];
+
+    /// The views an installation offers, in tab order; the first is the default.
+    pub fn tabs(installation: Installation) -> &'static [View] {
+        match installation {
+            Installation::Screen => &[View::Live, View::Set, View::Settings],
+            Installation::Library => &[View::Songs, View::Settings],
+        }
+    }
 
     /// The URL fragment, so a reload (e.g. after an update) comes back to the same view.
     fn fragment(self) -> &'static str {
@@ -34,6 +43,17 @@ impl View {
             View::Live => "msza",
             View::Set => "zestaw",
             View::Settings => "ustawienia",
+            View::Songs => "piesni",
+        }
+    }
+
+    /// `data-view` on the page, which the stylesheet arranges the regions by.
+    pub fn attribute(self) -> &'static str {
+        match self {
+            View::Live => "live",
+            View::Set => "set",
+            View::Settings => "settings",
+            View::Songs => "songs",
         }
     }
 
@@ -42,27 +62,45 @@ impl View {
             View::Live => Msg::TabLive,
             View::Set => Msg::TabSet,
             View::Settings => Msg::TabSettings,
+            View::Songs => Msg::TabSongs,
         })
     }
 
-    /// The view named in the URL fragment.
-    pub fn from_location() -> View {
+    /// The view named in the URL fragment, if this installation offers it; else its first view.
+    pub fn from_location(installation: Installation) -> View {
         let hash = web_sys::window().and_then(|window| window.location().hash().ok()).unwrap_or_default();
-        View::ALL.into_iter().find(|view| hash.trim_start_matches('#') == view.fragment()).unwrap_or_default()
+        let tabs = View::tabs(installation);
+        View::ALL
+            .into_iter()
+            .find(|view| hash.trim_start_matches('#') == view.fragment() && tabs.contains(view))
+            .unwrap_or(tabs[0])
     }
 }
 
 /// The current view (shared through the context).
 #[derive(Clone, Copy)]
-pub struct CurrentView(pub RwSignal<View>);
+pub struct CurrentView {
+    pub view: RwSignal<View>,
+    pub installation: Installation,
+}
 
 impl CurrentView {
+    /// Starts at the view named in the URL fragment.
+    pub fn new(installation: Installation) -> Self {
+        CurrentView { view: RwSignal::new(View::from_location(installation)), installation }
+    }
+
+    /// Follows the URL fragment (back and forward buttons).
+    pub fn follow_location(self) {
+        self.view.set(View::from_location(self.installation));
+    }
+
     /// Switches the view and records it in the URL fragment (a history entry, so the browser's
     /// back button returns to the previous view; `App` follows the fragment when it changes).
     pub fn show(self, view: View) {
-        self.0.set(view);
+        self.view.set(view);
         if let Some(window) = web_sys::window()
-            && View::from_location() != view
+            && View::from_location(self.installation) != view
         {
             let _ = window.location().set_hash(view.fragment());
         }
@@ -77,10 +115,11 @@ pub fn TopBar(
     on_status: impl Fn() + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
     let current = expect_context::<CurrentView>();
-    let tabs = View::ALL
-        .into_iter()
+    let tabs = View::tabs(current.installation)
+        .iter()
+        .copied()
         .map(|view| {
-            let selected = move || current.0.get() == view;
+            let selected = move || current.view.get() == view;
             view! {
                 <button
                     class="tab tappable"
@@ -139,9 +178,14 @@ pub fn Banners(
     state: RwSignal<Option<RemoteState>>,
     commands: Commands,
 ) -> impl IntoView {
+    // A library has no screen: only the connection can be a problem there.
+    let has_screen = expect_context::<CurrentView>().installation == Installation::Screen;
     let problem = move || {
         if status.get() != Status::Connected {
             return Some(Problem::Disconnected);
+        }
+        if !has_screen {
+            return None;
         }
         // Only once a snapshot arrived: before that we do not know.
         state.with(|state| {

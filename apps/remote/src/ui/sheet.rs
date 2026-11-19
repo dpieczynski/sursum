@@ -43,7 +43,10 @@ pub fn Sheet(
             on_close();
         }
     };
-    let free = RwSignal::new(String::new());
+    // From the first frame, so the sheet does not jump aside a frame after it appears (a tap
+    // aimed at it would land on the dimmed area and close it); checked again on the next frame,
+    // in case opening the sheet changed the layout.
+    let free = RwSignal::new(controls_free_style());
     request_animation_frame(move || free.set(controls_free_style()));
     let resize = window_event_listener(ev::resize, move |_| free.set(controls_free_style()));
     on_cleanup(move || resize.remove());

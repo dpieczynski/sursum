@@ -26,6 +26,7 @@ pub fn DeviceSection() -> impl IntoView {
         }
     };
     let full = RwSignal::new(is_fullscreen());
+
     let toggle_full = move |_| {
         toggle_fullscreen();
         // The change is asynchronous; read it back a moment later.
@@ -34,6 +35,14 @@ pub fn DeviceSection() -> impl IntoView {
             full.set(is_fullscreen());
         });
     };
+    // Safari on iPhone has no full screen for pages; asking for it there would throw.
+    let fullscreen_button = can_fullscreen().then(|| {
+        view! {
+            <button class="btn btn--sm" on:click=toggle_full>
+                {move || if full.get() { pl(Msg::ExitFullscreen) } else { pl(Msg::Fullscreen) }}
+            </button>
+        }
+    });
     view! {
         <Section title=Msg::SectionDevice>
             <fieldset class="choices">
@@ -51,12 +60,7 @@ pub fn DeviceSection() -> impl IntoView {
                     {pl(Msg::Vibration)}
                 </label>
             </Show>
-            <div class="setting-row">
-                <button class="btn btn--sm" on:click=toggle_full>
-                    {move || if full.get() { pl(Msg::ExitFullscreen) } else { pl(Msg::Fullscreen) }}
-                </button>
-                <crate::key_settings::KeysButton />
-            </div>
+            <div class="setting-row">{fullscreen_button} <crate::key_settings::KeysButton /></div>
             <p class="hint">{pl(Msg::SleepTip)}</p>
         </Section>
     }
@@ -67,6 +71,15 @@ fn is_fullscreen() -> bool {
         .and_then(|window| window.document())
         .and_then(|document| document.fullscreen_element())
         .is_some()
+}
+
+/// Whether this browser lets a page go full screen (`document.fullscreenEnabled`; missing on
+/// iPhone). Read through `Reflect`: the web-sys methods throw where the API does not exist.
+fn can_fullscreen() -> bool {
+    web_sys::window().and_then(|window| window.document()).is_some_and(|document| {
+        js_sys::Reflect::get(&document, &wasm_bindgen::JsValue::from_str("fullscreenEnabled"))
+            .is_ok_and(|enabled| enabled.as_bool() == Some(true))
+    })
 }
 
 /// Full screen hides the browser's bars (it works without HTTPS).

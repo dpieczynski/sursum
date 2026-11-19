@@ -46,4 +46,8 @@ ignore = [
     # `paste` is unmaintained (not vulnerable); it comes in through Leptos (`either_of`). Revisit
     # when upgrading Leptos.
     { id = "RUSTSEC-2024-0436", reason = "transitive via Leptos, compile-time macro only" },
+    # `proc-macro-error` is unmaintained (not vulnerable); it comes in through tao's GTK 3
+    # dependencies, which only build on Linux. sursum-desktop uses tao on Windows only (its Linux
+    # window is GTK 4), so this code is never compiled; cargo-deny cannot see that.
+    { id = "RUSTSEC-2024-0370", reason = "tao's Linux-only GTK 3 deps; tao is used on Windows only" },
 ]

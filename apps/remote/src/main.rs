@@ -28,6 +28,7 @@ mod search;
 mod sets;
 mod settings;
 mod shell;
+mod songs;
 mod ui;
 
 use leptos::prelude::*;
@@ -49,13 +50,7 @@ fn Root() -> impl IntoView {
     leptos::task::spawn_local(async move {
         let info = api::get_json::<sursum_protocol::SessionInfo>("/api/session").await;
         // If the question itself fails, try to connect anyway; the server decides.
-        let open = sursum_protocol::SessionInfo {
-            pin_required: false,
-            paired: true,
-            admin: true,
-            setup_needed: false,
-            admin_remaining_s: None,
-        };
+        let open = sursum_protocol::SessionInfo { paired: true, admin: true, ..Default::default() };
         session.set(Some(info.unwrap_or(open)));
     });
     move || match session.get() {
@@ -144,11 +139,11 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     provide_context(editing);
     let calibrating = calibration::Calibrating(RwSignal::new(false));
     provide_context(calibrating);
-    let current = CurrentView(RwSignal::new(View::from_location()));
+    provide_context(info.installation);
+    let current = CurrentView::new(info.installation);
     provide_context(current);
     // Back and forward (also Android's back gesture) move between the views they recorded.
-    let history =
-        window_event_listener(leptos::ev::hashchange, move |_| current.0.set(View::from_location()));
+    let history = window_event_listener(leptos::ev::hashchange, move |_| current.follow_location());
     on_cleanup(move || history.remove());
     let maintenance = maintenance::Maintenance::new();
     provide_context(maintenance);
@@ -162,16 +157,17 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     let screen_open = RwSignal::new(false);
     let screen_sheet =
         move || screen_open.get().then(|| view! { <live::ScreenSheet state commands open=screen_open /> });
-    let content = move || match (editing.get(), current.0.get()) {
+    let content = move || match (editing.get(), current.view.get()) {
         (Some(target), _) => view! { <editor::Editor target editing state commands /> }.into_any(),
         (None, View::Live) => view! { <live::LiveSet state commands /> }.into_any(),
         (None, View::Set) => view! { <sets::SetsView state commands /> }.into_any(),
         (None, View::Settings) => view! { <settings::SettingsView state commands /> }.into_any(),
+        (None, View::Songs) => view! { <songs::SongsView /> }.into_any(),
     };
-    let view_attr = move || match current.0.get() {
-        View::Live => "live",
-        View::Set => "set",
-        View::Settings => "settings",
+    let view_attr = move || current.view.get().attribute();
+    let installation_attr = match info.installation {
+        sursum_protocol::Installation::Screen => "screen",
+        sursum_protocol::Installation::Library => "library",
     };
     let editing_attr = move || editing.with(Option::is_some).to_string();
 
@@ -180,6 +176,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
         <main
             class="remote"
             data-view=view_attr
+            data-installation=installation_attr
             data-hand=shell::hand_attribute(prefs)
             data-editing=editing_attr
         >

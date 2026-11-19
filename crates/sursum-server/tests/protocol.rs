@@ -18,7 +18,7 @@ type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn start(data_dir: &std::path::Path, boot_id: &str) -> RunningServer {
     let mut config = Config::with_data_dir(data_dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
     sursum_server::start(config, &FixedPlatform(Some(boot_id.to_owned()))).await.unwrap()
 }
 
@@ -536,6 +536,7 @@ async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() 
             admin: false,
             setup_needed: false,
             admin_remaining_s: None,
+            installation: sursum_protocol::Installation::Screen,
         }
     );
 
@@ -874,7 +875,7 @@ async fn start_with_projector(
 ) -> RunningServer {
     let mut config = Config::with_data_dir(dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
     config.display_power = sursum_server::config::DisplayPowerConfig::Pjlink {
         host: projector.to_string(),
         password: Some(password.to_owned()),
@@ -982,7 +983,7 @@ async fn a_screen_that_stays_away_gets_its_kiosk_restarted_and_remotes_know() {
     let marker = dir.path().join("kiosk-restarted");
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
     config.screen_guard = Some(sursum_server::screen_guard::ScreenGuardConfig {
         restart_command: vec!["sh".into(), "-c".into(), format!("touch '{}'", marker.display())],
         grace_s: 1,
@@ -1126,5 +1127,26 @@ async fn sets_can_be_renamed_and_deleted_but_not_while_on_screen() {
     let state = next_remote_state(&mut remote).await;
     let names: Vec<&str> = state.sets.iter().map(|set| set.name.as_str()).collect();
     assert_eq!(names, ["Następna", "Niedziela"], "stored");
+    server.stop().await.unwrap();
+}
+
+/// The desktop program's mode (ADR 0020): admin without a PIN, only on loopback, and the remote
+/// learns that there is no screen.
+#[tokio::test]
+async fn the_local_owner_mode_is_a_library_on_loopback_only() {
+    use sursum_protocol::{Installation, SessionInfo};
+    use sursum_server::auth::AccessMode;
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = Config::with_data_dir(dir.path());
+    config.listen = "0.0.0.0:0".parse().unwrap();
+    config.access = AccessMode::LocalOwner;
+    config.installation = Installation::Library;
+    assert!(sursum_server::start(config.clone(), &FixedPlatform(None)).await.is_err());
+
+    config.listen = "127.0.0.1:0".parse().unwrap();
+    let server = sursum_server::start(config, &FixedPlatform(None)).await.unwrap();
+    let session: SessionInfo = serde_json::from_str(&http_get(&server, "/api/session").await).unwrap();
+    assert!(session.paired && session.admin && !session.setup_needed && !session.pin_required);
+    assert_eq!(session.installation, Installation::Library);
     server.stop().await.unwrap();
 }

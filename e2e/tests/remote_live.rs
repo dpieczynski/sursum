@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use sursum_e2e::{
-    Browser, SCREEN_ROOT, Server, attribute, open_tab, wait_for_slide, wait_until, with_engine,
+    Browser, SCREEN_ROOT, Server, attribute, open_tab, shown_text, wait_for_slide, wait_until, with_engine,
 };
 use sursum_protocol::{Command, EndOfItem, SongId};
 use thirtyfour::prelude::*;
@@ -30,7 +30,7 @@ async fn with_remote(
     drop(control);
     with_engine(Browser::Chromium, 640, 360, async |screen| {
         screen.goto(server.url("/screen/")).await?;
-        with_engine(Browser::Chromium, width, height, async |remote| {
+        with_engine(Browser::for_remote(), width, height, async |remote| {
             remote.goto(server.url("/remote/")).await?;
             wait_until(Duration::from_secs(10), || async {
                 remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
@@ -153,7 +153,7 @@ async fn black_turns_into_show_text_and_a_tapped_item_lifts_it() -> anyhow::Resu
         .await?;
         // The remote gets its snapshot independently of the screen.
         wait_until(Duration::from_secs(5), || async {
-            cover.text().await.is_ok_and(|text| text == "Pokaż tekst")
+            shown_text(&cover).await.is_ok_and(|text| text == "Pokaż tekst")
         })
         .await
         .context("the button must offer to show the text again")?;
@@ -192,10 +192,7 @@ async fn black_turns_into_show_text_and_a_tapped_item_lifts_it() -> anyhow::Resu
 async fn next_shows_a_gap_before_the_next_song_and_says_so() -> anyhow::Result<()> {
     with_remote(1280, 800, async |server, screen, remote| {
         let caption = async || {
-            remote
-                .find(By::Css("[data-testid=next-caption]"))
-                .await?
-                .text()
+            shown_text(&remote.find(By::Css("[data-testid=next-caption]")).await?)
                 .await
                 .map_err(anyhow::Error::from)
         };
@@ -260,7 +257,7 @@ async fn next_stops_at_the_end_of_the_set() -> anyhow::Result<()> {
         })
         .await
         .context("next never stopped")?;
-        let caption = remote.find(By::Css("[data-testid=next-caption]")).await?.text().await?;
+        let caption = shown_text(&remote.find(By::Css("[data-testid=next-caption]")).await?).await?;
         anyhow::ensure!(caption == "Koniec zestawu", "caption at the end: {caption:?}");
         Ok(())
     })
@@ -348,7 +345,7 @@ async fn the_gap_can_be_turned_off_in_the_settings() -> anyhow::Result<()> {
         control.command(Command::GoToSlide { slide_index: last }).await?;
         wait_until(Duration::from_secs(5), || async {
             match remote.find(By::Css("[data-testid=next-caption]")).await {
-                Ok(caption) => caption.text().await.unwrap_or_default().starts_with("→ 2."),
+                Ok(caption) => shown_text(&caption).await.unwrap_or_default().starts_with("→ 2."),
                 Err(_) => false,
             }
         })

@@ -16,6 +16,23 @@ build-web:
 build: build-web
     cargo build --release -p sursum-server
 
+# Build the desktop program `sursum` (ADR 0020) for this computer (Linux needs the GTK 4 and
+# WebKitGTK 6.0 development packages; Windows builds it with MSVC, see the CI).
+desktop: build-web
+    cargo build --release -p sursum-desktop
+
+# Install the desktop program for this Linux user: the binary in ~/.local/bin, the menu entry and
+# its icon (GTK finds the window's icon by the application id).
+desktop-install: desktop
+    install -Dm755 target/release/sursum ~/.local/bin/sursum
+    install -Dm644 crates/sursum-desktop/assets/io.github.dpieczynski.Sursum.desktop ~/.local/share/applications/io.github.dpieczynski.Sursum.desktop
+    install -Dm644 crates/sursum-desktop/assets/sursum.svg ~/.local/share/icons/hicolor/scalable/apps/io.github.dpieczynski.Sursum.svg
+
+# Start the desktop program with an empty data folder until the remote in its window connects
+# (needs a display; CI runs it under `dbus-run-session -- xvfb-run -a`).
+desktop-smoke: desktop
+    scripts/desktop-smoke.sh target/release/sursum
+
 # Run the server and both apps with auto-reload (server :8080, remote :8081, screen :8082).
 dev:
     #!/usr/bin/env bash
@@ -37,27 +54,32 @@ test:
 browsers-image:
     podman build -t localhost/sursum-browsers -f e2e/browsers.Containerfile e2e
 
-# Start chromedriver (:9515) and WPEWebDriver (:9516) in the background, on localhost only.
+# Start chromedriver (:9515), WPEWebDriver (:9516) and WebKitGTK's WebDriver (:9517) in the
+# background, on localhost only.
 # `--init` reaps finished browser processes; without it they pile up as zombies until new
 # sessions fail ("Timed out receiving message from renderer").
 browsers:
     podman run -d --rm --init --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
     podman run -d --rm --init --name sursum-wpedriver --network host localhost/sursum-browsers WPEWebDriver --port=9516
+    podman run -d --rm --init --name sursum-webkitgtkdriver --network host localhost/sursum-browsers webkitgtk-webdriver 9517
 
 # Stop the WebDriver containers.
 browsers-stop:
-    -podman stop sursum-chromedriver sursum-wpedriver
+    -podman stop sursum-chromedriver sursum-wpedriver sursum-webkitgtkdriver
 
 # Browser tests of the font fitting in the shared drawing crate (needs `just browsers`).
 test-wasm:
     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CHROMEDRIVER_REMOTE=http://127.0.0.1:9515 \
         cargo test -p sursum-slide --target wasm32-unknown-unknown --test dom
 
-# End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015).
+# End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015), then
+# the remote on WebKitGTK with the screen on Chromium (roadmap P2: WebKit as on an iPad).
 e2e: build-web
     cargo build -p sursum-server --features e2e-hooks
     SURSUM_E2E_BROWSER=chromium cargo test -p sursum-e2e -- --ignored --test-threads=1
     SURSUM_E2E_BROWSER=wpe cargo test -p sursum-e2e -- --ignored --test-threads=1
+    SURSUM_E2E_BROWSER=chromium SURSUM_E2E_REMOTE_BROWSER=webkitgtk cargo test -p sursum-e2e \
+        --test remote --test remote_live --test remote_sets --test remote_library -- --ignored --test-threads=1
 
 # Screenshots of the screen and the remote, for a quick visual check.
 screenshots dir="screenshots": build-web
@@ -71,7 +93,7 @@ remote-sizes dir="remote-sizes": build-web
 
 # Regenerate the third-party license notices served at /licenses (commit the result).
 licenses:
-    cargo about generate --fail -m crates/sursum-server/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs
+    cargo about generate --fail -m crates/sursum-desktop/Cargo.toml -o crates/sursum-server/assets/licenses-server.html about.hbs
     cargo about generate --fail -m apps/remote/Cargo.toml -o crates/sursum-server/assets/licenses-web.html about.hbs
     sed -i 's/\r$//' crates/sursum-server/assets/licenses-*.html
 
@@ -85,6 +107,7 @@ lint:
     leptosfmt --check crates/sursum-slide apps
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p sursum-slide -p sursum-client -p sursum-screen -p sursum-remote --target wasm32-unknown-unknown -- -D warnings
+    cargo-zigbuild clippy -p sursum-desktop --target x86_64-pc-windows-gnu --all-targets -- -D warnings
     scripts/check-spdx.sh
     cargo deny check
 

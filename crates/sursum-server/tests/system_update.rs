@@ -33,7 +33,7 @@ async fn start(dir: &Path, key: &ed25519_dalek::SigningKey) -> RunningServer {
     std::fs::write(dir.join("system-release"), "v1\n").unwrap();
     let mut config = Config::with_data_dir(dir.join("data"));
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
     config.bundle_key = Some(key.verifying_key());
     config.system_release = dir.join("system-release");
     config.system_request = dir.join("request");
@@ -116,7 +116,7 @@ async fn off_the_image_there_is_no_system_to_update() {
     let dir = tempfile::tempdir().unwrap();
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.open_without_pin = true;
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
     config.system_release = dir.path().join("no-such-file");
     config.system_request = dir.path().join("request");
     let server = sursum_server::start(config, &Supervised).await.unwrap();

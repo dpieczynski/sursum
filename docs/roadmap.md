@@ -160,9 +160,51 @@ reflashing (with a device backup first). Priority right after the first image wo
 and pairing survive, and a deliberately broken system update boots back into the old slot by
 itself. (All three met on the pilot Pi 5, 2026-11-18; CI-built images remain.)
 
+## D1 — Desktop program (ADR 0020)
+
+One program, `sursum`, with the server inside and the remote in its own window: for preparing
+songs at home (export, then "Scal bazę z pliku" in the church) and later for the parish PC.
+Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md).
+
+- [x] Spike (branch `spike/desktop-shell`, 2026-11-18): crate `sursum-desktop`; Linux window on GTK 4 + WebKitGTK 6.0 built and run on Fedora 45 (the remote connects and stays connected); Windows window on `tao` + `wry` cross-compiles with `cargo zigbuild` (9.9 MB, GUI subsystem); clippy clean for both targets; `cargo deny` passes with one exception
+- [ ] ⚠ Windows Defender flags the downloaded CI artifact (the ZIP with the unsigned `sursum.exe`) as a virus and deletes it right after the download (2026-11-19). Blocks the guide's download step. To find out: the detection name in Defender's protection history; whether the release's bare `.exe` is flagged too. Ways out: report a false positive to Microsoft (file submission), signing (the ADR 0020 amendment chose unsigned; revisit with an ADR if reporting is not enough)
+- [ ] ⚠ First run on Windows (the program starts, 2026-11-19; the rest not yet reported): the window opens, "Eksport bazy" saves a file, "Scal bazę z pliku" opens the file picker, closing the window ends the process; WebView2 present on the parish PC's Windows 10
+- [ ] ⚠ Linux by hand: the "save as" dialog of the export, the file picker of the merge, a second start only raises the first window
+- [x] The window behaves like a program: the web view's data in `webview/` beside the database, `sursum.log` (previous run kept as `sursum.previous.log`), a Polish message page instead of a silent exit (server failed, another copy running), one copy at a time through `sursum.lock` (Linux also hands a second start to the first window over D-Bus), links outside the server open in the system browser; checked on Fedora 45 (first start, second start, lock held by another process)
+- [x] MSVC target on a Windows runner, one `sursum.exe` (ADR 0020 amendment; the WebView2 SDK is BSD-3-Clause, its license is on `/licenses`, which also lists the desktop program's crates and links back to the remote): CI job `desktop-windows` with a non-blocking smoke test (the remote connects, read from `sursum.log`), artifact per commit (4.8 MB zipped), attached to releases; first run on GitHub 2026-11-18 (PR #1): built with MSVC on `windows-2025`, and the smoke test passed there, the remote in the WebView2 window connected to the server; first try on a real Windows (2026-11-19): "VCRUNTIME140_1.dll not found", because MSVC links the C runtime dynamically and the runner has the Visual C++ Redistributable; now linked statically (`.cargo/config.toml`, `+crt-static`) and CI fails if `sursum.exe` imports `vcruntime`/`msvcp`/`WebView2Loader` DLLs; with that it starts on a real Windows without errors (2026-11-19)
+- [x] Devcontainer (`libgtk-4-dev libwebkitgtk-6.0-dev`, checked on trixie: GTK 4.18.6, WebKitGTK 2.54.0) and CI (Ubuntu 24.04: GTK 4.14.5, WebKitGTK 2.52.6) carry the development packages; `just lint` also runs clippy for the Windows window (`cargo-zigbuild clippy`); `just desktop`, `just desktop-smoke`; all CI jobs green on PR #1 (2026-11-18)
+- [x] Library-only view of the remote for a computer without a screen: `SessionInfo.installation` (`screen` | `library`), Pieśni · Ustawienia tabs (search, new song, editor without "Zapisz i pokaż"; export, merge, OpenSong import, backup, about without updates), no screen status or banners (e2e: `remote_library.rs`)
+- [x] Local owner access mode (`AccessMode::LocalOwner` replaces the `open_without_pin` flag): admin without a PIN, refused unless the server listens on loopback; `sursum-server --library` (hidden) for the browser tests
+- [x] Program icon (`crates/sursum-desktop/assets/sursum.svg`: a lyrics slide in the remote's colours): window icon on Windows, `.exe` icon and name through `winresource` with MSVC (built in CI; how it looks not yet seen), Linux menu entry and icon by the application id (`just desktop-install`)
+- [x] Smoke test for the Linux window (`scripts/desktop-smoke.sh`: empty data folder, waits for the remote's connection in `sursum.log`); passes on the Fedora 45 desktop and headless under `dbus-run-session -- xvfb-run -a` (checked in a Fedora container); runs in CI after the build (the runner needs `kernel.apparmor_restrict_unprivileged_userns=0`: WebKitGTK's bubblewrap sandbox aborts the program where unprivileged user namespaces are forbidden ⚠ check on an Ubuntu desktop)
+- [x] Operator guide: "Pieśni przygotowane w domu" (download, the SmartScreen warning, write, export, merge in the church, bringing the church's songs home first) — screenshots once the program has run on Windows
+- [ ] Later: the same program on the parish PC with the screen on the projector, replacing `deploy/windows/start-pilot.ps1` (decide after P1)
+
+**Done when:** a parishioner downloads one thing on Windows, starts it without a console or a
+browser, writes a song with the preview, exports the library, and the church device merges it.
+
+## P2 — iPad as a remote (WebKit)
+
+Prepared without hardware as far as that goes (ADR 0021): the remote's tests on WebKitGTK in CI,
+iPadOS itself in the iPad Simulator on a macOS runner. Support is only announced after one
+session on a real device. Work packages: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md), section 6.
+
+- [x] Minimum version iPadOS 16.4 (ADR 0021): every WebAssembly feature our build emits works from Safari 15 (webassembly.org); the newest CSS is `overflow: clip` (16); page full screen on iPad from 16.4
+- [x] Remote tests on WebKit, blocking in `just e2e`: WebKitGTK's WebDriver and MiniBrowser under Xvfb in the browsers image (port 9517), `SURSUM_E2E_REMOTE_BROWSER=webkitgtk`; all 30 remote tests pass. Headless WPE was tried first and cannot (view fixed at 800×600; page zoom breaks clicks). Driver differences handled in the harness (`shown_text`, `typed`)
+- [x] Audit fixes: safe areas on every side and width (the tablet layouts had dropped the bottom inset), fields at 16px or more, full screen offered only where it exists, buttons clip with `overflow: clip`; found on the way (also in Chromium): the live preview overflowed its row on a 768×1024 iPad upright, and a sheet jumped beside the controls a frame after opening (a tap could close it); `just remote-sizes` covers iPad sizes
+- [ ] iPad Simulator workflow (`.github/workflows/ipad.yml`, by hand and weekly, not blocking): `safari-ipad` in the harness, screen in Chrome ⚠ not yet run (`safaridriver --enable` and simulator sessions on hosted runners, `CHROMEWEBDRIVER`, the server building on macOS)
+- [x] ADR 0021: the remote joins the WebKit API contract of ADR 0015
+- [ ] Screen stays awake: Screen Wake Lock needs HTTPS (M6); until then the guide asks for Auto-Lock "Never" during the service
+- [ ] One session on a real device with the checklist in `docs/testing.md` ("iPad on a real device")
+- [ ] Operator guide section for the iPad (after that session)
+
+**Done when:** the remote tests are blocking on WebKit (done) and pass in the iPad Simulator, and
+the checklist has passed once on a real iPad. Until that session the guide says "prepared, not
+confirmed".
+
 ## Later
 
 M6 optional HTTPS (device CA) + PWA + wake lock · an x86_64 mini-PC image (`mkosi` +
 `systemd-sysupdate`) ·
 M8 liturgical calendar/readings (licensing!) · M9 video backgrounds (HEVC on Pi 5) · M10 multiple
-screens · M11 internet sync · iPad (WebKit) support. **MIDI: dropped** (ADR 0002).
+screens · M11 internet sync. **MIDI: dropped** (ADR 0002).

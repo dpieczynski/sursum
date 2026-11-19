@@ -37,6 +37,7 @@ use tokio::sync::oneshot;
 
 pub use config::Config;
 pub use platform::{Platform, SystemPlatform};
+pub use sursum_protocol::Installation;
 
 /// Build identifier compiled into the server and the web apps; a mismatch makes clients reload.
 pub const BUILD_ID: &str = match option_env!("SURSUM_BUILD_ID") {
@@ -71,6 +72,12 @@ impl RunningServer {
 
 /// Starts the server in the background and returns once it listens.
 pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<RunningServer> {
+    // The local owner needs no PIN only because nothing outside this computer can connect.
+    anyhow::ensure!(
+        config.access != auth::AccessMode::LocalOwner || config.listen.ip().is_loopback(),
+        "the local owner mode needs a loopback address, not {}",
+        config.listen
+    );
     match device_backup::apply_staged(&config.data_dir) {
         Ok(true) => tracing::info!("restored a device backup"),
         Ok(false) => {}
@@ -83,15 +90,17 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         tracing::error!(?error, "could not write the startup backup");
     }
     let pin: Option<auth::PinHash> = database.setting(auth::PIN_SETTING).context("loading the PIN")?;
-    match (&pin, config.open_without_pin) {
+    match (&pin, config.access) {
+        (_, auth::AccessMode::LocalOwner) => tracing::info!("desktop program: this computer's user is admin"),
         (Some(_), _) => {}
-        (None, false) => tracing::warn!("no PIN is set: the first remote to open the page must set one"),
-        (None, true) => tracing::warn!(
+        (None, auth::AccessMode::Pin) => {
+            tracing::warn!("no PIN is set: the first remote to open the page must set one");
+        }
+        (None, auth::AccessMode::OpenForDevelopment) => tracing::warn!(
             "no PIN is set and --open-without-pin is on: any device on the local network is admin"
         ),
     }
-    let access =
-        std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?, config.open_without_pin));
+    let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?, config.access));
     let state = actor::spawn(&config, database, platform)?;
     let power = display_power::spawn(&config.display_power, state.clone());
     let state_for_watchdog = state.clone();

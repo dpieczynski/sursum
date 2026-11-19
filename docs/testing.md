@@ -6,10 +6,11 @@ All tests are Rust; no Node or Python is needed.
 |---|---|
 | `just test` | unit + integration tests (native), incl. pure frontend logic (`fit_font_size`, backoff, labels) |
 | `just test-wasm` | `wasm-bindgen-test` in Chromium (via the chromedriver container): DOM measuring of `fit_deck` — chosen size fits and is the largest, longer lines/narrower areas shrink, one size per deck, independent of stage scaling |
-| `just e2e` | builds the web apps and an `e2e-hooks` server, then WebDriver tests: all on Chromium, then on WPE WebKit |
-| `just lint` | rustfmt, leptosfmt, clippy `-D warnings` (native and `wasm32-unknown-unknown`), SPDX check, cargo-deny |
+| `just e2e` | builds the web apps and an `e2e-hooks` server, then WebDriver tests: all on Chromium, then on WPE WebKit, then the remote suites with the remotes on WebKitGTK (ADR 0021) |
+| `just lint` | rustfmt, leptosfmt, clippy `-D warnings` (native, `wasm32-unknown-unknown`, and the desktop program's Windows window), SPDX check, cargo-deny |
+| `just desktop-smoke` | starts the desktop program with an empty data folder until the remote in its window connects (needs a display; CI uses `dbus-run-session -- xvfb-run -a`) |
 | `just screenshots [dir]` | PNG screenshots of the screen and the remote (needs `just browsers`) |
-| `just remote-sizes [dir]` | PNG screenshots of the remote at 360×800, 800×1280 and 1280×800, operator and admin (needs `just browsers`) |
+| `just remote-sizes [dir]` | PNG screenshots of the remote at 360×800, 800×1280, 1280×800 and iPad sizes (768×1024, 1024×768, 820×1180), operator and admin (needs `just browsers`) |
 
 ## WebDriver servers
 
@@ -66,6 +67,13 @@ started them another way).
   song, exclusion zones, set edits not affecting the screen), using classic WebDriver only (no
   CDP). `wasm-bindgen-test` for `sursum-slide` runs on WPE too. A cross-engine test compares the
   fitted font size and line count between WPE (screen) and Chromium (remote).
+- **The remote on WebKit (ADR 0021)**: the remote suites (`remote`, `remote_live`,
+  `remote_sets`, `remote_library`) run **blocking** with `SURSUM_E2E_REMOTE_BROWSER=webkitgtk`:
+  WebKitGTK's `WebKitWebDriver` and MiniBrowser under Xvfb (port 9517), the screen on Chromium.
+  Headless WPE cannot do this (its view is fixed at 800×600). WebKit's driver returns "" as the
+  text of anything with `overflow: hidden` and types nothing for "\n": read text with
+  `shown_text` and type lines with `typed`. The `iPad` workflow (by hand, weekly) runs the same
+  suites in Safari on an iPad Simulator (`safari-ipad`, macOS runner), not blocking yet.
 - **Fallback**: if WebDriver + CDP/BiDi cannot cover a case (e.g. inspecting WebSocket frames),
   Playwright for Python may be added for that case only (ADR 0014).
 - **On-device (M4)**: 100 power-cut cycles, late projector power-on and HDMI replug, 8-hour soak,
@@ -76,6 +84,29 @@ started them another way).
 Only public-domain or synthetic texts. Add every new fixture to
 [fixtures/LICENSES.md](../fixtures/LICENSES.md). OpenSong fixtures keep their exact bytes
 (`.gitattributes` disables EOL conversion for them).
+
+## iPad on a real device (once, before the guide calls it supported)
+
+Prepared without hardware (ADR 0021); one session on a real iPad (iPadOS 16.4 or later; a
+borrowed one is enough, an iPhone covers everything but the layout) confirms it. Synthetic or
+public-domain songs only. Note the iPad model and iPadOS version, then check:
+
+1. Pairing through `http://sursum.local/` on the church network (and by IP address if `.local`
+   fails), PIN entry with the on-screen keyboard.
+2. The Msza view upright and lying: nothing overlaps, nothing sits under the home indicator or
+   the rounded corners; turning the iPad keeps the layout.
+3. Taps: Dalej, Wstecz, a tapped set item goes live; black is one tap away with a sheet open.
+4. Hold buttons (Uśpij ekran, deleting a set): a long press does not open Safari's menu.
+5. The search and the editor: the page does not zoom when a field gets focus; the live strip
+   stays usable with the on-screen keyboard open.
+6. Lock the iPad for a minute, unlock: the remote reconnects by itself; switch to another app
+   and back: the same.
+7. A whole set by touch, then by a Bluetooth pedal (page keys).
+8. Ustawienia → Eksport bazy saves to Files; Scal bazę z pliku picks it from Files.
+9. Full screen (Ustawienia → To urządzenie) on, then off.
+10. Add to Home Screen, open from there: everything above still works.
+
+Write the result (model, iPadOS version, what failed) into the roadmap's P2 section.
 
 ## Testing with a real parish library
 

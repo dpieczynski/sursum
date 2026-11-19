@@ -5,9 +5,16 @@
 //! Environment:
 //! - `SURSUM_SERVER_BIN`: server binary (default: `target/debug/sursum-server`; build it with
 //!   `--features e2e-hooks` for the first-frame test);
-//! - `SURSUM_E2E_BROWSER`: `chromium` (default) or `wpe`;
+//! - `SURSUM_E2E_BROWSER`: `chromium` (default) or `wpe`, the engine under test (the screen's);
+//! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default), `webkitgtk` or `safari-ipad`, the remotes'
+//!   engine (roadmap P2: the remote on WebKit; headless WPE cannot, its view is fixed at 800×600;
+//!   `safari-ipad` is Safari in the iPad Simulator through `safaridriver` on macOS, where the
+//!   window is the simulated iPad's screen and cannot be resized);
+//! - `SURSUM_CHROMIUM_BINARY`: Chromium or Chrome (default `/usr/bin/chromium`, as in the
+//!   browsers image; on macOS Chrome's path);
 //! - `SURSUM_WEBDRIVER_URL`: WebDriver server (default `http://127.0.0.1:9515` for Chromium,
-//!   `http://127.0.0.1:9516` for WPE).
+//!   `http://127.0.0.1:9516` for WPE, `http://127.0.0.1:9517` for WebKitGTK,
+//!   `http://127.0.0.1:4444` for `safaridriver`).
 //!
 //! The browsers run in the `sursum-browsers` container with host networking (`just browsers`).
 
@@ -38,6 +45,8 @@ enum Access<'a> {
     Pin(&'a str),
     /// No PIN yet: the first remote must set one.
     NewDevice,
+    /// The desktop program's library: no screen, no PIN (ADR 0020).
+    Library,
 }
 
 impl Server {
@@ -61,6 +70,11 @@ impl Server {
         Self::start_prepared(&[], Some(config_toml), Access::Pin(pin)).await
     }
 
+    /// Starts a server as the desktop program runs it: a library without a screen or a PIN.
+    pub async fn start_library() -> anyhow::Result<Server> {
+        Self::start_prepared(&[], None, Access::Library).await
+    }
+
     /// Starts a server as freshly installed: no PIN, so the first remote must set one.
     pub async fn start_new_device() -> anyhow::Result<Server> {
         Self::start_prepared(&[], Some("transition_ms = 0\n"), Access::NewDevice).await
@@ -76,8 +90,10 @@ impl Server {
             std::fs::write(data_dir.path().join("config.toml"), config)?;
         }
         let mut extra_args: Vec<String> = extra_args.iter().map(|arg| (*arg).to_owned()).collect();
-        if matches!(access, Access::Open) {
-            extra_args.push("--open-without-pin".to_owned());
+        match access {
+            Access::Open => extra_args.push("--open-without-pin".to_owned()),
+            Access::Library => extra_args.push("--library".to_owned()),
+            Access::Pin(_) | Access::NewDevice => {}
         }
         if let Access::Pin(pin) = access {
             let status = Process::new(server_binary())
@@ -258,13 +274,29 @@ pub enum Browser {
     Chromium,
     /// WPE WebKit through cog (ADR 0015).
     Wpe,
+    /// WebKitGTK's MiniBrowser: WebKit in a window whose size can be set, for the remote
+    /// (roadmap P2).
+    WebKitGtk,
+    /// Safari in the iPad Simulator (macOS with Xcode, roadmap P2).
+    SafariIpad,
 }
 
 impl Browser {
     /// From `SURSUM_E2E_BROWSER`.
     pub fn from_env() -> Browser {
-        match std::env::var("SURSUM_E2E_BROWSER").as_deref() {
+        Browser::named_in("SURSUM_E2E_BROWSER")
+    }
+
+    /// The remotes' engine, from `SURSUM_E2E_REMOTE_BROWSER`.
+    pub fn for_remote() -> Browser {
+        Browser::named_in("SURSUM_E2E_REMOTE_BROWSER")
+    }
+
+    fn named_in(variable: &str) -> Browser {
+        match std::env::var(variable).as_deref() {
             Ok("wpe") => Browser::Wpe,
+            Ok("webkitgtk") => Browser::WebKitGtk,
+            Ok("safari-ipad") => Browser::SafariIpad,
             _ => Browser::Chromium,
         }
     }
@@ -273,6 +305,8 @@ impl Browser {
         std::env::var("SURSUM_WEBDRIVER_URL").unwrap_or_else(|_| match self {
             Browser::Chromium => "http://127.0.0.1:9515".to_owned(),
             Browser::Wpe => "http://127.0.0.1:9516".to_owned(),
+            Browser::WebKitGtk => "http://127.0.0.1:9517".to_owned(),
+            Browser::SafariIpad => "http://127.0.0.1:4444".to_owned(),
         })
     }
 
@@ -281,7 +315,8 @@ impl Browser {
             Browser::Chromium => serde_json::json!({
                 "browserName": "chrome",
                 "goog:chromeOptions": {
-                    "binary": "/usr/bin/chromium",
+                    "binary": std::env::var("SURSUM_CHROMIUM_BINARY")
+                        .unwrap_or_else(|_| "/usr/bin/chromium".to_owned()),
                     "args": [
                         "--headless=new", "--no-sandbox", "--hide-scrollbars", "--force-device-scale-factor=1",
                         format!("--window-size={width},{height}"),
@@ -294,6 +329,18 @@ impl Browser {
                     "args": ["--automation", "--platform=headless", "--bg-color=black"],
                 },
             }),
+            Browser::SafariIpad => serde_json::json!({
+                "browserName": "safari",
+                "platformName": "iOS",
+                "safari:useSimulator": true,
+                "safari:deviceType": "iPad",
+            }),
+            Browser::WebKitGtk => serde_json::json!({
+                "webkitgtk:browserOptions": {
+                    "binary": "/usr/lib/x86_64-linux-gnu/webkitgtk-6.0/MiniBrowser",
+                    "args": ["--automation"],
+                },
+            }),
         };
         let serde_json::Value::Object(map) = value else { unreachable!("literal object") };
         Capabilities::from(map)
@@ -304,6 +351,15 @@ impl Browser {
         let driver = WebDriver::new(self.webdriver_url(), self.capabilities(width, height)).await?;
         // WPE headless ignores the window-size flag; ask through WebDriver as well.
         let _ = driver.set_window_rect(0, 0, width, height).await;
+        if self == Browser::WebKitGtk {
+            // The size WebDriver sets includes the window's frame: grow it by the difference.
+            let inner: (u32, u32) =
+                driver.execute("return [innerWidth, innerHeight]", Vec::new()).await?.convert()?;
+            let (extra_width, extra_height) = (width.saturating_sub(inner.0), height.saturating_sub(inner.1));
+            if extra_width > 0 || extra_height > 0 {
+                driver.set_window_rect(0, 0, width + extra_width, height + extra_height).await?;
+            }
+        }
         Ok(driver)
     }
 }
@@ -345,6 +401,19 @@ where
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     bail!("condition not met within {timeout:?}")
+}
+
+/// Keys that type `text`, line breaks as the Enter key: chromedriver turns "\n" into Enter, but
+/// the WebDriver standard (and WebKit's driver) types nothing for it.
+pub fn typed(text: &str) -> String {
+    text.replace('\n', "\u{E007}")
+}
+
+/// The text an element shows (`innerText`). WebDriver's own "element text" first asks whether the
+/// element is displayed, and WebKit's driver answers no for anything with `overflow: hidden`
+/// (every text cut off with an ellipsis), returning "".
+pub async fn shown_text(element: &WebElement) -> WebDriverResult<String> {
+    Ok(element.prop("innerText").await?.unwrap_or_default())
 }
 
 /// Opens a tab of the remote: "msza", "zestaw" or "ustawienia".

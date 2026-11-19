@@ -129,6 +129,36 @@ Ref.
 - Kto zna OpenSong, może pisać jak dotąd: `[V1]`, `[C]`, `[B]`. Kolejność sekcji (np. `V1 C V2 C`)
   jest w części **Zaawansowane**.
 
+## Pieśni przygotowane w domu
+
+Pieśni można przygotować na własnym komputerze z Windows (na Linuksie też działa) programem
+**Sursum** i przynieść je do kościoła w jednym pliku. Program działa bez internetu i bez
+urządzenia z kościoła; nie wyświetla niczego na ekranie, służy tylko do pieśni.
+
+1. Pobierz plik `sursum-<wersja>-windows-x86_64.exe` (od osoby, która opiekuje się sursum w
+   parafii, albo ze strony wydań) i uruchom go dwuklikiem. Instalacja nie jest potrzebna.
+2. Przy pierwszym uruchomieniu Windows może pokazać niebieskie okno „System Windows ochronił ten
+   komputer”. Program nie ma jeszcze podpisu cyfrowego, dlatego Windows go nie zna. Kliknij
+   **Więcej informacji**, a potem **Uruchom mimo to**. Kolejne uruchomienia odbywają się już
+   bez pytania.
+3. Program ma dwie zakładki: **Pieśni** i **Ustawienia**. W zakładce Pieśni wyszukaj pieśń, żeby
+   ją poprawić, albo dotknij **Nowa pieśń**. Pisze się tak samo jak w kościele (rozdział
+   [Nowa pieśń](#nowa-pieśń)), a obok widać, jak slajdy będą wyglądać na ekranie.
+4. Gdy skończysz: **Ustawienia → Baza pieśni → Eksport bazy**. Zapisz plik
+   `biblioteka.sursum` (np. na pendrive albo wyślij go sobie pocztą).
+5. W kościele, na pilocie: **Ustawienia → Baza pieśni → Scal bazę z pliku** 🔒 i wybierz ten
+   plik. Najpierw zobaczysz, co się zmieni; dopiero **Scal** zapisuje. Nic nie znika: jeśli tę
+   samą pieśń zmieniono i w domu, i w kościele, druga wersja trafi do bazy jako kopia
+   „(kopia ze scalenia)”.
+
+Chcesz w domu poprawiać pieśni, które są już w kościele? Najpierw zrób **Eksport bazy** na
+pilocie w kościele i **Scal bazę z pliku** w programie w domu; wtedy masz w domu te same pieśni.
+
+Pieśni w domu leżą w folderze `%LOCALAPPDATA%\sursum` (na Linuksie `~/.local/share/sursum`).
+Program może być uruchomiony tylko raz; jeśli drugie okno mówi „Sursum jest już uruchomiony”,
+poszukaj pierwszego okna na pasku zadań. Gdy coś nie działa, przyda się plik `sursum.log` z
+tego folderu.
+
 ## Po mszy
 
 Dotknij napisu stanu w prawym górnym rogu i przytrzymaj **Uśpij ekran** przez półtorej sekundy

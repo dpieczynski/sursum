@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# The desktop program for Windows is one file (ADR 0020): link the C runtime statically, otherwise
+# it needs VCRUNTIME140.dll and VCRUNTIME140_1.dll from the Visual C++ Redistributable, which
+# ordinary Windows installations do not have. (The windows-gnu builds do not use it.)
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

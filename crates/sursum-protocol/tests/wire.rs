@@ -154,13 +154,14 @@ fn merge_report() {
 /// default to false).
 #[test]
 fn pairing() {
-    use sursum_protocol::{PairOutcome, SessionInfo};
+    use sursum_protocol::{Installation, PairOutcome, SessionInfo};
     let session = SessionInfo {
         pin_required: false,
         paired: false,
         admin: false,
         setup_needed: true,
         admin_remaining_s: None,
+        installation: Installation::Screen,
     };
     let unlocked = SessionInfo {
         pin_required: true,
@@ -168,6 +169,15 @@ fn pairing() {
         admin: true,
         setup_needed: false,
         admin_remaining_s: Some(840),
+        installation: Installation::Screen,
+    };
+    let library = SessionInfo {
+        pin_required: false,
+        paired: true,
+        admin: true,
+        setup_needed: false,
+        admin_remaining_s: None,
+        installation: Installation::Library,
     };
     let outcomes = [
         PairOutcome::Paired,
@@ -177,9 +187,9 @@ fn pairing() {
         PairOutcome::AlreadySet,
         PairOutcome::Locked { retry_after_s: 30 },
     ];
-    insta::assert_json_snapshot!((session, unlocked, outcomes));
+    insta::assert_json_snapshot!((session, unlocked, library, outcomes));
     let old: SessionInfo = serde_json::from_str(r#"{"pin_required":true,"paired":false}"#).unwrap();
-    assert!(!old.admin && !old.setup_needed);
+    assert!(!old.admin && !old.setup_needed && old.installation == Installation::Screen);
 }
 
 /// Updates go over REST. The remote that uploads a bundle reloads into the new build, so these
