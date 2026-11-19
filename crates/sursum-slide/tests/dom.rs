@@ -6,9 +6,10 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use sursum_protocol::{Background, Deck, DeckId, ItemId, Rect, Slide, SlideBody, SlideKey, Theme};
+use sursum_protocol::{Background, Deck, DeckId, ItemId, Rect, Slide, SlideBody, SlideKey};
 use sursum_slide::fit::fit_deck;
 use sursum_slide::slide_view::{lines_class, text_box_style};
+use sursum_slide::theme::THEME;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -62,15 +63,11 @@ fn deck(group: &str, slides: &[&[&str]]) -> Deck {
 
 /// Draws `lines` at `font_px` exactly like the screen and reports whether they overflow.
 fn overflows(measurer: &web_sys::HtmlElement, lines: &[&str], content: Rect, font_px: u32) -> bool {
-    let theme = Theme::default();
     let document = document();
     let text: web_sys::HtmlElement = document.create_element("div").unwrap().dyn_into().unwrap();
-    text.set_class_name(&lines_class(&theme, false));
-    text.set_attribute(
-        "style",
-        &text_box_style(&theme, Rect::new(0, 0, content.width, content.height), font_px),
-    )
-    .unwrap();
+    text.set_class_name(lines_class(false));
+    text.set_attribute("style", &text_box_style(Rect::new(0, 0, content.width, content.height), font_px))
+        .unwrap();
     for line in lines {
         let row = document.create_element("div").unwrap();
         row.set_class_name("sursum-line");
@@ -89,7 +86,7 @@ const LONG: &[&str] = &["Ta linia jest wyraźnie dłuższa od pozostałych, żeb
 #[wasm_bindgen_test]
 async fn the_chosen_size_fits_and_one_size_more_does_not() {
     let measurer = stage(1.0);
-    let fit = fit_deck(&deck("fits", &[SHORT, LONG]), &Theme::default(), FULL, &measurer).await;
+    let fit = fit_deck(&deck("fits", &[SHORT, LONG]), FULL, &measurer).await;
     assert!(!fit.wrap);
     assert!(!overflows(&measurer, LONG, FULL, fit.font_px), "{fit:?} overflows");
     assert!(overflows(&measurer, LONG, FULL, fit.font_px + 1), "{fit:?} is not the largest size");
@@ -98,31 +95,28 @@ async fn the_chosen_size_fits_and_one_size_more_does_not() {
 #[wasm_bindgen_test]
 async fn longer_lines_and_narrower_areas_get_smaller_text() {
     let measurer = stage(1.0);
-    let theme = Theme::default();
-    let short = fit_deck(&deck("short", &[SHORT]), &theme, FULL, &measurer).await;
-    let long = fit_deck(&deck("long", &[LONG]), &theme, FULL, &measurer).await;
+    let short = fit_deck(&deck("short", &[SHORT]), FULL, &measurer).await;
+    let long = fit_deck(&deck("long", &[LONG]), FULL, &measurer).await;
     assert!(long.font_px < short.font_px, "{long:?} vs {short:?}");
     // The same song next to an exclusion zone: less width, smaller text.
     let beside_zone = Rect::new(648, 48, 1224, 984);
-    let narrow = fit_deck(&deck("long", &[LONG]), &theme, beside_zone, &measurer).await;
+    let narrow = fit_deck(&deck("long", &[LONG]), beside_zone, &measurer).await;
     assert!(narrow.font_px < long.font_px, "{narrow:?} vs {long:?}");
 }
 
 #[wasm_bindgen_test]
 async fn one_size_for_the_whole_deck_is_set_by_its_longest_slide() {
     let measurer = stage(1.0);
-    let theme = Theme::default();
-    let alone = fit_deck(&deck("long-alone", &[LONG]), &theme, FULL, &measurer).await;
-    let together = fit_deck(&deck("mixed", &[SHORT, LONG, SHORT]), &theme, FULL, &measurer).await;
+    let alone = fit_deck(&deck("long-alone", &[LONG]), FULL, &measurer).await;
+    let together = fit_deck(&deck("mixed", &[SHORT, LONG, SHORT]), FULL, &measurer).await;
     assert_eq!(together, alone);
 }
 
 #[wasm_bindgen_test]
 async fn scaling_the_stage_does_not_change_the_size() {
-    let theme = Theme::default();
-    let screen = fit_deck(&deck("scale-1", &[SHORT, LONG]), &theme, FULL, &stage(1.0)).await;
+    let screen = fit_deck(&deck("scale-1", &[SHORT, LONG]), FULL, &stage(1.0)).await;
     // A remote preview is the same stage scaled down; a new group avoids the cache.
-    let preview = fit_deck(&deck("scale-0.3", &[SHORT, LONG]), &theme, FULL, &stage(0.3)).await;
+    let preview = fit_deck(&deck("scale-0.3", &[SHORT, LONG]), FULL, &stage(0.3)).await;
     assert_eq!(preview, screen);
 }
 
@@ -131,10 +125,9 @@ async fn a_hidden_measurer_does_not_spoil_the_size_for_a_visible_one() {
     let hidden = stage(1.0);
     let frame = hidden.parent_element().unwrap().unchecked_into::<web_sys::HtmlElement>();
     frame.style().set_property("display", "none").unwrap();
-    let theme = Theme::default();
-    let hidden_fit = fit_deck(&deck("hidden-first", &[LONG]), &theme, FULL, &hidden).await;
-    assert_eq!(hidden_fit.font_px, theme.min_font_px, "nothing can be measured while hidden");
-    let visible = fit_deck(&deck("hidden-first", &[LONG]), &theme, FULL, &stage(1.0)).await;
+    let hidden_fit = fit_deck(&deck("hidden-first", &[LONG]), FULL, &hidden).await;
+    assert_eq!(hidden_fit.font_px, THEME.min_font_px, "nothing can be measured while hidden");
+    let visible = fit_deck(&deck("hidden-first", &[LONG]), FULL, &stage(1.0)).await;
     assert!(!overflows(&stage(1.0), LONG, FULL, visible.font_px), "measured for real, not from the cache");
     assert!(overflows(&stage(1.0), LONG, FULL, visible.font_px + 1));
 }

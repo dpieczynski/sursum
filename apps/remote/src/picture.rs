@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Uploading pictures: a poster for the set, or the parish logo (admin).
+//! Uploading pictures: a poster for the set, or the parish logo.
 
 use leptos::prelude::*;
 use sursum_protocol::{AssetId, Command};
@@ -55,7 +55,7 @@ pub fn AddPictureButton(commands: Commands) -> impl IntoView {
     view! { <UploadPicture label=Msg::Picture class="btn btn--sm" on_uploaded=add /> }
 }
 
-/// Sets the parish logo shown by the LOGO button (admin mode).
+/// Sets the parish logo shown by the LOGO button.
 #[component]
 pub fn LogoButton(commands: Commands) -> impl IntoView {
     let set = move |asset_id, _title| commands.send(Command::SetLogo { asset_id: Some(asset_id) });

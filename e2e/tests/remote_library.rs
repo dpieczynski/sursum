@@ -32,7 +32,7 @@ async fn the_library_offers_songs_and_settings_only() -> anyhow::Result<()> {
 
         open_tab(remote, "ustawienia").await?;
         remote.query(By::Css("a[href='/api/library/export']")).first().await.context("no export")?;
-        for absent in ["[data-testid=calibrate]", "[data-testid=settings-power]", "[data-testid=locked]"] {
+        for absent in ["[data-testid=calibrate]", "[data-testid=settings-power]"] {
             anyhow::ensure!(!shown(remote, absent).await, "{absent} is shown in the library");
         }
         Ok(())

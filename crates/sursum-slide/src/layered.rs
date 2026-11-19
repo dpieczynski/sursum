@@ -11,7 +11,7 @@ use futures_util::StreamExt;
 use leptos::html::Div;
 use leptos::prelude::*;
 use sursum_protocol::{
-    Background, DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideBody, SlideKey, Theme,
+    Background, DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideBody, SlideKey,
 };
 use wasm_bindgen::JsCast;
 
@@ -28,14 +28,13 @@ struct Shown {
     deck_id: DeckId,
     slide: Slide,
     background: Background,
-    theme: Theme,
     layout: ScreenLayout,
     fit: Fit,
 }
 
 impl Shown {
-    fn same_as(&self, deck_id: &DeckId, key: &SlideKey, theme: &Theme, layout: &ScreenLayout) -> bool {
-        &self.deck_id == deck_id && &self.slide.key == key && &self.theme == theme && &self.layout == layout
+    fn same_as(&self, deck_id: &DeckId, key: &SlideKey, layout: &ScreenLayout) -> bool {
+        &self.deck_id == deck_id && &self.slide.key == key && &self.layout == layout
     }
 }
 
@@ -156,16 +155,14 @@ impl Parts {
         let Some(slide) = crate::shown::shown_slide(&live) else { return };
         let current = self.front.get_untracked();
         let unchanged = self.layers[current].with_untracked(|shown| {
-            shown.as_ref().is_some_and(|shown| {
-                shown.same_as(&live.deck.deck_id, &slide.key, &target.theme, &target.layout)
-            })
+            shown.as_ref().is_some_and(|shown| shown.same_as(&live.deck.deck_id, &slide.key, &target.layout))
         });
         if unchanged {
             return;
         }
         let Some(measurer) = self.measurer.get_untracked() else { return };
         let measurer: web_sys::HtmlElement = measurer.unchecked_into();
-        let fit = fit_deck(&live.deck, &target.theme, target.layout.content, &measurer).await;
+        let fit = fit_deck(&live.deck, target.layout.content, &measurer).await;
         if let SlideBody::Image { asset_id, .. } = &slide.body {
             dom::decode_image(&crate::slide_view::asset_url(asset_id)).await;
         }
@@ -175,7 +172,6 @@ impl Parts {
             deck_id: live.deck.deck_id.clone(),
             slide,
             background: live.deck.background.clone(),
-            theme: target.theme.clone(),
             layout: target.layout.clone(),
             fit,
         }));
@@ -201,7 +197,7 @@ impl Parts {
 
         // Fit the next item in advance so its first slide appears without delay.
         if let Some(upcoming) = target.upcoming {
-            let _ = fit_deck(&upcoming, &target.theme, target.layout.content, &measurer).await;
+            let _ = fit_deck(&upcoming, target.layout.content, &measurer).await;
         }
     }
 }
@@ -224,7 +220,6 @@ fn layer_view(shown: RwSignal<Option<Shown>>, node_ref: NodeRef<Div>) -> impl In
                         view! {
                             <SlideView
                                 slide=shown.slide
-                                theme=shown.theme
                                 content=shown.layout.content
                                 font_px=shown.fit.font_px
                                 wrap=shown.fit.wrap

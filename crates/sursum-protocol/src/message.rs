@@ -30,8 +30,6 @@ pub enum ClientMsg {
     Cmd { seq: u32, base_rev: Rev, cmd: Command },
     /// Keep-alive; the server answers with [`ServerMsg::Pong`].
     Ping,
-    /// A client-side problem worth logging on the server (never shown on the screen).
-    Log { message: String },
 }
 
 /// Operator intents. The server owns all logic; commands only state what the operator wants.

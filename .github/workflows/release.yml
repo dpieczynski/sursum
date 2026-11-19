@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# A release for a version tag (`v0.2.0`): the signed application bundle for the Pi (ADR 0013), the
-# Windows pilot binary and the desktop program for Windows (ADR 0020), attached to a GitHub
-# release.
+# A release for a version tag (`v0.2.0`): the signed application bundle for the Pi (ADR 0013) and
+# the desktop program for Windows (ADR 0020), attached to a GitHub release.
 #
 # The signing secret is `SURSUM_BUNDLE_SIGNING_KEY` in the `release` environment, which only
 # `main` and `v*` tags may use; it is written to a file readable by the runner user only and
@@ -47,7 +46,7 @@ jobs:
           path: target/x86_64-pc-windows-msvc/release/sursum.exe
 
   release:
-    name: Signed bundle and Windows binaries
+    name: Signed bundle and the Windows program
     runs-on: ubuntu-24.04
     needs: desktop-windows
     environment: release
@@ -78,9 +77,6 @@ jobs:
           SURSUM_BUNDLE_SIGNING_KEY="$key_file" just app-bundle "$version"
           # A secret that does not match the public key would make bundles every device refuses.
           cargo run -q -p sursum-server -- bundle verify "target/sursum-$version.sursum-app"
-      - run: just cross-win
-        env:
-          SURSUM_BUNDLE_KEY: ${{ vars.SURSUM_BUNDLE_KEY }}
       - uses: actions/download-artifact@v7
         with:
           name: desktop-windows
@@ -90,9 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          cp target/x86_64-pc-windows-gnu/release/sursum-server.exe "target/sursum-server-$version-windows-x86_64.exe"
           cp target/desktop-windows/sursum.exe "target/sursum-$version-windows-x86_64.exe"
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
             "target/sursum-$version.sursum-app" \
-            "target/sursum-server-$version-windows-x86_64.exe" \
             "target/sursum-$version-windows-x86_64.exe"

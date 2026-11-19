@@ -26,7 +26,6 @@ fn sample_screen() -> ScreenState {
         live: Some(LiveSlide { deck: sample_deck(), slide_index: 0, gap: false }),
         upcoming: None,
         overlay: Overlay::Black,
-        theme: Theme::default(),
         transition_ms: 250,
         layout: ScreenLayout {
             content: Rect::new(600, 48, 1272, 984),
@@ -83,7 +82,6 @@ fn client_messages() {
             cmd: Command::SetEndOfItem { mode: EndOfItem::Continue },
         },
         ClientMsg::Ping,
-        ClientMsg::Log { message: "font missing".into() },
     ];
     insta::assert_json_snapshot!(messages);
 }
@@ -106,7 +104,6 @@ fn remote_state() {
         rev: Rev(7),
         program: sample_screen(),
         next: Some(LiveSlide { deck: sample_deck(), slide_index: 0, gap: true }),
-        sections: vec![SectionJump { label: "v1".into(), slide_index: 0 }],
         active_set: Some(SetView {
             set_id: SetId::from("set"),
             name: "Msza".into(),
@@ -158,38 +155,31 @@ fn pairing() {
     let session = SessionInfo {
         pin_required: false,
         paired: false,
-        admin: false,
         setup_needed: true,
-        admin_remaining_s: None,
         installation: Installation::Screen,
     };
-    let unlocked = SessionInfo {
+    let paired = SessionInfo {
         pin_required: true,
         paired: true,
-        admin: true,
         setup_needed: false,
-        admin_remaining_s: Some(840),
         installation: Installation::Screen,
     };
     let library = SessionInfo {
         pin_required: false,
         paired: true,
-        admin: true,
         setup_needed: false,
-        admin_remaining_s: None,
         installation: Installation::Library,
     };
     let outcomes = [
         PairOutcome::Paired,
-        PairOutcome::Unlocked,
         PairOutcome::WrongPin,
         PairOutcome::InvalidPin,
         PairOutcome::AlreadySet,
         PairOutcome::Locked { retry_after_s: 30 },
     ];
-    insta::assert_json_snapshot!((session, unlocked, library, outcomes));
+    insta::assert_json_snapshot!((session, paired, library, outcomes));
     let old: SessionInfo = serde_json::from_str(r#"{"pin_required":true,"paired":false}"#).unwrap();
-    assert!(!old.admin && !old.setup_needed && old.installation == Installation::Screen);
+    assert!(!old.setup_needed && old.installation == Installation::Screen);
 }
 
 /// Updates go over REST. The remote that uploads a bundle reloads into the new build, so these

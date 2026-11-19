@@ -4,7 +4,7 @@
 
 use leptos::html::Div;
 use leptos::prelude::*;
-use sursum_protocol::{LiveSlide, ScreenLayout, Theme};
+use sursum_protocol::{LiveSlide, ScreenLayout};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 
@@ -16,7 +16,6 @@ use crate::stage::Stage;
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreviewData {
     pub live: LiveSlide,
-    pub theme: Theme,
     pub layout: ScreenLayout,
 }
 
@@ -47,7 +46,7 @@ pub fn SlidePreview(
         let Some(element) = measurer.get() else { return };
         let element: web_sys::HtmlElement = element.unchecked_into();
         leptos::task::spawn_local(async move {
-            let result = fit_deck(&current.live.deck, &current.theme, current.layout.content, &element).await;
+            let result = fit_deck(&current.live.deck, current.layout.content, &element).await;
             // Ignore results for data that changed while measuring.
             if data.get_untracked().as_ref() == Some(&current) {
                 fit.set(Some((current, result)));
@@ -62,13 +61,7 @@ pub fn SlidePreview(
             let masks = data.layout.masks.clone();
             Some(view! {
                 <div class="sursum-layer" style=background>
-                    <SlideView
-                        slide
-                        theme=data.theme
-                        content=data.layout.content
-                        font_px=fit.font_px
-                        wrap=fit.wrap
-                    />
+                    <SlideView slide content=data.layout.content font_px=fit.font_px wrap=fit.wrap />
                 </div>
                 {masks
                     .into_iter()

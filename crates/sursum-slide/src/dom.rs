@@ -4,17 +4,18 @@
 
 use std::time::Duration;
 
-use sursum_protocol::Theme;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
-/// Waits until the theme's font is loaded, so measurements use the real metrics.
-pub async fn fonts_ready(theme: &Theme) {
+use crate::theme::THEME;
+
+/// Waits until the slide font is loaded, so measurements use the real metrics.
+pub async fn fonts_ready() {
     let Some(fonts) = web_sys::window().and_then(|window| window.document()).map(|document| document.fonts())
     else {
         return;
     };
-    let spec = format!("{} 100px \"{}\"", theme.font_weight, theme.font_family);
+    let spec = format!("{} 100px \"{}\"", THEME.font_weight, THEME.font_family);
     // Polish letters live in the latin-ext subset; load it explicitly too.
     let _ = JsFuture::from(fonts.load_with_text(&spec, "AĄŁżź")).await;
     if let Ok(promise) = fonts.ready() {

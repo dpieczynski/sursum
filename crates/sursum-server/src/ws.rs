@@ -4,11 +4,11 @@
 //! A session waits for `Hello`, answers with `Welcome` and the full snapshot, then forwards
 //! every new snapshot and (for remotes) executes commands. See `docs/protocol.md`.
 //!
-//! Rights are checked for every command, not only at connection time: admin mode expires and a
-//! device can be revoked while its tablet stays connected. A revocation closes the session.
+//! Pairing is checked for every command, not only at connection time: a device can be revoked
+//! while its tablet stays connected. A revocation closes the session.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use axum::extract::ws::{Message, WebSocket};
 use axum::http::HeaderMap;
@@ -22,7 +22,7 @@ use tokio::sync::watch;
 
 use crate::BUILD_ID;
 use crate::actor::StateHandle;
-use crate::auth::{Access, Rights};
+use crate::auth::Access;
 
 /// The access rules and the upgrade request's headers (with the device cookie).
 pub struct Guard {
@@ -37,20 +37,10 @@ pub struct Guard {
 }
 
 impl Guard {
-    fn rights(&self) -> Rights {
-        self.access.rights(&self.headers, Instant::now())
+    /// True while the device behind this session is still paired.
+    fn allows(&self) -> bool {
+        self.access.allows(&self.headers)
     }
-}
-
-/// Commands that change the device's setup rather than the service: admin mode only.
-fn needs_admin(command: &Command) -> bool {
-    matches!(
-        command,
-        Command::SetScreenProfile { .. }
-            | Command::Calibrate { .. }
-            | Command::SetLogo { .. }
-            | Command::DeleteSong { .. }
-    )
 }
 
 /// A remote's right to send commands.
@@ -63,8 +53,7 @@ struct Control<'a> {
 impl Control<'_> {
     /// Runs a command if this device may, else answers `Forbidden`.
     async fn run(&self, base_rev: sursum_protocol::Rev, cmd: Command) -> CmdOutcome {
-        let required = if needs_admin(&cmd) { Rights::Admin } else { Rights::Operator };
-        if self.guard.rights() < required {
+        if !self.guard.allows() {
             return CmdOutcome::Rejected { code: ErrorCode::Forbidden };
         }
         if let Command::DisplayPower { action } = cmd {
@@ -138,13 +127,13 @@ async fn forward_loop<T: Clone + Serialize>(
     send(sender, &wrap(first)).await.map_err(|_| "send failed")?;
     let mut revocations = control.as_ref().map(|control| control.guard.access.revocations());
     // A revocation between the upgrade and this subscription would otherwise go unnoticed.
-    if control.as_ref().is_some_and(|control| control.guard.rights() == Rights::None) {
+    if control.as_ref().is_some_and(|control| !control.guard.allows()) {
         return Err("device revoked");
     }
     loop {
         tokio::select! {
             Some(()) = revoked(&mut revocations) => {
-                if control.as_ref().is_some_and(|control| control.guard.rights() == Rights::None) {
+                if control.as_ref().is_some_and(|control| !control.guard.allows()) {
                     return Err("device revoked");
                 }
             }
@@ -157,10 +146,6 @@ async fn forward_loop<T: Clone + Serialize>(
                 let message = message.map_err(|_| "idle timeout")?.ok_or("closed")?;
                 let reply = match (message, &control) {
                     (ClientMsg::Ping, _) => Some(ServerMsg::Pong),
-                    (ClientMsg::Log { message }, _) => {
-                        tracing::warn!(client_message = %message, "client reported a problem");
-                        None
-                    }
                     (ClientMsg::Cmd { seq, base_rev, cmd }, Some(control)) => {
                         let outcome = control.run(base_rev, cmd).await;
                         Some(ServerMsg::CmdResult { seq, outcome })
@@ -251,18 +236,5 @@ mod tests {
     #[test]
     fn missing_origin_is_allowed() {
         assert!(origin_allowed(&headers(None, "localhost:8080"), &[]));
-    }
-
-    #[test]
-    fn sets_are_created_and_deleted_by_operators_alike() {
-        let set_id = sursum_protocol::SetId::from("set-1");
-        let commands = [
-            Command::NewSet { name: "Niedziela".into() },
-            Command::RenameSet { set_id: set_id.clone(), name: "Niedziela 10:00".into() },
-            Command::DeleteSet { set_id },
-            Command::UndoDeleteSet,
-        ];
-        assert!(commands.iter().all(|command| !needs_admin(command)));
-        assert!(needs_admin(&Command::SetLogo { asset_id: None }));
     }
 }

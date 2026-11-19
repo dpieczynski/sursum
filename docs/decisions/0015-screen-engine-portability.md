@@ -49,3 +49,16 @@ Rust launcher on WPEPlatform's DRM platform once the base ships WPE WebKit ≥ 2
 stay: the screen keeps its API contract and its blocking WPE tests. Those tests still start WPE
 through cog (`--automation --platform=headless`) because WPEWebDriver needs a launcher and trixie
 has nothing newer; they move to a WPEPlatform launcher together with the engine.
+
+## Amendment (2026-11-19): what the WPE tests are worth until the spike
+The blocking WPE tests run WPE WebKit 2.48.3 through cog: an engine version and a launcher that
+will never ship on a device. They guard the screen's API contract, nothing more. The spike of
+ADR 0009's amendment of the same day decides their future: if WPE on DRM becomes the engine, the
+tests move to the shipped combination (Debian forky and sid carry WPE WebKit 2.54 with
+`wpewebkit-webdriver`; WPEWebDriver starts `MiniBrowser --automation` when given its path as
+`binary` ⚠ not yet tried), and cog leaves the browsers image; if the spike fails, the WPE tests
+and cog are removed and the contract is checked by the WebKitGTK tests of ADR 0021 alone.
+
+The compatibility report of point 1 ("the screen sends a compatibility report to the server
+log") was never built; its message, `ClientMsg::Log`, had no sender and was removed on
+2026-11-19. Problems on the screen show in the kiosk's journal.

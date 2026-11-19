@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use serde::Deserialize;
-use sursum_protocol::{Insets, ScreenProfile};
 
 /// Effective configuration of one server instance.
 #[derive(Debug, Clone)]
@@ -20,8 +19,6 @@ pub struct Config {
     /// Host names the server answers to besides IP addresses, `localhost` and `*.local`
     /// (protection against DNS rebinding), e.g. a name in the parish router's DNS.
     pub allowed_hosts: Vec<String>,
-    /// Physical description of the screen (safe area, exclusion zones).
-    pub screen_profile: ScreenProfile,
     /// Crossfade duration in milliseconds; 0 for instant cuts.
     pub transition_ms: u32,
     /// Accept connections from any address, not only private networks (for special setups).
@@ -72,7 +69,6 @@ impl Config {
             data_dir: data_dir.into(),
             allowed_origins: Vec::new(),
             allowed_hosts: Vec::new(),
-            screen_profile: ScreenProfile { safe_area: Insets::uniform(48), exclusions: Vec::new() },
             transition_ms: 250,
             allow_public_clients: false,
             access: crate::auth::AccessMode::Pin,
@@ -118,8 +114,11 @@ impl Config {
         if let Some(hosts) = file.allowed_hosts {
             self.allowed_hosts = hosts;
         }
-        if let Some(profile) = file.screen_profile {
-            self.screen_profile = profile;
+        if file.screen_profile.is_some() {
+            // Read before 2026-11-19; the calibration panel is the only source now.
+            tracing::warn!(
+                "config.toml: [screen_profile] is ignored; set the screen in the remote's calibration panel"
+            );
         }
         if let Some(transition_ms) = file.transition_ms {
             self.transition_ms = transition_ms;
@@ -144,7 +143,9 @@ struct FileConfig {
     listen: Option<SocketAddr>,
     allowed_origins: Option<Vec<String>>,
     allowed_hosts: Option<Vec<String>>,
-    screen_profile: Option<ScreenProfile>,
+    /// No longer read (the calibration panel stores the profile); accepted so an old file
+    /// does not stop the server.
+    screen_profile: Option<toml::Table>,
     transition_ms: Option<u32>,
     allow_public_clients: Option<bool>,
     display_power: Option<DisplayPowerConfig>,
@@ -222,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn file_overrides_defaults_including_exclusion_zones() {
+    fn file_overrides_defaults_and_an_old_screen_profile_is_ignored() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
             dir.path().join("config.toml"),
@@ -232,17 +233,12 @@ transition_ms = 0
 
 [screen_profile]
 safe_area = { top = 10, right = 10, bottom = 10, left = 10 }
-
-[[screen_profile.exclusions]]
-name = "Strefa 1"
-rect = { x = 0, y = 0, width = 300, height = 1080 }
 "#,
         )
         .unwrap();
         let config = Config::with_data_dir(dir.path()).load_file().unwrap();
         assert_eq!(config.listen.port(), 9000);
         assert_eq!(config.transition_ms, 0);
-        assert_eq!(config.screen_profile.exclusions[0].name, "Strefa 1");
     }
 
     #[test]

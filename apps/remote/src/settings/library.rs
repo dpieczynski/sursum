@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Baza pieśni: a copy of the whole library (any paired remote), merging another church's file
-//! and importing from OpenSong (admin mode).
+//! and importing from OpenSong.
 
 use leptos::prelude::*;
 
-use super::{AdminOnly, Section};
+use super::Section;
 use crate::messages::Msg;
 
 #[component]
@@ -15,14 +15,10 @@ pub fn LibrarySection() -> impl IntoView {
                 <crate::bundle::ExportLink />
             </div>
             <div class="setting-row">
-                <AdminOnly label=Msg::MergeLibrary>
-                    <crate::bundle::MergeButton />
-                </AdminOnly>
+                <crate::bundle::MergeButton />
             </div>
             <div class="setting-row">
-                <AdminOnly label=Msg::ImportOpenSong>
-                    <crate::import::ImportButton />
-                </AdminOnly>
+                <crate::import::ImportButton />
             </div>
         </Section>
     }

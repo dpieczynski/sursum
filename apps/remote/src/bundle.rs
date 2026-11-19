@@ -35,7 +35,7 @@ pub fn ExportLink() -> impl IntoView {
     }
 }
 
-/// "Merge library" picker with a dry run and a confirmation step (admin mode).
+/// "Merge library" picker with a dry run and a confirmation step.
 #[component]
 pub fn MergeButton() -> impl IntoView {
     let step = RwSignal::new(Step::Idle);

@@ -13,7 +13,7 @@
 //! Commands that name what to show (`GoTo`, `GoToItemNumber`, `GoToSlide`) lift black or the
 //! logo; relative steps keep them, so a slide can be prepared under black (ADR 0004).
 
-use sursum_protocol::{ClientId, Command, Deck, EndOfItem, ItemId, NextStep, Overlay, Rev, SectionJump};
+use sursum_protocol::{ClientId, Command, Deck, EndOfItem, ItemId, NextStep, Overlay, Rev};
 
 use crate::model::{ItemKind, ServiceSet, SetItem};
 
@@ -199,22 +199,6 @@ impl Program {
         }
     }
 
-    /// Jump buttons for the live deck: one per section, pointing at its first slide.
-    pub fn sections(&self) -> Vec<SectionJump> {
-        let Some(live) = &self.live else {
-            return Vec::new();
-        };
-        let mut jumps: Vec<SectionJump> = Vec::new();
-        for (index, slide) in live.deck.slides.iter().enumerate() {
-            let section = section_of(slide.key.as_str());
-            let previous = index.checked_sub(1).map(|i| section_of(live.deck.slides[i].key.as_str()));
-            if previous != Some(section) {
-                jumps.push(SectionJump { label: slide.label.clone(), slide_index: index as u32 });
-            }
-        }
-        jumps
-    }
-
     fn next(&mut self, context: &Context<'_>) -> Result<(), Rejection> {
         let Some(live) = self.refreshed_live(context) else {
             return self.show_item_at(context, 0, SlidePick::First);
@@ -373,13 +357,6 @@ enum SlidePick {
     First,
     Last,
     Index(usize),
-}
-
-/// The section part of a slide key: `c#1@0` → `c@0` (chorus, first occurrence).
-fn section_of(key: &str) -> (&str, &str) {
-    let name = key.split('#').next().unwrap_or(key);
-    let occurrence = key.rsplit('@').next().unwrap_or("");
-    (name, occurrence)
 }
 
 #[cfg(test)]
@@ -708,15 +685,5 @@ mod tests {
         let next = program.peek_next(&context).unwrap();
         assert_eq!(next.slide_index, 1);
         assert_eq!(program, before);
-    }
-
-    #[test]
-    fn sections_point_at_first_slides() {
-        let set = set();
-        let mut program = Program::default();
-        run(&mut program, &set, Command::Next).unwrap();
-        let labels: Vec<(String, u32)> =
-            program.sections().into_iter().map(|jump| (jump.label, jump.slide_index)).collect();
-        assert_eq!(labels, [("v1".to_owned(), 0), ("c".to_owned(), 1), ("v2".to_owned(), 2)]);
     }
 }

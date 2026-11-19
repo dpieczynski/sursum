@@ -89,10 +89,9 @@ pub fn EditorForm(
             }
         })
         .collect_view();
-    let session = expect_context::<crate::admin::Session>();
     let commands = expect_context::<crate::Commands>();
     let editing = expect_context::<RwSignal<Option<super::EditorTarget>>>();
-    let can_delete = move || session.0.get().admin && draft.with(|draft| draft.song_id.is_some());
+    let can_delete = move || draft.with(|draft| draft.song_id.is_some());
     // The desktop program's library has no screen to show the song on.
     let has_screen =
         use_context::<sursum_protocol::Installation>() != Some(sursum_protocol::Installation::Library);

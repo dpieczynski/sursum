@@ -48,6 +48,8 @@ ignore = [
     { id = "RUSTSEC-2024-0436", reason = "transitive via Leptos, compile-time macro only" },
     # `proc-macro-error` is unmaintained (not vulnerable); it comes in through tao's GTK 3
     # dependencies, which only build on Linux. sursum-desktop uses tao on Windows only (its Linux
-    # window is GTK 4), so this code is never compiled; cargo-deny cannot see that.
+    # window is GTK 4), so this code is never compiled; cargo-deny cannot see that. Checked
+    # 2026-11-19: tao and wry are moving to gtk 0.19, whose macros no longer use
+    # proc-macro-error (wry pull request 1843); drop this entry when updating to those releases.
     { id = "RUSTSEC-2024-0370", reason = "tao's Linux-only GTK 3 deps; tao is used on Windows only" },
 ]

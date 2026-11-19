@@ -40,3 +40,11 @@ of library export.
   the position), so the operator never types a zone off the screen.
 - The UI and code speak of exclusion zones ("Strefa 1", …), not of a pillar: the Tulce pillar is
   this ADR's motivation, not the only use (other churches have other obstacles).
+
+## Amendment (2026-11-19): the calibration panel is the only source
+The profile could also be written into `config.toml` (`[screen_profile]`), and a profile saved
+from a remote then silently won over it (only the log said so). The maintainer kept the panel
+and dropped the file source: the server no longer reads `[screen_profile]` (an old file still
+starts, with a warning in the log), a device that was never calibrated uses 48 px margins and no
+zones, and the browser tests set their zones with `SetScreenProfile` like the panel does.
+Calibration no longer needs admin mode (ADR 0024).

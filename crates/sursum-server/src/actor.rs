@@ -17,7 +17,7 @@ use sursum_core::slides::SlideRules;
 use sursum_protocol::{
     ClientId, CmdOutcome, Command, Deck, DisplayPowerState, EndOfItem, ErrorCode, ItemId, LiveSlide, Overlay,
     Rect, RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenProfile, ScreenState, SetId, SetItemView,
-    SetView, SongDraft, SongId, SongSummary, Theme,
+    SetView, SongDraft, SongId, SongSummary,
 };
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -248,10 +248,7 @@ pub fn spawn(
     tracing::info!(songs = songs.len(), "song library loaded");
     let saved_profile: Option<ScreenProfile> =
         database.setting(SCREEN_PROFILE_KEY).context("loading the screen profile")?;
-    if saved_profile.is_some() {
-        tracing::info!("using the screen profile calibrated from a remote (config.toml's is ignored)");
-    }
-    let profile = layout::fit_to_scene(&saved_profile.unwrap_or_else(|| config.screen_profile.clone()));
+    let profile = layout::fit_to_scene(&saved_profile.unwrap_or(UNCALIBRATED));
     let logo: Option<sursum_protocol::AssetId> =
         database.setting::<Option<sursum_protocol::AssetId>>(LOGO_KEY).context("loading the logo")?.flatten();
     let end_of_item: EndOfItem =
@@ -263,7 +260,6 @@ pub fn spawn(
         sets: SetStore::new(sets, active_set),
         program: Program::default(),
         rev: Rev(1),
-        theme: Theme::default(),
         layout: layout_or_fallback(&profile),
         profile,
         calibrating: false,
@@ -422,7 +418,6 @@ struct AppState {
     sets: SetStore,
     program: Program,
     rev: Rev,
-    theme: Theme,
     layout: ScreenLayout,
     /// The profile `layout` was computed from (shown in the calibration panel).
     profile: ScreenProfile,
@@ -842,7 +837,6 @@ impl AppState {
             live: self.program.live.as_ref().map(live_slide),
             upcoming: self.upcoming_deck(),
             overlay: self.program.overlay,
-            theme: self.theme.clone(),
             transition_ms: self.transition_ms,
             layout: self.layout.clone(),
             calibration: self.calibrating.then(|| self.profile.clone()),
@@ -858,7 +852,6 @@ impl AppState {
             rev: self.rev,
             program: self.screen_state(),
             next: self.program.peek_next(&context).as_ref().map(live_slide),
-            sections: self.program.sections(),
             active_set: self.sets.active().map(|set| self.set_view(set)),
             sets: self.sets.summaries(),
             can_undo: self.sets.can_undo(),
@@ -951,8 +944,11 @@ const ACTIVE_SET_KEY: &str = "active_set";
 const END_OF_ITEM_KEY: &str = "end_of_item";
 /// Settings key of the parish logo (an asset id).
 const LOGO_KEY: &str = "logo";
-/// Settings key of a screen profile calibrated from a remote; it wins over `config.toml`.
+/// Settings key of the screen profile calibrated from a remote (its only source, ADR 0008).
 const SCREEN_PROFILE_KEY: &str = "screen_profile";
+/// The screen until the calibration panel saves a profile: 48 px margins, no exclusion zones.
+const UNCALIBRATED: ScreenProfile =
+    ScreenProfile { safe_area: sursum_protocol::Insets::uniform(48), exclusions: Vec::new() };
 
 /// Compiles the deck for a set item.
 fn compile_item(songs: &HashMap<SongId, Song>, rules: SlideRules, item: &SetItem) -> Option<Deck> {

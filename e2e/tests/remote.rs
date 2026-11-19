@@ -58,9 +58,9 @@ async fn buttons_on_the_remote_drive_the_screen() -> anyhow::Result<()> {
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
 async fn preview_on_the_remote_matches_the_screen() -> anyhow::Result<()> {
-    let config = "transition_ms = 0\n\n[screen_profile]\nsafe_area = { top = 48, right = 48, bottom = 48, left = 48 }\n\n\
-                  [[screen_profile.exclusions]]\nname = \"Strefa 1\"\nrect = { x = 1500, y = 0, width = 420, height = 1080 }\n";
-    let server = Server::start_with(&[], Some(config)).await?;
+    let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let zone = sursum_e2e::profile_with_zone(48, sursum_protocol::Rect::new(1500, 0, 420, 1080));
+    server.remote("calibration").await?.command(zone).await?;
     with_engine(screen_engine(), 1920, 1080, async |screen| {
         screen.goto(server.url("/screen/")).await?;
         with_engine(Browser::for_remote(), 1280, 800, async |remote| {
@@ -270,7 +270,7 @@ async fn editing_the_set_on_the_remote_never_changes_the_screen() -> anyhow::Res
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
-async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> anyhow::Result<()> {
+async fn remote_pairs_with_the_pin_and_then_may_do_everything() -> anyhow::Result<()> {
     let server = Server::start_with_pin("246813").await?;
     with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
@@ -290,27 +290,14 @@ async fn remote_pairs_with_the_pin_and_unlocks_admin_mode_with_it_again() -> any
             remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
         })
         .await?;
-        // An operator sees no setup tools until admin mode is unlocked with the PIN again.
+        // A paired remote has every tool at once (ADR 0024): no second PIN, no locks.
         open_tab(remote, "ustawienia").await?;
-        let import = By::XPath("//label[contains(text(), 'Import z OpenSong')]");
-        anyhow::ensure!(remote.find(import.clone()).await.is_err(), "import must need admin mode");
-        // Admin items are visible with a lock; tapping one asks for the PIN.
-        remote.find(By::Css("[data-testid=locked]")).await?.click().await?;
-        let pin = remote.query(By::Css("[data-testid=admin-unlock] .pin")).first().await?;
-        pin.wait_until().displayed().await?;
-        pin.send_keys("246813").await?;
-        remote.find(By::Css("[data-testid=admin-unlock-submit]")).await?.click().await?;
-        wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_ok() }).await?;
-        // The banner counts down the minutes admin mode has left.
-        let banner = shown_text(&remote.find(By::Css("[data-testid=admin-on]")).await?).await?;
-        anyhow::ensure!(banner.contains("wyłączy się za 15 min"), "{banner}");
+        remote.find(By::XPath("//label[contains(text(), 'Import z OpenSong')]")).await?;
         // The device list shows this tablet (which cannot revoke itself).
         wait_until(Duration::from_secs(5), || async {
             remote.find(By::Css("[data-testid=devices] .device-self")).await.is_ok()
         })
         .await?;
-        remote.find(By::Css("[data-testid=end-admin]")).await?.click().await?;
-        wait_until(Duration::from_secs(5), || async { remote.find(import.clone()).await.is_err() }).await?;
         Ok(())
     })
     .await
@@ -336,7 +323,7 @@ async fn a_new_device_asks_the_first_remote_for_a_pin_and_then_runs() -> anyhow:
         let fields = form.find_all(By::Css(".pin")).await?;
         fields[1].send_keys("246813").await?;
         form.find(By::Css("button[type=submit]")).await?.click().await?;
-        // The page reloads into the remote, already in admin mode to go on with the setup.
+        // The page reloads into the remote, with every tool to go on with the setup.
         wait_until(Duration::from_secs(10), || async {
             remote.find(By::Css("[data-testid=status-connected]")).await.is_ok()
         })

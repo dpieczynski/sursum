@@ -37,7 +37,7 @@ pub async fn post_file<T: DeserializeOwned>(url: &str, file: &web_sys::File) -> 
     decode(JsFuture::from(promise).await.ok()?).await
 }
 
-/// A request without a body (e.g. `DELETE /api/admin`); the HTTP status, `None` on network errors.
+/// A request without a body (e.g. revoking a device); the HTTP status, `None` on network errors.
 pub async fn request_status(method: &str, url: &str) -> Option<u16> {
     let init = web_sys::RequestInit::new();
     init.set_method(method);

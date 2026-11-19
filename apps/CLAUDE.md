@@ -15,7 +15,7 @@ is our own axum app, not a Leptos SSR server). No Node, npm or TypeScript. Appli
 - `apps/screen`: draws only. No UI, no i18n, no error messages, no cursor, no network resources;
   black background inline in `index.html` `<head>`. Panics go to the console
   (`console_error_panic_hook`) and the page reloads itself after 2 s (a panicked module cannot
-  send anything to the server; non-fatal problems use `ClientMsg::Log`).
+  send anything to the server; there is no client-to-server log message).
 - `apps/remote`: operator UI for tablet and PC. All strings go through the `Msg` enum in
   `apps/remote/src/messages.rs` (compile-time checked; Polish for now). `leptos_i18n` is deferred
   until a second language is needed (ADR 0014 amendment). Destructive actions need hold-to-confirm
@@ -35,5 +35,6 @@ is our own axum app, not a Leptos SSR server). No Node, npm or TypeScript. Appli
   fallback. Screen tests use classic WebDriver only (no CDP).
 - Test hooks for WebDriver are `data-*` attributes (`data-deck-id`, `data-slide-key`,
   `data-transitions`), not globals.
-- Keep `wasm-bindgen` (Cargo.lock) and `wasm-bindgen-cli` (devcontainer) at the same version.
+- Keep `wasm-bindgen` (Cargo.lock) and `wasm-bindgen-cli` (`.github/workflows/`) at the same version.
+- The text style (font, colour, size range) is `sursum-slide/src/theme.rs`, not protocol data.
 - SPDX header in every file (`<!-- … -->` in `.html`, `/* … */` in `.css`).
