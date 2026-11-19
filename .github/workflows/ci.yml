@@ -112,6 +112,16 @@ jobs:
           (cd apps/screen && trunk build --release)
           (cd apps/remote && trunk build --release)
           cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
+      - name: One file (no DLLs beyond what Windows itself has)
+        # The runner has the Visual C++ Redistributable; ordinary PCs do not.
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+          $dependents = & $dumpbin /nologo /dependents target\x86_64-pc-windows-msvc\release\sursum.exe
+          $dependents
+          $extra = $dependents | Select-String -Pattern '(?i)^\s+(vcruntime|msvcp|webview2loader)\S*\.dll'
+          if ($extra) { throw "the program needs DLLs Windows does not ship: $extra" }
       - name: Smoke test (the remote in the WebView2 window connects)
         # Non-blocking until it has proven reliable on hosted runners.
         continue-on-error: true
