@@ -6,7 +6,7 @@
 //! text gives the same bytes (and the same version id) on every device.
 
 use anyhow::Context as _;
-use rusqlite::params;
+use rusqlite::{OptionalExtension as _, params};
 use sursum_core::model::Song;
 use sursum_core::versions::{Body, Heads, Version, VersionId};
 use sursum_protocol::SongId;
@@ -47,6 +47,20 @@ pub enum SongSave {
     Unchanged(VersionId),
     /// The loaded version was replaced meanwhile (or the song is gone); nothing was written.
     Outdated,
+}
+
+/// What importing a song from OpenSong did (ADR 0025, the plan's section 7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SongImport {
+    /// A song this device did not have.
+    Created,
+    /// The song shows the file's text now.
+    Updated,
+    /// Nothing new: the file's text is already known here (also from another church).
+    Unchanged,
+    /// The file's text and a correction made in sursum meet: both stay, one is shown, and the
+    /// song waits for review.
+    ToReview,
 }
 
 /// The stored form of a song: without its id, keys sorted.
@@ -150,6 +164,67 @@ impl Database {
     /// Records a song's heads after a merge (`before` as read by [`Database::song_heads`]).
     pub fn store_song_heads(&self, id: &SongId, before: &Heads, after: &Heads) -> anyhow::Result<()> {
         self.store_heads(Kind::Song, id.as_str(), before, after)
+    }
+
+    /// Imports a song from an OpenSong file under the rules of ADR 0025:
+    ///
+    /// - the file's text is a version built on the version the previous import of this song made
+    ///   on this device, or, if there was none, a first version (no ancestors) — the same version
+    ///   on every device that imports the same text, so the other church's import of it is
+    ///   recognised;
+    /// - a version this device already knows changes nothing, so importing an old folder again
+    ///   never undoes a correction made in sursum, nor brings back a deleted song;
+    /// - a new text next to a correction made in sursum keeps both, for review.
+    pub fn import_song(&mut self, song: &Song) -> anyhow::Result<SongImport> {
+        let body = song_body(song)?;
+        let previous = self.imported_version(&song.id)?;
+        if previous.as_ref().and_then(Version::live_body) == Some(body.as_slice()) {
+            return Ok(SongImport::Unchanged);
+        }
+        let ancestors = previous
+            .map(|previous| previous.ancestors().iter().cloned().chain([previous.id().clone()]).collect())
+            .unwrap_or_default();
+        let version = Version::new(Body::Live(body.clone()), ancestors);
+        self.remember_import(&song.id, &version)?;
+        let heads = self.song_heads(&song.id)?;
+        let after = heads.with(version);
+        if after == heads {
+            return Ok(SongImport::Unchanged);
+        }
+        self.store_song_heads(&song.id, &heads, &after)?;
+        Ok(if heads.is_empty() {
+            SongImport::Created
+        } else if after.needs_review() {
+            SongImport::ToReview
+        } else if after.current().map(Version::id) != heads.current().map(Version::id) {
+            SongImport::Updated
+        } else {
+            SongImport::Unchanged
+        })
+    }
+
+    /// The version the last import of a song made on this device.
+    fn imported_version(&self, id: &SongId) -> anyhow::Result<Option<Version>> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT version_id, body, ancestors FROM imported_versions WHERE song_id = ?1",
+                [id.as_str()],
+                stored_version,
+            )
+            .optional()?;
+        row.map(StoredVersion::verified).transpose()
+    }
+
+    fn remember_import(&self, id: &SongId, version: &Version) -> anyhow::Result<()> {
+        let ancestors: Vec<&str> = version.ancestors().iter().map(VersionId::as_str).collect();
+        self.connection.execute(
+            "INSERT INTO imported_versions (song_id, version_id, body, ancestors) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (song_id) DO UPDATE SET version_id = excluded.version_id, body = excluded.body,
+                 ancestors = excluded.ancestors",
+            params![id.as_str(), version.id().as_str(), version.live_body(), ancestors.join(" ")],
+        )?;
+        Ok(())
     }
 
     /// Songs changed in two places that nobody has reviewed yet (two live heads, different texts).

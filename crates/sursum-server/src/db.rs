@@ -16,7 +16,7 @@ use sursum_protocol::{ItemId, Overlay, SetId, SlideKey};
 
 mod songs;
 
-pub use songs::{Base, SongSave, song_body, song_from_body};
+pub use songs::{Base, SongImport, SongSave, song_body, song_from_body};
 
 /// Schema versions start above this (`user_version` = this + the number of migrations
 /// applied). Databases of earlier builds have 1 to 5 and are refused, never converted: nobody
@@ -72,6 +72,14 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (kind, document_id, version_id)
     );
     CREATE INDEX versions_heads ON versions (kind, document_id) WHERE head = 1;",
+    // 102: the version the last OpenSong import made of each song on this device (ADR 0025): a
+    // later import builds on it, so it never undoes a correction made in sursum. Never travels.
+    "CREATE TABLE imported_versions (
+        song_id TEXT PRIMARY KEY,
+        version_id TEXT NOT NULL,
+        body BLOB NOT NULL,
+        ancestors TEXT NOT NULL
+    );",
 ];
 
 /// The database file inside the data directory.

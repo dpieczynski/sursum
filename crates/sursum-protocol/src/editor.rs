@@ -66,6 +66,10 @@ pub struct ImportReport {
     /// Sets imported from the `Sets/` folder (re-importing a set replaces it).
     #[serde(default)]
     pub sets: u32,
+    /// Titles of songs whose file text differs from a correction made in sursum since the last
+    /// import (ADR 0025): both versions stay, the song waits for review.
+    #[serde(default)]
+    pub to_review: Vec<String>,
     /// Warnings and failures, one line each (at most a few hundred).
     pub problems: Vec<String>,
 }

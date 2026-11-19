@@ -775,6 +775,12 @@ pub fn import_lines(report: &sursum_protocol::ImportReport) -> Vec<String> {
     if report.failed > 0 {
         lines.push(format!("Nie udało się wczytać: {}", report.failed));
     }
+    if !report.to_review.is_empty() {
+        lines.push(format!(
+            "Zmienione i w OpenSong, i w sursum (do przejrzenia): {}",
+            report.to_review.join(", ")
+        ));
+    }
     lines.extend(report.problems.iter().map(|problem| format!("Uwaga: {problem}")));
     lines
 }

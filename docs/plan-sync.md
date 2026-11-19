@@ -232,13 +232,23 @@ display power, the gap setting, the logo, this device's church, the import bookk
 
 ## 7. OpenSong import under the same rules
 
-- A new song: a version with no ancestors. The same file gives the same version on every
-  device, so two churches importing the same folder have nothing to merge.
-- A file whose text the device already knows (current, another head, or in the local history):
-  nothing happens. An old folder no longer undoes a correction.
-- A file with a new text: a version on top of the last version the import made for that song on
-  this device (kept in a local column). If the song was not changed in sursum since, the import
-  simply updates it; if it was, the song has two versions and rule 3 picks.
+Built in Y1.4 (2026-11-20). One rule replaced the earlier idea of looking for the file's text in
+a song's history: a device that received a song from the other church's file has only its heads,
+not the texts of older versions, so it could not recognise an old text by its content.
+
+- The version an import makes for a text is built on the version the previous import of that
+  song made **on this device** (table `imported_versions`, never in a file); if there was none,
+  it is a first version with no ancestors. A first version has the same id on every device, so
+  a church that never imported a song still recognises the other church's import of the same
+  text: it is an ancestor of what that church sent, and nothing happens.
+- The same text as the previous import, or a version already known: nothing happens. An old
+  folder never undoes a correction made in sursum, and never brings back a deleted song.
+- A new text on a song untouched in sursum since the last import: the song shows it (updated).
+- A new text on a song corrected in sursum meanwhile: both stay, rule 3 picks, and the song is on
+  the review list; the import report names it (`ImportReport.to_review`).
+- A church that never imported a song and whose folder has a text nobody imported before: the
+  text is a first version next to what the other church sent; it has fewer changes, so the other
+  church's text stays shown and the song waits for review.
 - Imported sets: the set id also depends on the device's church, so the same OpenSong set
   imported in both churches is two sets, one per church.
 
@@ -319,7 +329,7 @@ Each is one pull request.
 | Y1.1 | Core module with property tests; the new schema and refusing old databases (section 9.1); songs saved and loaded through it; editor saves on the loaded version; file format 2 for songs with merge and report; the section 1 scenario as a test; conflict copies gone ✓ | Y1.0 |
 | Y1.2 | Streamed merge upload (done with Y1.6) | Y1.1 |
 | Y1.3 | Review list and comparison screen (keep one version; editing comes after keeping) ✓ | Y1.1 |
-| Y1.4 | OpenSong import under section 7 | Y1.1 |
+| Y1.4 | OpenSong import under section 7 ✓ | Y1.1 |
 | Y1.5 | Churches: the document, the id from the name, the first-start form, the device setting and the choice of a known church | Y1.1 |
 | Y1.6 | Sets as versions: every command saves one; date and list order; "Nowy zestaw z tego" (5.1); sets and pictures in the file; report lines; set review and its comparison screen | Y1.2, Y1.3, Y1.5 |
 | Y1.7 | Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden there (it cannot work without a service manager) | Y1.6 |
