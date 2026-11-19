@@ -143,6 +143,10 @@ pub enum Msg {
     Saved,
     Conflict,
     ReviewTitle,
+    CopySet,
+    CopySetShort,
+    SetDate,
+    InvalidDate,
     ChurchName,
     ChurchNameExample,
     ChurchMissing,
@@ -455,6 +459,10 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Saved => "Zapisano",
         Msg::Conflict => "Ktoś zapisał tę pieśń w międzyczasie – otwórz ją ponownie",
         Msg::ReviewTitle => "Pieśni do przejrzenia",
+        Msg::CopySet => "Nowy zestaw z tego",
+        Msg::CopySetShort => "Nowy z tego",
+        Msg::SetDate => "Data (niekoniecznie)",
+        Msg::InvalidDate => "Niepoprawna data zestawu",
         Msg::ChurchName => "Nazwa kościoła",
         Msg::ChurchNameExample => "np. Tulce",
         Msg::ChurchMissing => "Wpisz nazwę kościoła, w którym stoi to urządzenie",
@@ -777,6 +785,7 @@ pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
     match code {
         ErrorCode::InvalidProfile => Msg::InvalidProfile,
         ErrorCode::SetOnScreen => Msg::SetOnScreen,
+        ErrorCode::InvalidDate => Msg::InvalidDate,
         ErrorCode::Forbidden => Msg::NotPaired,
         ErrorCode::DisplayBusy => Msg::DisplayBusy,
         ErrorCode::DisplayAuthFailed => Msg::DisplayAuthFailed,
@@ -824,6 +833,18 @@ pub fn merge_lines(report: &sursum_protocol::MergeReport) -> Vec<String> {
         ));
     }
     lines
+}
+
+/// A set's date as people read it: "22.11.2026", with ", 10:00" when it has a time. Anything
+/// unexpected is shown as it came.
+pub fn set_date_label(date: &str) -> String {
+    let (day, time) = date.split_once('T').map_or((date, None), |(day, time)| (day, Some(time)));
+    let parts: Vec<&str> = day.split('-').collect();
+    let day = match parts.as_slice() {
+        [year, month, day] => format!("{day}.{month}.{year}"),
+        _ => return date.to_owned(),
+    };
+    time.map_or(day.clone(), |time| format!("{day}, {time}"))
 }
 
 /// "Pieśni do przejrzenia: 2" (songs changed in two places, ADR 0025).

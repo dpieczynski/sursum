@@ -255,3 +255,46 @@ async fn a_song_changed_in_two_places_is_reviewed_and_one_version_kept() -> anyh
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_set_is_copied_with_a_new_date_and_the_original_stays() -> anyhow::Result<()> {
+    with_sets(async |_server, screen, remote| {
+        let before_screen = attribute(screen, SCREEN_ROOT, "data-deck-id").await;
+        let items = item_count(remote).await;
+        remote.find(By::Css("[data-testid=copy-set]")).await?.click().await?;
+        let sheet = remote.query(By::Css("[data-testid=set-name-sheet]")).first().await?;
+        let name = sheet.find(By::Css("[data-testid=set-name-input]")).await?;
+        name.clear().await?;
+        name.send_keys("Następna niedziela").await?;
+        // Date fields take typed dates in the browser's locale; set the value like a picker does.
+        remote
+            .execute(
+                "const field = document.querySelector('[data-testid=set-date-input]'); \
+                 field.value = '2026-11-29'; field.dispatchEvent(new Event('input', { bubbles: true }));",
+                Vec::new(),
+            )
+            .await?;
+        sheet.find(By::Css("button[type=submit]")).await?.click().await?;
+        wait_until(Duration::from_secs(5), || async {
+            match remote.find(By::Css("[data-testid=set-name]")).await {
+                Ok(title) => shown_text(&title).await.is_ok_and(|text| text.contains("Następna niedziela")),
+                Err(_) => false,
+            }
+        })
+        .await
+        .context("the copy did not become the active set")?;
+        let date = shown_text(&remote.find(By::Css("[data-testid=set-date]")).await?).await?;
+        anyhow::ensure!(date == "29.11.2026", "{date}");
+        anyhow::ensure!(item_count(remote).await == items, "the copy has the same items");
+        anyhow::ensure!(
+            attribute(screen, SCREEN_ROOT, "data-deck-id").await == before_screen,
+            "copying a set never changes the screen"
+        );
+        remote.find(By::Css("[data-testid=change-set]")).await?.click().await?;
+        let rows = remote.query(By::Css("[data-testid=pick-set]")).all_from_selector_required().await?;
+        anyhow::ensure!(rows.len() == 2, "the original stays");
+        Ok(())
+    })
+    .await
+}

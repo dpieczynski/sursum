@@ -13,7 +13,7 @@ use sursum_formats::opensong::{
     ImportedSet, LibraryImport, SetEntry, add_file, add_set_file, is_skipped, presentation_for, read_library,
     read_sets,
 };
-use sursum_protocol::{ImportReport, ItemId, SetId, SongId};
+use sursum_protocol::{ChurchId, ImportReport, ItemId, SetId, SongId};
 
 use crate::db::{Database, SongImport};
 
@@ -32,7 +32,7 @@ pub fn import_opensong(
     if sets_dir.is_dir() {
         read_sets(&mut library, &sets_dir).with_context(|| format!("reading {}", sets_dir.display()))?;
     }
-    store(database, &library).map(|(report, _)| report)
+    store(database, &library, None).map(|(report, _)| report)
 }
 
 /// Reads the songs in a ZIP of an OpenSong folder. Paths are taken relative to the last `Songs`
@@ -112,13 +112,15 @@ fn song_path(name: &str) -> Option<String> {
 pub fn store(
     database: &mut Database,
     library: &LibraryImport,
+    church: Option<&ChurchId>,
 ) -> anyhow::Result<(ImportReport, Vec<ServiceSet>)> {
-    database.in_transaction(|database| store_in(database, library))
+    database.in_transaction(|database| store_in(database, library, church))
 }
 
 fn store_in(
     database: &mut Database,
     library: &LibraryImport,
+    church: Option<&ChurchId>,
 ) -> anyhow::Result<(ImportReport, Vec<ServiceSet>)> {
     let mut report = ImportReport { failed: count(library.failures.len()), ..ImportReport::default() };
     for (path, imported) in &library.songs {
@@ -141,7 +143,7 @@ fn store_in(
             database.load_songs()?.into_iter().map(|song| (song.id.clone(), song)).collect();
         let finder = SongFinder::new(&songs);
         for imported in &library.sets {
-            let (set, problems) = resolve_set(imported, &finder);
+            let (set, problems) = resolve_set(imported, &finder, church);
             for problem in problems {
                 push_problem(&mut report, format!("Sets/{}: {problem}", imported.file_name));
             }
@@ -203,10 +205,16 @@ impl<'a> SongFinder<'a> {
     }
 }
 
-/// Turns an imported set into a sursum set. Ids derive from the file name, so importing the same
-/// file again replaces the set and keeps item ids (the program can still find its live item).
-fn resolve_set(imported: &ImportedSet, finder: &SongFinder<'_>) -> (ServiceSet, Vec<String>) {
-    let digest = Sha256::digest(imported.file_name.as_bytes());
+/// Turns an imported set into a sursum set of `church`. Ids derive from the file name and the
+/// church, so importing the same file again replaces the set and keeps item ids (the program can
+/// still find its live item), and the same OpenSong set imported in two churches is two sets.
+fn resolve_set(
+    imported: &ImportedSet,
+    finder: &SongFinder<'_>,
+    church: Option<&ChurchId>,
+) -> (ServiceSet, Vec<String>) {
+    let church_part = church.map(ChurchId::as_str).unwrap_or_default();
+    let digest = Sha256::digest(format!("{church_part}/{}", imported.file_name).as_bytes());
     let hex: String = digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect();
     let set_id = SetId(format!("opensong-set-{hex}"));
     let mut problems = imported.skipped.clone();
@@ -233,7 +241,10 @@ fn resolve_set(imported: &ImportedSet, finder: &SongFinder<'_>) -> (ServiceSet, 
         };
         items.push(SetItem { id: ItemId(format!("{}-{index}", set_id.as_str())), kind });
     }
-    (ServiceSet { id: set_id, name: imported.name.clone(), items }, problems)
+    (
+        ServiceSet { id: set_id, name: imported.name.clone(), items, date: None, church: church.cloned() },
+        problems,
+    )
 }
 
 fn push_problem(report: &mut ImportReport, line: String) {
@@ -300,28 +311,28 @@ mod tests {
     #[test]
     fn importing_again_never_undoes_a_correction_or_a_deletion() {
         let mut database = Database::in_memory().unwrap();
-        store(&mut database, &folder_with("z OpenSong")).unwrap();
+        store(&mut database, &folder_with("z OpenSong"), None).unwrap();
         correct(&mut database, "poprawione w sursum");
-        let (report, _) = store(&mut database, &folder_with("z OpenSong")).unwrap();
+        let (report, _) = store(&mut database, &folder_with("z OpenSong"), None).unwrap();
         assert_eq!((report.unchanged, report.updated), (1, 0), "{report:?}");
         assert_eq!(text_of(&database), "poprawione w sursum");
 
         let id = database.load_songs().unwrap()[0].id.clone();
         assert!(database.delete_song(id.as_str()).unwrap());
-        store(&mut database, &folder_with("z OpenSong")).unwrap();
+        store(&mut database, &folder_with("z OpenSong"), None).unwrap();
         assert!(database.load_songs().unwrap().is_empty(), "the same folder does not bring it back");
     }
 
     #[test]
     fn a_changed_file_updates_an_untouched_song_and_meets_a_correction_for_review() {
         let mut database = Database::in_memory().unwrap();
-        store(&mut database, &folder_with("pierwsza")).unwrap();
-        let (report, _) = store(&mut database, &folder_with("druga")).unwrap();
+        store(&mut database, &folder_with("pierwsza"), None).unwrap();
+        let (report, _) = store(&mut database, &folder_with("druga"), None).unwrap();
         assert_eq!(report.updated, 1, "{report:?}");
         assert_eq!(text_of(&database), "druga");
 
         correct(&mut database, "poprawione w sursum");
-        let (report, _) = store(&mut database, &folder_with("trzecia")).unwrap();
+        let (report, _) = store(&mut database, &folder_with("trzecia"), None).unwrap();
         assert_eq!(report.to_review, ["Pieśń A"], "{report:?}");
         assert_eq!(database.songs_in_review().unwrap().len(), 1, "both texts stay");
     }
@@ -329,21 +340,21 @@ mod tests {
     #[test]
     fn a_church_that_never_imported_recognises_the_other_churchs_import() {
         let (mut tulce, mut gowarzewo) = (Database::in_memory().unwrap(), Database::in_memory().unwrap());
-        store(&mut tulce, &folder_with("z OpenSong")).unwrap();
+        store(&mut tulce, &folder_with("z OpenSong"), None).unwrap();
         correct(&mut tulce, "poprawione w Tulcach");
         let file = crate::library::read_bundle(&crate::library::export(&tulce).unwrap()).unwrap();
         crate::library::merge(&mut gowarzewo, &file, false).unwrap();
 
         // Gowarzewo imports its own copy of the same old folder: nothing changes.
-        let (report, _) = store(&mut gowarzewo, &folder_with("z OpenSong")).unwrap();
+        let (report, _) = store(&mut gowarzewo, &folder_with("z OpenSong"), None).unwrap();
         assert_eq!((report.unchanged, report.to_review.len()), (1, 0), "{report:?}");
         assert_eq!(text_of(&gowarzewo), "poprawione w Tulcach");
 
         // Both churches importing the same folder have nothing to merge.
         let mut other = Database::in_memory().unwrap();
-        store(&mut other, &folder_with("z OpenSong")).unwrap();
+        store(&mut other, &folder_with("z OpenSong"), None).unwrap();
         let mut fresh = Database::in_memory().unwrap();
-        store(&mut fresh, &folder_with("z OpenSong")).unwrap();
+        store(&mut fresh, &folder_with("z OpenSong"), None).unwrap();
         let file = crate::library::read_bundle(&crate::library::export(&other).unwrap()).unwrap();
         let report = crate::library::merge(&mut fresh, &file, false).unwrap();
         assert_eq!(report.unchanged, 1, "{report:?}");

@@ -266,6 +266,7 @@ mod tests {
                 set_id: SetId::from("s"),
                 name: "Msza".into(),
                 items: vec![item(1, "i1"), item(2, "i2")],
+                date: None,
             }),
             sets: vec![],
             can_undo: false,

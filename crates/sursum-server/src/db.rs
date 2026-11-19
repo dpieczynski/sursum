@@ -11,14 +11,15 @@ use std::path::{Path, PathBuf};
 use anyhow::Context as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use sursum_core::model::{ItemKind, ServiceSet, SetItem};
 use sursum_protocol::{ItemId, Overlay, SetId, SlideKey};
 
 mod churches;
+mod sets;
 mod songs;
 mod versions;
 
 pub use churches::{Church, church_name};
+pub use sets::{set_body, set_from_body};
 pub use songs::{Base, SongImport, SongSave, song_body, song_from_body};
 
 /// Schema versions start above this (`user_version` = this + the number of migrations
@@ -83,6 +84,9 @@ const MIGRATIONS: &[&str] = &[
         body BLOB NOT NULL,
         ancestors TEXT NOT NULL
     );",
+    // 103: sets are versioned documents too (ADR 0025), kept in `versions`.
+    "DROP TABLE set_items;
+    DROP TABLE sets;",
 ];
 
 /// The database file inside the data directory.
@@ -315,72 +319,6 @@ impl Database {
         Ok(())
     }
 
-    /// All sets that are not deleted, items in order.
-    pub fn load_sets(&self) -> anyhow::Result<Vec<ServiceSet>> {
-        let mut sets_statement = self
-            .connection
-            .prepare("SELECT id, name FROM sets WHERE deleted_at IS NULL ORDER BY created_at, rowid")?;
-        let sets: Vec<(String, String)> =
-            sets_statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?.collect::<Result<_, _>>()?;
-        let mut items_statement = self
-            .connection
-            .prepare("SELECT item_id, kind_json FROM set_items WHERE set_id = ?1 ORDER BY position")?;
-        let mut result = Vec::new();
-        for (id, name) in sets {
-            let rows: Vec<(String, String)> = items_statement
-                .query_map([&id], |row| Ok((row.get(0)?, row.get(1)?)))?
-                .collect::<Result<_, _>>()?;
-            let items = rows
-                .into_iter()
-                .map(|(item_id, json)| {
-                    let kind: ItemKind = serde_json::from_str(&json).context("decoding a set item")?;
-                    Ok(SetItem { id: ItemId(item_id), kind })
-                })
-                .collect::<anyhow::Result<_>>()?;
-            result.push(ServiceSet { id: SetId(id), name, items });
-        }
-        Ok(result)
-    }
-
-    /// Stores a set, replacing its previous items.
-    pub fn save_set(&mut self, set: &ServiceSet) -> anyhow::Result<()> {
-        let transaction = self.connection.savepoint()?;
-        transaction.execute(
-            "INSERT INTO sets (id, name) VALUES (?1, ?2)
-             ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = datetime('now')",
-            params![set.id.as_str(), set.name],
-        )?;
-        transaction.execute("DELETE FROM set_items WHERE set_id = ?1", [set.id.as_str()])?;
-        for (position, item) in set.items.iter().enumerate() {
-            transaction.execute(
-                "INSERT INTO set_items (set_id, position, item_id, kind_json) VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    set.id.as_str(),
-                    i64::try_from(position)?,
-                    item.id.as_str(),
-                    serde_json::to_string(&item.kind)?
-                ],
-            )?;
-        }
-        transaction.commit()?;
-        Ok(())
-    }
-
-    /// Marks a set as deleted (it stays in the database file, e.g. for a later undo tool).
-    pub fn delete_set(&self, id: &str) -> anyhow::Result<()> {
-        self.connection.execute(
-            "UPDATE sets SET deleted_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL",
-            [id],
-        )?;
-        Ok(())
-    }
-
-    /// Undoes [`Database::delete_set`].
-    pub fn restore_set(&self, id: &str) -> anyhow::Result<()> {
-        self.connection.execute("UPDATE sets SET deleted_at = NULL WHERE id = ?1", [id])?;
-        Ok(())
-    }
-
     /// Records a newly paired device.
     pub fn add_device(&self, id: &str, name: &str, token_hash: &str) -> anyhow::Result<()> {
         self.connection.execute(
@@ -523,7 +461,10 @@ fn contents(connection: &Connection) -> anyhow::Result<Contents> {
             "SELECT count(DISTINCT document_id) FROM versions
              WHERE kind = 'song' AND head = 1 AND body IS NOT NULL",
         )?,
-        sets: count("SELECT count(*) FROM sets WHERE deleted_at IS NULL")?,
+        sets: count(
+            "SELECT count(DISTINCT document_id) FROM versions
+             WHERE kind = 'set' AND head = 1 AND body IS NOT NULL",
+        )?,
     })
 }
 
@@ -588,7 +529,7 @@ fn restore_newest_backup(data_dir: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sursum_core::model::{Song, Verse};
+    use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song, Verse};
     use sursum_protocol::SongId;
 
     fn song(text: &str) -> Song {
@@ -652,12 +593,22 @@ mod tests {
                 id: ItemId::from("i1"),
                 kind: ItemKind::Text { title: "Ogł.".into(), slides: vec!["x".into()] },
             }],
+            date: None,
+            church: None,
         };
+        database.save_set(&set).unwrap();
         database.save_set(&set).unwrap();
         set.items.clear();
         set.name = "Niedziela II".into();
+        set.date = Some("2026-11-22".into());
         database.save_set(&set).unwrap();
-        assert_eq!(database.load_sets().unwrap(), vec![set]);
+        assert_eq!(database.load_sets().unwrap(), vec![set.clone()]);
+        let heads = database.set_heads(&set.id).unwrap();
+        assert_eq!(heads.current().unwrap().changes(), 1, "an unchanged save adds no version");
+        database.delete_set("set-1").unwrap();
+        assert!(database.load_sets().unwrap().is_empty());
+        database.save_set(&set).unwrap();
+        assert_eq!(database.load_sets().unwrap(), vec![set], "saving again undoes the deletion");
         database.set_setting("active_set", &"set-1").unwrap();
         assert_eq!(database.setting::<String>("active_set").unwrap().as_deref(), Some("set-1"));
         assert_eq!(database.setting::<String>("missing").unwrap(), None);

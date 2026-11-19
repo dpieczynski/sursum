@@ -157,6 +157,8 @@ impl Program {
             | Command::MoveItem { .. }
             | Command::UndoRemove
             | Command::NewSet { .. }
+            | Command::DateSet { .. }
+            | Command::CopySet { .. }
             | Command::ActivateSet { .. }
             | Command::RenameSet { .. }
             | Command::DeleteSet { .. }
@@ -403,6 +405,8 @@ mod tests {
                     kind: ItemKind::Text { title: "Ogł.".to_owned(), slides: vec!["x".to_owned()] },
                 },
             ],
+            date: None,
+            church: None,
         }
     }
 

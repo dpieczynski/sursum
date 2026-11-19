@@ -2,7 +2,7 @@
 //! Songs and sets. The song model follows OpenLyrics 0.9 so it can be exported without loss.
 
 use serde::{Deserialize, Serialize};
-use sursum_protocol::{AssetId, ImageFit, ItemId, SetId, SongId};
+use sursum_protocol::{AssetId, ChurchId, ImageFit, ItemId, SetId, SongId};
 
 /// Name of a verse in OpenLyrics style: `v1`, `c`, `c2`, `b`, `p`, `e`, `o1`…
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -219,6 +219,35 @@ pub struct ServiceSet {
     pub id: SetId,
     pub name: String,
     pub items: Vec<SetItem>,
+    /// When the service is, as the organist chose it: `YYYY-MM-DD`, optionally with `THH:MM`
+    /// (see [`is_set_date`]). Lists of sets are ordered by it, never by a device clock, which a
+    /// church device may not have right (ADR 0025).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    /// The church the set is for (ADR 0025); `None` for a set made before the device's church
+    /// was named.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub church: Option<ChurchId>,
+}
+
+/// True for a set date as the remote's date field gives it: `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`.
+/// Such text sorts like the dates it names.
+pub fn is_set_date(text: &str) -> bool {
+    let digits =
+        |part: &str, length: usize| part.len() == length && part.bytes().all(|byte| byte.is_ascii_digit());
+    let (day, time) = match text.split_once('T') {
+        Some((day, time)) => (day, Some(time)),
+        None => (text, None),
+    };
+    let mut parts = day.split('-');
+    let day_ok = matches!(
+        (parts.next(), parts.next(), parts.next(), parts.next()),
+        (Some(year), Some(month), Some(day), None) if digits(year, 4) && digits(month, 2) && digits(day, 2)
+    );
+    let time_ok = time.is_none_or(|time| {
+        matches!(time.split_once(':'), Some((hours, minutes)) if digits(hours, 2) && digits(minutes, 2))
+    });
+    day_ok && time_ok
 }
 
 impl ServiceSet {
@@ -261,6 +290,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn set_dates_are_days_with_an_optional_time() {
+        for good in ["2026-11-22", "2026-11-22T10:00"] {
+            assert!(is_set_date(good), "{good}");
+        }
+        for bad in ["", "22.11.2026", "2026-11-2", "2026-11-22T10", "2026-11-22 10:00", "2026-11-22-01"] {
+            assert!(!is_set_date(bad), "{bad}");
+        }
+    }
+
+    #[test]
     fn lines_without_chords_serialize_as_strings() {
         let block: LinesBlock = serde_json::from_str(
             r#"{"lines": ["a", {"text": "b", "chords": [{"position": 0, "chord": "G"}]}]}"#,
@@ -278,8 +317,13 @@ mod tests {
             id: ItemId::from(id),
             kind: ItemKind::Text { title: id.into(), slides: vec![] },
         };
-        let mut set =
-            ServiceSet { id: SetId::from("s"), name: "s".into(), items: vec![item("a"), item("b")] };
+        let mut set = ServiceSet {
+            id: SetId::from("s"),
+            name: "s".into(),
+            items: vec![item("a"), item("b")],
+            date: None,
+            church: None,
+        };
         set.insert_after(Some(&ItemId::from("a")), item("x"));
         set.insert_after(None, item("y"));
         set.insert_after(Some(&ItemId::from("missing")), item("z"));
@@ -297,6 +341,8 @@ mod tests {
             id: SetId::from("s"),
             name: "s".into(),
             items: vec![item("a"), item("b"), item("c")],
+            date: None,
+            church: None,
         };
         assert!(set.move_to(&ItemId::from("a"), 9));
         let ids = |set: &ServiceSet| set.items.iter().map(|item| item.id.0.clone()).collect::<Vec<_>>();
@@ -312,7 +358,7 @@ mod tests {
         #[test]
         fn moves_keep_every_item_exactly_once(moves in proptest::collection::vec((0usize..6, 0usize..8), 0..20)) {
             let item = |id: usize| SetItem { id: ItemId(id.to_string()), kind: ItemKind::Text { title: String::new(), slides: vec![] } };
-            let mut set = ServiceSet { id: SetId::from("s"), name: "s".into(), items: (0..6).map(item).collect() };
+            let mut set = ServiceSet { id: SetId::from("s"), name: "s".into(), items: (0..6).map(item).collect(), date: None, church: None };
             for (which, to) in moves {
                 set.move_to(&ItemId(which.to_string()), to);
             }

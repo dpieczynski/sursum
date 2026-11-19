@@ -14,6 +14,7 @@ use super::Database;
 pub(crate) enum Kind {
     Song,
     Church,
+    Set,
 }
 
 impl Kind {
@@ -21,6 +22,7 @@ impl Kind {
         match self {
             Kind::Song => "song",
             Kind::Church => "church",
+            Kind::Set => "set",
         }
     }
 }

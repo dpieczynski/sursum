@@ -339,7 +339,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut database = device(dir.path(), "old-pin", "old-token", &["Alfa", "Beta"]);
         database
-            .save_set(&ServiceSet { id: SetId::from("set-1"), name: "Niedziela".into(), items: vec![] })
+            .save_set(&ServiceSet {
+                id: SetId::from("set-1"),
+                name: "Niedziela".into(),
+                items: vec![],
+                date: None,
+                church: None,
+            })
             .unwrap();
         drop(database);
         crate::assets::store(dir.path(), PNG).unwrap();

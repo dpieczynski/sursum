@@ -85,8 +85,14 @@ packages: [plan-sync.md](plan-sync.md).
   `RemoteState.church` and `churches`; commands `NameChurch` (create or rename) and `UseChurch`;
   Ustawienia → Kościół; churches travel in `.sursum` files (`churches.jsonl`). Sets are not yet
   tied to churches (Y1.6)
-- [ ] Y1.6 Sets as versions, dates and list order, "Nowy zestaw z tego", sets and pictures in the
-  file, set review
+- [x] Y1.6a Sets as versions (2026-11-20): every set change saves a version (`db/sets.rs`, the
+  old set tables dropped); sets carry an optional date (`NewSet.date`, `DateSet`,
+  `is_set_date`) and their church; the list shows drafts first, then by date, latest on top;
+  "Nowy zestaw z tego" (`CopySet`: a new set, new item ids, becomes active); a device shows its
+  church's sets (and those made before the church was named, which naming adopts); the demo set
+  is made once, on the first start, with an id of its own; imported OpenSong sets are per church
+- [ ] Y1.6b Sets and their pictures in the `.sursum` file; the merge upload streamed to disk
+- [ ] Y1.6c Set review: sets changed in two places, the comparison with "Dodaj" 
 - [ ] Y1.7 Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden
   there
 - [ ] Y1.8 Operator guide

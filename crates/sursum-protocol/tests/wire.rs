@@ -83,6 +83,21 @@ fn client_messages() {
         },
         ClientMsg::Cmd { seq: 11, base_rev: Rev(7), cmd: Command::NameChurch { name: "Tulce".into() } },
         ClientMsg::Cmd {
+            seq: 13,
+            base_rev: Rev(7),
+            cmd: Command::CopySet {
+                set_id: SetId::from("set"),
+                name: "Niedziela".into(),
+                date: Some("2026-11-29".into()),
+                church: None,
+            },
+        },
+        ClientMsg::Cmd {
+            seq: 14,
+            base_rev: Rev(7),
+            cmd: Command::DateSet { set_id: SetId::from("set"), date: Some("2026-11-22T10:00".into()) },
+        },
+        ClientMsg::Cmd {
             seq: 12,
             base_rev: Rev(7),
             cmd: Command::UseChurch { church_id: ChurchId::from("church-0123456789abcdef") },
@@ -121,8 +136,14 @@ fn remote_state() {
                 song_id: Some(SongId::from("song-1")),
                 song_number: Some("123".into()),
             }],
+            date: Some("2026-11-22T10:00".into()),
         }),
-        sets: vec![SetSummary { set_id: SetId::from("set"), name: "Msza".into(), items: 1 }],
+        sets: vec![SetSummary {
+            set_id: SetId::from("set"),
+            name: "Msza".into(),
+            items: 1,
+            date: Some("2026-11-22T10:00".into()),
+        }],
         can_undo: false,
         display_power: DisplayPowerState::Unavailable { reason: "not_configured".into() },
         screen_profile: sample_profile(),

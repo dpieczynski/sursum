@@ -72,15 +72,17 @@ impl SetStore {
         self.active.as_ref()
     }
 
-    /// The list for switching sets, newest first (the next service is usually the newest).
+    /// The list for switching sets: sets without a date first (drafts, newest first), then by
+    /// date, the latest on top (ADR 0025). The same order on every device; no clock involved.
     pub fn summaries(&self) -> Vec<SetSummary> {
-        self.sets
-            .iter()
-            .rev()
+        let mut sets: Vec<&ServiceSet> = self.sets.iter().rev().collect();
+        sets.sort_by_key(|set| (set.date.is_some(), std::cmp::Reverse(set.date.clone())));
+        sets.into_iter()
             .map(|set| SetSummary {
                 set_id: set.id.clone(),
                 name: set.name.clone(),
                 items: u32::try_from(set.items.len()).unwrap_or(u32::MAX),
+                date: set.date.clone(),
             })
             .collect()
     }
@@ -135,11 +137,29 @@ impl SetStore {
     }
 
     /// Creates an empty set and makes it active.
-    pub fn create(&mut self, id: SetId, name: &str) -> &ServiceSet {
+    pub fn create(
+        &mut self,
+        id: SetId,
+        name: &str,
+        date: Option<String>,
+        church: Option<sursum_protocol::ChurchId>,
+    ) -> &ServiceSet {
         let name = if name.trim().is_empty() { "Zestaw" } else { name.trim() };
-        self.sets.push(ServiceSet { id: id.clone(), name: name.to_owned(), items: Vec::new() });
-        self.active = Some(id);
+        self.add(ServiceSet { id, name: name.to_owned(), items: Vec::new(), date, church })
+    }
+
+    /// Adds a set (a new one, or a copy) and makes it active.
+    pub fn add(&mut self, set: ServiceSet) -> &ServiceSet {
+        self.active = Some(set.id.clone());
+        self.sets.push(set);
         self.sets.last().expect("just pushed")
+    }
+
+    /// Sets or clears a set's date; returns it, or `None` if it does not exist.
+    pub fn set_date(&mut self, set_id: &SetId, date: Option<String>) -> Option<&ServiceSet> {
+        let set = self.sets.iter_mut().find(|set| &set.id == set_id)?;
+        set.date = date;
+        Some(set)
     }
 
     /// Adds a set, or replaces the set with the same id (re-importing). The active set stays.
@@ -209,8 +229,8 @@ mod tests {
     #[test]
     fn a_deleted_set_comes_back_at_its_place_and_active_again() {
         let mut store = SetStore::default();
-        let first = store.create(SetId::from("a"), "Niedziela").id.clone();
-        let second = store.create(SetId::from("b"), "Środa").id.clone();
+        let first = store.create(SetId::from("a"), "Niedziela", None, None).id.clone();
+        let second = store.create(SetId::from("b"), "Środa", None, None).id.clone();
         assert!(store.delete(&second));
         assert_eq!(store.active_id(), Some(&first));
         assert_eq!(store.undo_delete().map(|set| set.name.as_str()), Some("Środa"));
@@ -222,7 +242,13 @@ mod tests {
 
     #[test]
     fn newest_set_is_active_unless_one_is_named() {
-        let set = |id: &str| ServiceSet { id: SetId::from(id), name: id.into(), items: vec![] };
+        let set = |id: &str| ServiceSet {
+            id: SetId::from(id),
+            name: id.into(),
+            items: vec![],
+            date: None,
+            church: None,
+        };
         let store = SetStore::new(vec![set("a"), set("b")], None);
         assert_eq!(store.active_id().map(SetId::as_str), Some("b"));
         let store = SetStore::new(vec![set("a"), set("b")], Some(SetId::from("a")));
@@ -234,7 +260,7 @@ mod tests {
     #[test]
     fn remove_and_undo() {
         let mut store = SetStore::default();
-        store.create(SetId::from("s"), " Niedziela ");
+        store.create(SetId::from("s"), " Niedziela ", None, None);
         for id in ["a", "b", "c"] {
             let (item_id, kind) = text(id);
             store.insert(None, item_id, kind);
@@ -250,8 +276,8 @@ mod tests {
     #[test]
     fn sets_are_listed_newest_first_and_can_be_renamed_and_deleted() {
         let mut store = SetStore::default();
-        store.create(SetId::from("a"), "Pierwszy");
-        store.create(SetId::from("b"), "Drugi");
+        store.create(SetId::from("a"), "Pierwszy", None, None);
+        store.create(SetId::from("b"), "Drugi", None, None);
         let names: Vec<String> = store.summaries().into_iter().map(|set| set.name).collect();
         assert_eq!(names, ["Drugi", "Pierwszy"]);
         assert_eq!(
@@ -265,15 +291,31 @@ mod tests {
     }
 
     #[test]
+    fn dated_sets_are_listed_by_date_after_the_drafts() {
+        let mut store = SetStore::default();
+        store.create(SetId::from("a"), "Niedziela 15.11", Some("2026-11-15".into()), None);
+        store.create(SetId::from("b"), "Szkic", None, None);
+        store.create(SetId::from("c"), "Niedziela 22.11", Some("2026-11-22T10:00".into()), None);
+        store.create(SetId::from("d"), "Środa 18.11", Some("2026-11-18".into()), None);
+        let names: Vec<String> = store.summaries().into_iter().map(|set| set.name).collect();
+        assert_eq!(names, ["Szkic", "Niedziela 22.11", "Środa 18.11", "Niedziela 15.11"]);
+        assert_eq!(
+            store.set_date(&SetId::from("b"), Some("2026-11-29".into())).map(|set| set.id.as_str()),
+            Some("b")
+        );
+        assert_eq!(store.summaries()[0].name, "Szkic", "now the latest date");
+    }
+
+    #[test]
     fn move_and_activate() {
         let mut store = SetStore::default();
-        store.create(SetId::from("s1"), "");
+        store.create(SetId::from("s1"), "", None, None);
         let (item_id, kind) = text("a");
         store.insert(None, item_id, kind);
         let (item_id, kind) = text("b");
         store.insert(None, item_id, kind);
         assert_eq!(ids(store.move_item(&ItemId::from("b"), 0).unwrap()), ["b", "a"]);
-        store.create(SetId::from("s2"), "Drugi");
+        store.create(SetId::from("s2"), "Drugi", None, None);
         assert_eq!(store.active().unwrap().items.len(), 0);
         assert!(store.activate(&SetId::from("s1")));
         assert!(!store.activate(&SetId::from("nope")));

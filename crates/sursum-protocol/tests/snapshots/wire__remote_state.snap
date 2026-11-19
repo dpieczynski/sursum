@@ -92,13 +92,15 @@ expression: state
         "song_id": "song-1",
         "song_number": "123"
       }
-    ]
+    ],
+    "date": "2026-11-22T10:00"
   },
   "sets": [
     {
       "set_id": "set",
       "name": "Msza",
-      "items": 1
+      "items": 1,
+      "date": "2026-11-22T10:00"
     }
   ],
   "can_undo": false,

@@ -78,7 +78,9 @@ Command = Next | Prev | NextItem | PrevItem                // relative: subject 
                                         // the live item; goes live
         | AddSong { song_id } | AddText { title, text }
         | RemoveItem { item_id } | MoveItem { item_id, to_index } | UndoRemove
-        | NewSet { name } | ActivateSet { set_id } | RenameSet { set_id, name }
+        | NewSet { name, date? } | ActivateSet { set_id } | RenameSet { set_id, name }
+        | DateSet { set_id, date? }     // date: YYYY-MM-DD or YYYY-MM-DDTHH:MM (ADR 0025)
+        | CopySet { set_id, name, date?, church? }   // "Nowy zestaw z tego": a new set, active
         | DeleteSet { set_id }          // refused with `set_on_screen` while one of its items is live
         | UndoDeleteSet                 // brings back the set deleted last, in its place
         | SetEndOfItem { mode: "gap"|"continue" }   // what Next does after an item's last slide
