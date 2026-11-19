@@ -832,6 +832,22 @@ pub fn merge_lines(report: &sursum_protocol::MergeReport) -> Vec<String> {
             report.conflicts.join(", ")
         ));
     }
+    // Sets and pictures only when the file brought some: most files carry songs only.
+    let counts = [
+        ("Nowe zestawy", report.sets_added),
+        ("Zmienione zestawy", report.sets_updated),
+        ("Zestawy innych kościołów (przechowane, niewidoczne tutaj)", report.other_church_sets),
+        ("Nowe obrazy", report.pictures_added),
+    ];
+    lines.extend(
+        counts.iter().filter(|(_, count)| *count > 0).map(|(label, count)| format!("{label}: {count}")),
+    );
+    if !report.sets_to_review.is_empty() {
+        lines.push(format!(
+            "Zestawy zmienione w dwóch miejscach (do przejrzenia): {}",
+            report.sets_to_review.join(", ")
+        ));
+    }
     lines
 }
 

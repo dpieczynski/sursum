@@ -626,6 +626,38 @@ async fn library_file_moves_new_songs_to_another_device_after_a_dry_run() {
     gowarzewo.stop().await.unwrap();
 }
 
+#[tokio::test]
+async fn pictures_of_sets_travel_in_the_library_file() {
+    use sursum_protocol::{AssetId, MergeReport};
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let tulce = start(dir_a.path(), "boot-1").await;
+    let gowarzewo = start(dir_b.path(), "boot-1").await;
+    let png = b"\x89PNG\r\n\x1a\nsynthetic poster";
+    let id: AssetId = serde_json::from_str(&http_post_bytes(&tulce, "/api/assets", png).await).unwrap();
+    let mut remote = connect(&tulce, Role::Remote, "organist").await;
+    let add = Command::AddImage { title: "Plakat".into(), asset_id: id.clone() };
+    assert!(matches!(command(&mut remote, 1, Rev(u32::MAX), add).await, CmdOutcome::Applied { .. }));
+
+    let bundle = http_get_bytes(&tulce, "/api/library/export").await;
+    let path = format!("/assets/{}", id.as_str());
+    let preview: MergeReport =
+        serde_json::from_str(&http_post_bytes(&gowarzewo, "/api/library/merge?dry_run=true", &bundle).await)
+            .unwrap();
+    assert_eq!(preview.pictures_added, 1, "{preview:?}");
+    assert!(preview.sets_added >= 1, "{preview:?}");
+    assert_ne!(http_get_bytes(&gowarzewo, &path).await, png, "a dry run stores no picture");
+
+    let merged: MergeReport =
+        serde_json::from_str(&http_post_bytes(&gowarzewo, "/api/library/merge", &bundle).await).unwrap();
+    assert_eq!(merged, preview);
+    assert_eq!(http_get_bytes(&gowarzewo, &path).await, png);
+    let again: MergeReport =
+        serde_json::from_str(&http_post_bytes(&gowarzewo, "/api/library/merge", &bundle).await).unwrap();
+    assert_eq!((again.pictures_added, again.sets_added), (0, 0), "{again:?}");
+    tulce.stop().await.unwrap();
+    gowarzewo.stop().await.unwrap();
+}
+
 /// Saves `lyrics` over the version a song shows now, like the editor (load the draft, change it,
 /// save on the loaded version).
 async fn edit_song(server: &RunningServer, song_id: &sursum_protocol::SongId, lyrics: &str) {

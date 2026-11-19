@@ -102,7 +102,7 @@ pub fn router(
         .route(
             "/api/library/merge",
             axum::routing::post(merge_library)
-                .layer(axum::extract::DefaultBodyLimit::max(MAX_IMPORT_BYTES))
+                .layer(axum::extract::DefaultBodyLimit::disable())
                 .layer(middleware::from_fn(require_upload_header)),
         )
         .route(
@@ -480,20 +480,56 @@ async fn asset(State(app): State<App>, Path(id): Path<String>) -> Response {
 
 /// `GET /api/library/export`: the whole library as a `.sursum` file (also a backup).
 async fn export_library(State(app): State<App>) -> Response {
-    match app.state.export_library().await {
-        Some(bytes) => (
-            [
-                (header::CONTENT_TYPE, HeaderValue::from_static("application/zip")),
-                (
-                    header::CONTENT_DISPOSITION,
-                    HeaderValue::from_static("attachment; filename=\"biblioteka.sursum\""),
-                ),
-            ],
-            bytes,
-        )
-            .into_response(),
-        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    let Some(export) = app.state.export_library().await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    // The pictures are read from the store here, outside the state actor.
+    let data_dir = app.data_dir.clone();
+    let written = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        let mut temporary = crate::device_backup::TemporaryFile::new(&data_dir)?;
+        crate::library::write(&export, &data_dir, temporary.file())?;
+        std::io::Seek::rewind(temporary.file())?;
+        Ok(temporary)
+    })
+    .await;
+    match written {
+        Ok(Ok(temporary)) => stream_file(temporary, "attachment; filename=\"biblioteka.sursum\""),
+        Ok(Err(error)) => {
+            tracing::error!(?error, "could not write the library file");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
+}
+
+/// Sends a temporary file in chunks (it is removed when the response is done) as a download.
+/// The length is sent too, so the browser shows progress and clients need no chunked decoding.
+fn stream_file(mut temporary: crate::device_backup::TemporaryFile, disposition: &'static str) -> Response {
+    let length = temporary.file().metadata().map(|metadata| metadata.len()).ok();
+    let chunks = futures_util::stream::try_unfold(temporary, |mut temporary| async move {
+        let read = tokio::task::spawn_blocking(move || {
+            let mut chunk = vec![0; 256 * 1024];
+            let read = std::io::Read::read(temporary.file(), &mut chunk)?;
+            chunk.truncate(read);
+            Ok::<_, std::io::Error>((chunk, temporary))
+        })
+        .await
+        .map_err(std::io::Error::other)??;
+        let (chunk, temporary) = read;
+        Ok::<_, std::io::Error>((!chunk.is_empty()).then(|| (axum::body::Bytes::from(chunk), temporary)))
+    });
+    let mut response = (
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("application/zip")),
+            (header::CONTENT_DISPOSITION, HeaderValue::from_static(disposition)),
+        ],
+        axum::body::Body::from_stream(chunks),
+    )
+        .into_response();
+    if let Some(length) = length {
+        response.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(length));
+    }
+    response
 }
 
 /// `GET /api/backup`: a whole-device backup (`.sursum-backup`, ADR 0018), streamed from a
@@ -515,29 +551,7 @@ async fn download_backup(State(app): State<App>) -> Response {
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    let chunks = futures_util::stream::try_unfold(temporary, |mut temporary| async move {
-        let read = tokio::task::spawn_blocking(move || {
-            let mut chunk = vec![0; 256 * 1024];
-            let read = std::io::Read::read(temporary.file(), &mut chunk)?;
-            chunk.truncate(read);
-            Ok::<_, std::io::Error>((chunk, temporary))
-        })
-        .await
-        .map_err(std::io::Error::other)??;
-        let (chunk, temporary) = read;
-        Ok::<_, std::io::Error>((!chunk.is_empty()).then(|| (axum::body::Bytes::from(chunk), temporary)))
-    });
-    (
-        [
-            (header::CONTENT_TYPE, HeaderValue::from_static("application/zip")),
-            (
-                header::CONTENT_DISPOSITION,
-                HeaderValue::from_static("attachment; filename=\"kopia.sursum-backup\""),
-            ),
-        ],
-        axum::body::Body::from_stream(chunks),
-    )
-        .into_response()
+    stream_file(temporary, "attachment; filename=\"kopia.sursum-backup\"")
 }
 
 /// `POST /api/backup/restore`: checks and stages a backup, answers, then restarts so the
@@ -610,18 +624,57 @@ struct MergeQuery {
 async fn merge_library(
     State(app): State<App>,
     Query(query): Query<MergeQuery>,
-    body: axum::body::Bytes,
+    body: axum::body::Body,
 ) -> Response {
-    let songs = match tokio::task::spawn_blocking(move || crate::library::read_bundle(&body)).await {
-        Ok(Ok(songs)) => songs,
+    use futures_util::StreamExt as _;
+    // The file goes to disk as it arrives: with pictures it can be large.
+    let data_dir = app.data_dir.clone();
+    let Ok(mut upload) = crate::device_backup::TemporaryFile::new(&data_dir) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let mut received: u64 = 0;
+    let mut stream = body.into_data_stream();
+    while let Some(chunk) = stream.next().await {
+        let Ok(chunk) = chunk else { return StatusCode::BAD_REQUEST.into_response() };
+        received += chunk.len() as u64;
+        if received > MAX_LIBRARY_FILE_BYTES {
+            return (StatusCode::PAYLOAD_TOO_LARGE, "the file is too large").into_response();
+        }
+        if std::io::Write::write_all(upload.file(), &chunk).is_err() {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+    let dry_run = query.dry_run;
+    // Read the documents; store the pictures first (unless trying), so sets never point at a
+    // picture that is not there yet.
+    let read = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        std::io::Seek::rewind(upload.file())?;
+        let incoming = crate::library::read_bundle(&mut *upload.file())?;
+        let pictures = if dry_run {
+            crate::library::missing_pictures(&incoming, &data_dir)
+        } else {
+            std::io::Seek::rewind(upload.file())?;
+            crate::library::store_pictures(&mut *upload.file(), &data_dir)?
+        };
+        Ok((incoming, pictures))
+    })
+    .await;
+    let (incoming, pictures) = match read {
+        Ok(Ok(read)) => read,
         Ok(Err(error)) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    match app.state.merge_library(songs, query.dry_run).await {
-        Some(report) => axum::Json(report).into_response(),
+    match app.state.merge_library(incoming, dry_run).await {
+        Some(mut report) => {
+            report.pictures_added = pictures;
+            axum::Json(report).into_response()
+        }
         None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
+
+/// Largest library file accepted: every picture the store may hold, and room for the rest.
+const MAX_LIBRARY_FILE_BYTES: u64 = crate::assets::MAX_TOTAL_BYTES + 256 * 1024 * 1024;
 
 /// `GET /api/songs/{id}/draft`: a song in the editor's text form.
 async fn song_draft(State(app): State<App>, Path(id): Path<String>) -> Response {

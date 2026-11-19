@@ -222,8 +222,10 @@ obsługują ekranu.
   do konkretnych plików. Ponowny import aktualizuje tylko pieśni zmienione w OpenSong i nigdy nie
   cofa poprawek zrobionych w sursum ani nie przywraca usuniętych pieśni. Jeśli pieśń zmieniono i
   w OpenSong, i w sursum, zostają obie wersje i pieśń trafia do przejrzenia.
-- **Eksport bazy** / **Scal bazę z pliku**: wymiana pieśni między kościołami. Plik `.sursum` z
-  jednego kościoła scalasz w drugim. Najpierw zobaczysz, co się zmieni, i dopiero **Scal**
+- **Eksport bazy** / **Scal bazę z pliku**: wymiana pieśni i zestawów między kościołami. Plik
+  `.sursum` z jednego kościoła scalasz w drugim. Plik zawiera też zestawy wszystkich kościołów
+  razem z ich obrazami; każde urządzenie pokazuje tylko zestawy swojego kościoła, a pozostałe
+  przechowuje i przekazuje dalej. Najpierw zobaczysz, co się zmieni, i dopiero **Scal**
   zapisuje. Wczytanie tego samego albo starszego pliku niczego nie psuje. Gdy tę samą pieśń
   zmieniono w obu miejscach, zostaje jedna pieśń z wersją zmienianą więcej razy, a druga wersja
   czeka przy niej na przejrzenie; raport scalania wymienia takie pieśni. Pliki z wcześniejszych

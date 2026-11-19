@@ -140,11 +140,18 @@ restart after a server restart, so clients apply every snapshot instead of compa
   remote saved). A version that lost a merge can still be saved on; the song then keeps both
   versions until review.
 - **Library files** (`GET /api/library/export`, `POST /api/library/merge[?dry_run=true]`):
-  `.sursum` format 2, a ZIP with `manifest.json` and `songs.jsonl`, one song per line with its
-  heads (`{ id, heads: [{ body, ancestors }] }`, `body` null for a deletion). Version ids are
-  computed by the reader, never read. `MergeReport { added, updated, unchanged, kept_local,
-  deleted, conflicts }`: `conflicts` are the titles of songs changed in two places (one shown,
-  the other kept for review). Format 1 files are refused.
+  `.sursum` format 2, a ZIP with `manifest.json` (format and counts), `songs.jsonl`,
+  `churches.jsonl` and `sets.jsonl`, one document per line with its heads
+  (`{ id, heads: [{ body, ancestors }] }`, `body` null for a deletion), and `assets/<id>`, the
+  pictures the sets use. Version ids are computed by the reader, never read; a picture is
+  stored only if its bytes give its id. Every set travels, also other churches' (kept and passed
+  on, not shown). The export is written to a temporary file and streamed with its length; the
+  upload is streamed to a temporary file too (up to the picture store's limit plus 256 MB), so
+  neither is held in memory. `MergeReport { added, updated, unchanged, kept_local, deleted,
+  conflicts, sets_added, sets_updated, sets_to_review, other_church_sets, pictures_added }`:
+  `conflicts` and `sets_to_review` are the titles and names of documents changed in two places
+  (one shown, the other kept for review); a dry run counts the pictures it would add. Format 1
+  files are refused.
 - **OpenSong import** (`POST /api/import/opensong`) answers `ImportReport { inserted, updated,
   unchanged, failed, sets, to_review, problems }`; `to_review` names songs whose file text met a
   correction made in sursum since the last import (both versions stay, ADR 0025).

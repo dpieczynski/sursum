@@ -67,8 +67,6 @@ packages: [plan-sync.md](plan-sync.md).
   format 2 for songs with merge and report; the two-church scenario, the text typed back, a
   deletion against a change and stale files as tests; conflict copies removed (2026-11-19).
   Not yet run on the pilot Pi (its data folder must be emptied first)
-- [ ] Y1.2 rest: the merge upload streamed to disk (moved to Y1.6, when pictures make files
-  large)
 - [x] Y1.3 Review of songs changed in two places (2026-11-20): `songs_to_review` in the
   remote's state, a mark in search results, the "Pieśni do przejrzenia" line in the Zestaw and
   Pieśni views, the comparison of versions with "Zostaw tę" (`/api/songs/review`,
@@ -91,7 +89,11 @@ packages: [plan-sync.md](plan-sync.md).
   "Nowy zestaw z tego" (`CopySet`: a new set, new item ids, becomes active); a device shows its
   church's sets (and those made before the church was named, which naming adopts); the demo set
   is made once, on the first start, with an id of its own; imported OpenSong sets are per church
-- [ ] Y1.6b Sets and their pictures in the `.sursum` file; the merge upload streamed to disk
+- [x] Y1.6b Sets and their pictures in the `.sursum` file (2026-11-20): `sets.jsonl` with
+  every church's sets, `assets/<id>` checked against their contents; the export and the merge
+  upload go through temporary files (also Y1.2's rest); report lines for sets and pictures in
+  the remote; tests for sets moving, a set changed in two places and pictures (dry run
+  included)
 - [ ] Y1.6c Set review: sets changed in two places, the comparison with "Dodaj" 
 - [ ] Y1.7 Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden
   there

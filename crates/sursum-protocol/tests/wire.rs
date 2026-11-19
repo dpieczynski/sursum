@@ -179,6 +179,11 @@ fn merge_report() {
         kept_local: 1,
         deleted: 1,
         conflicts: vec!["Pieśń zmieniona w obu kościołach".into()],
+        sets_added: 1,
+        sets_updated: 2,
+        sets_to_review: vec!["Niedziela, suma".into()],
+        other_church_sets: 3,
+        pictures_added: 1,
     };
     insta::assert_json_snapshot!(report);
 }

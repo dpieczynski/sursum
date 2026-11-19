@@ -342,8 +342,11 @@ mod tests {
         let (mut tulce, mut gowarzewo) = (Database::in_memory().unwrap(), Database::in_memory().unwrap());
         store(&mut tulce, &folder_with("z OpenSong"), None).unwrap();
         correct(&mut tulce, "poprawione w Tulcach");
-        let file = crate::library::read_bundle(&crate::library::export(&tulce).unwrap()).unwrap();
-        crate::library::merge(&mut gowarzewo, &file, false).unwrap();
+        let file = crate::library::read_bundle(std::io::Cursor::new(
+            crate::library::export(&tulce, std::path::Path::new("")).unwrap(),
+        ))
+        .unwrap();
+        crate::library::merge(&mut gowarzewo, &file, false, &|_| true).unwrap();
 
         // Gowarzewo imports its own copy of the same old folder: nothing changes.
         let (report, _) = store(&mut gowarzewo, &folder_with("z OpenSong"), None).unwrap();
@@ -355,8 +358,11 @@ mod tests {
         store(&mut other, &folder_with("z OpenSong"), None).unwrap();
         let mut fresh = Database::in_memory().unwrap();
         store(&mut fresh, &folder_with("z OpenSong"), None).unwrap();
-        let file = crate::library::read_bundle(&crate::library::export(&other).unwrap()).unwrap();
-        let report = crate::library::merge(&mut fresh, &file, false).unwrap();
+        let file = crate::library::read_bundle(std::io::Cursor::new(
+            crate::library::export(&other, std::path::Path::new("")).unwrap(),
+        ))
+        .unwrap();
+        let report = crate::library::merge(&mut fresh, &file, false, &|_| true).unwrap();
         assert_eq!(report.unchanged, 1, "{report:?}");
     }
 

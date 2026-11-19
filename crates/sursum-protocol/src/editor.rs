@@ -88,6 +88,21 @@ pub struct MergeReport {
     /// Titles of songs changed in both places (ADR 0025): the version with more changes is
     /// shown on every device, the other one stays with the song and waits for review.
     pub conflicts: Vec<String>,
+    /// This church's sets the file added (ADR 0025).
+    #[serde(default)]
+    pub sets_added: u32,
+    /// This church's sets the file changed (or deleted).
+    #[serde(default)]
+    pub sets_updated: u32,
+    /// Names of this church's sets changed in two places, waiting for review.
+    #[serde(default)]
+    pub sets_to_review: Vec<String>,
+    /// Sets of other churches the file added or changed: kept and passed on, not shown here.
+    #[serde(default)]
+    pub other_church_sets: u32,
+    /// Pictures the file brought that this device did not have.
+    #[serde(default)]
+    pub pictures_added: u32,
 }
 
 /// Result of saving a draft.
