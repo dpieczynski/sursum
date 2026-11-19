@@ -142,6 +142,9 @@ restart after a server restart, so clients apply every snapshot instead of compa
   computed by the reader, never read. `MergeReport { added, updated, unchanged, kept_local,
   deleted, conflicts }`: `conflicts` are the titles of songs changed in two places (one shown,
   the other kept for review). Format 1 files are refused.
+- **OpenSong import** (`POST /api/import/opensong`) answers `ImportReport { inserted, updated,
+  unchanged, failed, sets, to_review, problems }`; `to_review` names songs whose file text met a
+  correction made in sursum since the last import (both versions stay, ADR 0025).
 - **Review** of songs changed in two places: `RemoteState.songs_to_review` counts them and
   `SongSummary.review` marks them in search results; `GET /api/songs/review` lists them,
   `GET /api/songs/{id}/versions` answers `SongVersions` (every live version in the editor's text

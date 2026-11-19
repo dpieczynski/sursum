@@ -74,7 +74,11 @@ packages: [plan-sync.md](plan-sync.md).
   Pieśni views, the comparison of versions with "Zostaw tę" (`/api/songs/review`,
   `/api/songs/{id}/versions`, `/api/songs/{id}/keep`); server and e2e tests (Chromium,
   WebKitGTK). Editing a version that lost before keeping one is not offered: keep one, then edit
-- [ ] Y1.4 OpenSong import under the same rules
+- [x] Y1.4 OpenSong import under the same rules (2026-11-20): an import builds on what the
+  previous import of the song made on this device, or on a first version shared by every
+  device; importing an old folder again never undoes a correction nor brings back a deleted
+  song; a new text next to a correction made in sursum waits for review
+  (`ImportReport.to_review`)
 - [ ] Y1.5 Churches: id from the name, the first-start form, the device's church
 - [ ] Y1.6 Sets as versions, dates and list order, "Nowy zestaw z tego", sets and pictures in the
   file, set review

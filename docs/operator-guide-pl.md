@@ -215,7 +215,9 @@ obsługują ekranu.
 
 - **Import z OpenSong (ZIP)**: spakuj cały folder OpenSong (z podfolderami *Songs* i *Sets*) i
   wybierz plik. Po imporcie okno pokazuje, ile pieśni i zestawów dodano lub zmieniono, oraz uwagi
-  do konkretnych plików. Ponowny import tych samych plików tylko aktualizuje zmienione pieśni.
+  do konkretnych plików. Ponowny import aktualizuje tylko pieśni zmienione w OpenSong i nigdy nie
+  cofa poprawek zrobionych w sursum ani nie przywraca usuniętych pieśni. Jeśli pieśń zmieniono i
+  w OpenSong, i w sursum, zostają obie wersje i pieśń trafia do przejrzenia.
 - **Eksport bazy** / **Scal bazę z pliku**: wymiana pieśni między kościołami. Plik `.sursum` z
   jednego kościoła scalasz w drugim. Najpierw zobaczysz, co się zmieni, i dopiero **Scal**
   zapisuje. Wczytanie tego samego albo starszego pliku niczego nie psuje. Gdy tę samą pieśń

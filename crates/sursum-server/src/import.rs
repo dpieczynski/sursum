@@ -15,7 +15,7 @@ use sursum_formats::opensong::{
 };
 use sursum_protocol::{ImportReport, ItemId, SetId, SongId};
 
-use crate::db::{Base, Database, SongSave};
+use crate::db::{Database, SongImport};
 
 /// At most this many problem lines are reported back.
 const MAX_PROBLEMS: usize = 500;
@@ -125,11 +125,11 @@ fn store_in(
         for warning in &imported.warnings {
             push_problem(&mut report, format!("{path}: {warning}"));
         }
-        // Until roadmap Y1.4, an import builds on the current version like an edit.
-        match database.save_song(&imported.song, Base::Current)? {
-            SongSave::Created(_) => report.inserted += 1,
-            SongSave::Changed(_) => report.updated += 1,
-            SongSave::Unchanged(_) | SongSave::Outdated => report.unchanged += 1,
+        match database.import_song(&imported.song)? {
+            SongImport::Created => report.inserted += 1,
+            SongImport::Updated => report.updated += 1,
+            SongImport::Unchanged => report.unchanged += 1,
+            SongImport::ToReview => report.to_review.push(imported.song.title().to_owned()),
         }
     }
     for (path, reason) in &library.failures {
@@ -265,6 +265,88 @@ mod tests {
         let second = import_opensong(&mut database, &fixtures(), "Przykładowy").unwrap();
         assert_eq!((second.inserted, second.updated, second.unchanged), (0, 0, 3));
         assert_eq!(database.load_songs().unwrap().len(), 3);
+    }
+
+    /// An OpenSong folder with one song at `Pieśni/A` holding `text`.
+    fn folder_with(text: &str) -> LibraryImport {
+        let path = "Pieśni/A";
+        let song = Song {
+            id: sursum_formats::opensong::song_id_for_path(path),
+            titles: vec!["Pieśń A".into()],
+            authors: vec![],
+            songbooks: vec![],
+            copyright: None,
+            ccli: None,
+            themes: vec![],
+            verse_order: vec![],
+            verses: vec![sursum_core::model::Verse::simple("v1", &[text])],
+            extra: Default::default(),
+        };
+        let imported = sursum_formats::opensong::ImportedSong { song, warnings: vec![] };
+        LibraryImport { songs: vec![(path.to_owned(), imported)], sets: vec![], failures: vec![] }
+    }
+
+    fn text_of(database: &Database) -> String {
+        database.load_songs().unwrap()[0].verses[0].blocks[0].lines[0].text.clone()
+    }
+
+    /// Corrects the song in sursum, like the editor.
+    fn correct(database: &mut Database, text: &str) {
+        let mut song = database.load_songs().unwrap().remove(0);
+        song.verses = vec![sursum_core::model::Verse::simple("v1", &[text])];
+        database.save_song(&song, crate::db::Base::Current).unwrap();
+    }
+
+    #[test]
+    fn importing_again_never_undoes_a_correction_or_a_deletion() {
+        let mut database = Database::in_memory().unwrap();
+        store(&mut database, &folder_with("z OpenSong")).unwrap();
+        correct(&mut database, "poprawione w sursum");
+        let (report, _) = store(&mut database, &folder_with("z OpenSong")).unwrap();
+        assert_eq!((report.unchanged, report.updated), (1, 0), "{report:?}");
+        assert_eq!(text_of(&database), "poprawione w sursum");
+
+        let id = database.load_songs().unwrap()[0].id.clone();
+        assert!(database.delete_song(id.as_str()).unwrap());
+        store(&mut database, &folder_with("z OpenSong")).unwrap();
+        assert!(database.load_songs().unwrap().is_empty(), "the same folder does not bring it back");
+    }
+
+    #[test]
+    fn a_changed_file_updates_an_untouched_song_and_meets_a_correction_for_review() {
+        let mut database = Database::in_memory().unwrap();
+        store(&mut database, &folder_with("pierwsza")).unwrap();
+        let (report, _) = store(&mut database, &folder_with("druga")).unwrap();
+        assert_eq!(report.updated, 1, "{report:?}");
+        assert_eq!(text_of(&database), "druga");
+
+        correct(&mut database, "poprawione w sursum");
+        let (report, _) = store(&mut database, &folder_with("trzecia")).unwrap();
+        assert_eq!(report.to_review, ["Pieśń A"], "{report:?}");
+        assert_eq!(database.songs_in_review().unwrap().len(), 1, "both texts stay");
+    }
+
+    #[test]
+    fn a_church_that_never_imported_recognises_the_other_churchs_import() {
+        let (mut tulce, mut gowarzewo) = (Database::in_memory().unwrap(), Database::in_memory().unwrap());
+        store(&mut tulce, &folder_with("z OpenSong")).unwrap();
+        correct(&mut tulce, "poprawione w Tulcach");
+        let file = crate::library::read_bundle(&crate::library::export(&tulce).unwrap()).unwrap();
+        crate::library::merge(&mut gowarzewo, &file, false).unwrap();
+
+        // Gowarzewo imports its own copy of the same old folder: nothing changes.
+        let (report, _) = store(&mut gowarzewo, &folder_with("z OpenSong")).unwrap();
+        assert_eq!((report.unchanged, report.to_review.len()), (1, 0), "{report:?}");
+        assert_eq!(text_of(&gowarzewo), "poprawione w Tulcach");
+
+        // Both churches importing the same folder have nothing to merge.
+        let mut other = Database::in_memory().unwrap();
+        store(&mut other, &folder_with("z OpenSong")).unwrap();
+        let mut fresh = Database::in_memory().unwrap();
+        store(&mut fresh, &folder_with("z OpenSong")).unwrap();
+        let file = crate::library::read_bundle(&crate::library::export(&other).unwrap()).unwrap();
+        let report = crate::library::merge(&mut fresh, &file, false).unwrap();
+        assert_eq!(report.unchanged, 1, "{report:?}");
     }
 
     #[test]
