@@ -146,9 +146,11 @@ urządzenia z kościoła; nie wyświetla niczego na ekranie, służy tylko do pi
 4. Gdy skończysz: **Ustawienia → Baza pieśni → Eksport bazy**. Zapisz plik
    `biblioteka.sursum` (np. na pendrive albo wyślij go sobie pocztą).
 5. W kościele, na pilocie: **Ustawienia → Baza pieśni → Scal bazę z pliku** i wybierz ten
-   plik. Najpierw zobaczysz, co się zmieni; dopiero **Scal** zapisuje. Nic nie znika: jeśli tę
-   samą pieśń zmieniono i w domu, i w kościele, druga wersja trafi do bazy jako kopia
-   „(kopia ze scalenia)”.
+   plik. Najpierw zobaczysz, co się zmieni; dopiero **Scal** zapisuje. Ten sam plik można
+   wczytać wiele razy i nic się nie zdubluje. Jeśli tę samą pieśń zmieniono i w domu, i w
+   kościele, zostaje jedna pieśń: pokazana jest wersja, którą zmieniano więcej razy, a druga
+   zostaje przy niej do przejrzenia (okno porównania pojawi się w jednej z kolejnych wersji
+   programu).
 
 Chcesz w domu poprawiać pieśni, które są już w kościele? Najpierw zrób **Eksport bazy** na
 pilocie w kościele i **Scal bazę z pliku** w programie w domu; wtedy masz w domu te same pieśni.
@@ -204,8 +206,10 @@ obsługują ekranu.
   do konkretnych plików. Ponowny import tych samych plików tylko aktualizuje zmienione pieśni.
 - **Eksport bazy** / **Scal bazę z pliku**: wymiana pieśni między kościołami. Plik `.sursum` z
   jednego kościoła scalasz w drugim. Najpierw zobaczysz, co się zmieni, i dopiero **Scal**
-  zapisuje. Nic nie jest nadpisywane po cichu: gdy tę samą pieśń zmieniono w obu miejscach, druga
-  wersja trafia do bazy jako kopia „(kopia ze scalenia)”.
+  zapisuje. Wczytanie tego samego albo starszego pliku niczego nie psuje. Gdy tę samą pieśń
+  zmieniono w obu miejscach, zostaje jedna pieśń z wersją zmienianą więcej razy, a druga wersja
+  czeka przy niej na przejrzenie; raport scalania wymienia takie pieśni. Pliki z wcześniejszych
+  wersji programu nie są wczytywane.
 - **Kalibracja ekranu**: tylko poza mszą. Po potwierdzeniu na ekranie w kościele pojawia się
   siatka z literami i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć strefę
   bez tekstu, np. ciemną powierzchnię lub przeszkodę (czerwona strefa); tekst będzie ją omijał, a

@@ -49,7 +49,8 @@ Whole-device backups (ADR 0018): `GET /api/backup` streams a `.sursum-backup` fi
 `POST /api/backup/restore` (`X-Sursum-Upload`) answers `RestoreOutcome`:
 `restored { summary: BackupSummary { created_unix, build, songs, sets, pictures } }`, after which
 the server restarts and the next start puts the backup in place, or `refused { reason }` with
-`not_supervised`, `not_a_backup`, `newer_version`, `too_large` or `failed` (nothing changed).
+`not_supervised`, `not_a_backup`, `newer_version`, `older_version` (made before ADR 0025;
+not converted), `too_large` or `failed` (nothing changed).
 System updates (ADR 0019): `POST /api/system/update` (`X-Sursum-Upload`) takes a
 `.sursum-system` file and answers `InstallOutcome` like application updates (`refused` adds
 `busy` while another update is installed or on trial); afterwards the device writes the other
@@ -130,8 +131,17 @@ restart after a server restart, so clients apply every snapshot instead of compa
   slide (`live.gap = true`, same item) before the next item; `Prev` leaves it. Not after a pause
   item; `NextItem`/`PrevItem` and absolute commands never stop in it.
 - **Set operations** address items by stable IDs; a missing ID returns `Rejected(NotFound)`.
-- **Song edits** go through REST (the editor), with optimistic locking on `revision`; a mismatch
-  answers `Conflict` there (`sursum-protocol`'s `editor` module), not over the WebSocket.
+- **Song edits** go through REST (the editor). A draft carries `base_version`, the version the
+  editor loaded (ADR 0025); saving builds a new version on it and answers
+  `Saved { song_id, version }`, or `Conflict` if that version was replaced meanwhile (another
+  remote saved). A version that lost a merge can still be saved on; the song then keeps both
+  versions until review.
+- **Library files** (`GET /api/library/export`, `POST /api/library/merge[?dry_run=true]`):
+  `.sursum` format 2, a ZIP with `manifest.json` and `songs.jsonl`, one song per line with its
+  heads (`{ id, heads: [{ body, ancestors }] }`, `body` null for a deletion). Version ids are
+  computed by the reader, never read. `MergeReport { added, updated, unchanged, kept_local,
+  deleted, conflicts }`: `conflicts` are the titles of songs changed in two places (one shown,
+  the other kept for review). Format 1 files are refused.
 - **Display power** commands are executed asynchronously; failures return
   `Rejected(DisplayUnreachable | DisplayBusy | DisplayAuthFailed)` and never block navigation.
 

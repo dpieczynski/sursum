@@ -62,10 +62,10 @@ pub fn Editor(
         leptos::task::spawn_local(async move {
             let outcome = post_json::<_, SaveOutcome>("/api/songs/save", &draft.get_untracked()).await;
             status.set(Some(save_message(outcome.as_ref())));
-            if let Some(SaveOutcome::Saved { song_id, revision }) = outcome {
+            if let Some(SaveOutcome::Saved { song_id, version }) = outcome {
                 draft.update(|draft| {
                     draft.song_id = Some(song_id.clone());
-                    draft.base_revision = Some(revision);
+                    draft.base_version = Some(version);
                 });
                 saved.set(draft.get_untracked());
                 if show_after {
@@ -135,9 +135,7 @@ pub fn Editor(
 fn save_message(outcome: Option<&SaveOutcome>) -> String {
     match outcome {
         Some(SaveOutcome::Saved { .. }) => pl(Msg::Saved).to_owned(),
-        Some(SaveOutcome::Conflict { current_revision }) => {
-            format!("{} ({current_revision})", pl(Msg::Conflict))
-        }
+        Some(SaveOutcome::Conflict) => pl(Msg::Conflict).to_owned(),
         Some(SaveOutcome::Invalid { reason }) if reason == "title_missing" => {
             pl(Msg::TitleMissing).to_owned()
         }

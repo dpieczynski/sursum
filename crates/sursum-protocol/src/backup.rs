@@ -41,6 +41,8 @@ pub enum RestoreRefusal {
     NotABackup,
     /// Made by a newer version of the program, whose database this version cannot read.
     NewerVersion,
+    /// Made by an earlier version whose data is not converted (ADR 0025).
+    OlderVersion,
     /// Larger than any backup this device could have made.
     TooLarge,
     /// Writing failed (e.g. a full disk); the device keeps its current data.

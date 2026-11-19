@@ -16,5 +16,9 @@ expression: outcomes
   {
     "outcome": "refused",
     "reason": "newer_version"
+  },
+  {
+    "outcome": "refused",
+    "reason": "older_version"
   }
 ]

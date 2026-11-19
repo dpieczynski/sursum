@@ -48,6 +48,8 @@ pub enum RestoreError {
     NotABackup(String),
     #[error("the backup was made by a newer version of the program")]
     NewerVersion,
+    #[error("the backup was made by an earlier version of the program, whose data is not converted")]
+    OlderVersion,
     #[error("the backup is too large")]
     TooLarge,
     #[error("could not stage the backup: {0:#}")]
@@ -60,6 +62,7 @@ impl RestoreError {
         match self {
             RestoreError::NotABackup(_) => RestoreRefusal::NotABackup,
             RestoreError::NewerVersion => RestoreRefusal::NewerVersion,
+            RestoreError::OlderVersion => RestoreRefusal::OlderVersion,
             RestoreError::TooLarge => RestoreRefusal::TooLarge,
             RestoreError::Failed(_) => RestoreRefusal::Failed,
         }
@@ -171,6 +174,7 @@ pub fn stage(data_dir: &Path, upload: &std::fs::File) -> Result<BackupSummary, R
     let checked = unpacked.and_then(|()| {
         Database::inspect(&database).map_err(|error| match error {
             Unreadable::Newer => RestoreError::NewerVersion,
+            Unreadable::Older => RestoreError::OlderVersion,
             Unreadable::Damaged => not_a_backup(&error),
         })
     });
@@ -318,7 +322,7 @@ mod tests {
         database.set_setting(crate::auth::PIN_SETTING, &pin).unwrap();
         database.add_device(device_token, "Tablet", device_token).unwrap();
         for title in songs {
-            database.upsert_song(&song(title), "test").unwrap();
+            database.save_song(&song(title), crate::db::Base::Current).unwrap();
         }
         database
     }

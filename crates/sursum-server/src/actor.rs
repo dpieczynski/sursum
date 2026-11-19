@@ -14,6 +14,7 @@ use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song};
 use sursum_core::program::{Context, Live, Outcome, Program, Rejection};
 use sursum_core::search::SearchIndex;
 use sursum_core::slides::SlideRules;
+use sursum_core::versions::VersionId;
 use sursum_protocol::{
     ClientId, CmdOutcome, Command, Deck, DisplayPowerState, EndOfItem, ErrorCode, ItemId, LiveSlide, Overlay,
     Rect, RemoteState, Rev, SaveOutcome, ScreenLayout, ScreenProfile, ScreenState, SetId, SetItemView,
@@ -22,7 +23,7 @@ use sursum_protocol::{
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::config::Config;
-use crate::db::{Database, RuntimeRecord, SavedProgram, Upsert};
+use crate::db::{Base, Database, RuntimeRecord, SavedProgram, SongSave};
 use crate::demo;
 use crate::editor;
 use crate::platform::Platform;
@@ -144,7 +145,7 @@ impl StateHandle {
     /// Merges a `.sursum` file (or only reports what would happen, with `dry_run`).
     pub async fn merge_library(
         &self,
-        songs: Vec<crate::library::BundleSong>,
+        songs: Vec<crate::library::IncomingSong>,
         dry_run: bool,
     ) -> Option<sursum_protocol::MergeReport> {
         let (reply, report) = oneshot::channel();
@@ -187,7 +188,7 @@ enum Request {
         reply: oneshot::Sender<Option<Vec<u8>>>,
     },
     Merge {
-        songs: Vec<crate::library::BundleSong>,
+        songs: Vec<crate::library::IncomingSong>,
         dry_run: bool,
         reply: oneshot::Sender<Option<sursum_protocol::MergeReport>>,
     },
@@ -237,7 +238,7 @@ pub fn spawn(
     if sets.is_empty() {
         let demo_songs = demo::songs();
         for song in &demo_songs {
-            database.upsert_song(song, "demo").context("storing demo songs")?;
+            database.save_song(song, Base::Current).context("storing demo songs")?;
         }
         let demo_set = demo::set(&demo_songs);
         database.save_set(&demo_set).context("storing the demo set")?;
@@ -694,7 +695,7 @@ impl AppState {
     /// Merges a library file after backing up the database, then reloads the library.
     fn merge(
         &mut self,
-        songs: &[crate::library::BundleSong],
+        songs: &[crate::library::IncomingSong],
         dry_run: bool,
     ) -> Option<sursum_protocol::MergeReport> {
         if !dry_run && let Err(error) = self.database.backup(&self.data_dir, "before-merge") {
@@ -744,41 +745,37 @@ impl AppState {
 
     fn draft(&self, song_id: &SongId) -> Option<SongDraft> {
         let song = self.songs.get(song_id)?;
-        let revision = self.database.song_revision(song_id.as_str()).ok().flatten()?;
-        Some(editor::draft_of(song, u32::try_from(revision).unwrap_or(u32::MAX)))
+        let version = self.database.song_version(song_id.as_str()).ok().flatten()?;
+        Some(editor::draft_of(song, &version))
     }
 
-    /// Saves a draft. An existing song is only overwritten if nobody saved it since the editor
-    /// opened it; the program keeps its frozen deck until the next navigation (ADR 0005).
+    /// Saves a draft as a new version built on the one the editor loaded (ADR 0025); refused if
+    /// that version was replaced meanwhile. The program keeps its frozen deck until the next
+    /// navigation (ADR 0005).
     fn save_song(&mut self, draft: &SongDraft) -> SaveOutcome {
-        let current = match &draft.song_id {
-            Some(id) => match self.database.song_revision(id.as_str()) {
-                Ok(Some(revision)) => Some(u32::try_from(revision).unwrap_or(u32::MAX)),
-                Ok(None) => return SaveOutcome::Invalid { reason: "not_found".to_owned() },
-                Err(error) => return SaveOutcome::Invalid { reason: format!("database: {error}") },
+        let loaded = match (&draft.song_id, &draft.base_version) {
+            (Some(_), Some(version)) => match VersionId::parse(version) {
+                Some(version) => Some(version),
+                None => return SaveOutcome::Invalid { reason: "bad_version".to_owned() },
             },
-            None => None,
+            (Some(_), None) => return SaveOutcome::Invalid { reason: "bad_version".to_owned() },
+            (None, _) => None,
         };
-        if let (Some(current), Some(base)) = (current, draft.base_revision)
-            && current != base
-        {
-            return SaveOutcome::Conflict { current_revision: current };
-        }
         let id = draft.song_id.clone().unwrap_or_else(|| SongId(format!("song-{}", uuid::Uuid::new_v4())));
         let (song, _) = editor::song_from_draft(draft, id.clone(), self.songs.get(&id));
         if let Some(reason) = editor::validation_error(&song) {
             return SaveOutcome::Invalid { reason: reason.to_owned() };
         }
-        let revision = match self.database.upsert_song(&song, "editor") {
-            Ok(Upsert::Inserted) => 1,
-            Ok(Upsert::Updated { revision }) => u32::try_from(revision).unwrap_or(u32::MAX),
-            Ok(Upsert::Unchanged) => current.unwrap_or(1),
+        let base = loaded.as_ref().map_or(Base::Current, Base::Loaded);
+        let version = match self.database.save_song(&song, base) {
+            Ok(SongSave::Created(version) | SongSave::Changed(version) | SongSave::Unchanged(version)) => {
+                version
+            }
+            Ok(SongSave::Outdated) => return SaveOutcome::Conflict,
             Err(error) => return SaveOutcome::Invalid { reason: format!("database: {error}") },
         };
-        self.index.upsert(&song);
-        self.songs.insert(id.clone(), song);
-        self.rev = self.rev.next();
-        SaveOutcome::Saved { song_id: id, revision }
+        self.reload_library();
+        SaveOutcome::Saved { song_id: id, version: version.as_str().to_owned() }
     }
 
     fn search(&self, query: &str, limit: usize) -> Vec<SongSummary> {

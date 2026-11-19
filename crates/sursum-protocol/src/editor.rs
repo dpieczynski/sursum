@@ -12,8 +12,9 @@ use crate::slide::Deck;
 pub struct SongDraft {
     /// `None` for a new song.
     pub song_id: Option<SongId>,
-    /// The revision the editor started from (optimistic locking); `None` for a new song.
-    pub base_revision: Option<u32>,
+    /// The version the editor started from (ADR 0025): saving builds on it, and is refused if
+    /// it was replaced meanwhile. `None` for a new song.
+    pub base_version: Option<String>,
     pub title: String,
     /// Number in the songbook, if any.
     pub number: Option<String>,
@@ -75,12 +76,13 @@ pub struct MergeReport {
     pub added: u32,
     pub updated: u32,
     pub unchanged: u32,
-    /// Songs where this device already has a newer version.
+    /// Songs where this device already knows everything the file holds (or more).
     pub kept_local: u32,
-    /// Songs deleted on the other device (in the version this device had).
+    /// Songs deleted on the other device in a version this device had.
     #[serde(default)]
     pub deleted: u32,
-    /// Titles of songs changed on both sides; the incoming version is stored as a copy.
+    /// Titles of songs changed in both places (ADR 0025): the version with more changes is
+    /// shown on every device, the other one stays with the song and waits for review.
     pub conflicts: Vec<String>,
 }
 
@@ -90,14 +92,11 @@ pub struct MergeReport {
 pub enum SaveOutcome {
     Saved {
         song_id: SongId,
-        revision: u32,
+        /// The version just saved; the editor builds its next save on it.
+        version: String,
     },
     /// Someone saved this song since the editor opened it; nothing was written.
-    Conflict {
-        current_revision: u32,
-    },
+    Conflict,
     /// The draft cannot be saved (e.g. no title or no lyrics).
-    Invalid {
-        reason: String,
-    },
+    Invalid { reason: String },
 }

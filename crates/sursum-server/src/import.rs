@@ -15,7 +15,7 @@ use sursum_formats::opensong::{
 };
 use sursum_protocol::{ImportReport, ItemId, SetId, SongId};
 
-use crate::db::{Database, Upsert};
+use crate::db::{Base, Database, SongSave};
 
 /// At most this many problem lines are reported back.
 const MAX_PROBLEMS: usize = 500;
@@ -125,10 +125,11 @@ fn store_in(
         for warning in &imported.warnings {
             push_problem(&mut report, format!("{path}: {warning}"));
         }
-        match database.upsert_song(&imported.song, &format!("opensong:{path}"))? {
-            Upsert::Inserted => report.inserted += 1,
-            Upsert::Updated { .. } => report.updated += 1,
-            Upsert::Unchanged => report.unchanged += 1,
+        // Until roadmap Y1.4, an import builds on the current version like an edit.
+        match database.save_song(&imported.song, Base::Current)? {
+            SongSave::Created(_) => report.inserted += 1,
+            SongSave::Changed(_) => report.updated += 1,
+            SongSave::Unchanged(_) | SongSave::Outdated => report.unchanged += 1,
         }
     }
     for (path, reason) in &library.failures {
