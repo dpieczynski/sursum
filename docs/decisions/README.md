@@ -30,3 +30,4 @@ supersedes the old one instead of editing it.
 | [0022](0022-one-update-path.md) | One update path: the server ships inside the system image, `.sursum-system` is the only update file, application bundles are removed (not built yet) |
 | [0023](0023-platform-scope.md) | Platform scope: no iPad, no macOS program, no Windows parish PC; remote in Blink browsers, desktop program on Windows and Linux, screen on the Pi image only |
 | [0024](0024-one-level-of-rights.md) | One level of rights: a paired remote may do everything; no admin mode, pairing stays |
+| [0025](0025-versioned-songs-and-sets.md) | Songs and sets keep their identity and get versions; more changes win, the other version waits for review; sets per church with a date; one `.sursum` file with sets and pictures; no migration (not built yet) |
