@@ -220,6 +220,59 @@ impl Server {
         Ok(response)
     }
 
+    /// Saves a new song like the editor does and returns its id.
+    pub async fn new_song(&self, title: &str, lyrics: &str) -> anyhow::Result<sursum_protocol::SongId> {
+        let draft =
+            sursum_protocol::SongDraft { title: title.into(), lyrics: lyrics.into(), ..Default::default() };
+        match self.save_draft(&draft).await? {
+            sursum_protocol::SaveOutcome::Saved { song_id, .. } => Ok(song_id),
+            other => bail!("not saved: {other:?}"),
+        }
+    }
+
+    /// Changes a song's lyrics like the editor does: loads the draft, saves on its version.
+    pub async fn edit_song(&self, song_id: &sursum_protocol::SongId, lyrics: &str) -> anyhow::Result<()> {
+        let response = self.http("GET", &format!("/api/songs/{}/draft", song_id.as_str()), None, "").await?;
+        let mut draft: sursum_protocol::SongDraft = serde_json::from_str(body_of(&response))?;
+        draft.lyrics = lyrics.to_owned();
+        match self.save_draft(&draft).await? {
+            sursum_protocol::SaveOutcome::Saved { .. } => Ok(()),
+            other => bail!("not saved: {other:?}"),
+        }
+    }
+
+    /// Carries this server's library to `other` like a `.sursum` file (export, then merge).
+    pub async fn send_library_to(&self, other: &Server) -> anyhow::Result<sursum_protocol::MergeReport> {
+        let file = self.request_bytes("GET /api/library/export", &[]).await?;
+        let response = other.request_bytes("POST /api/library/merge", &file).await?;
+        Ok(serde_json::from_slice(&response)?)
+    }
+
+    async fn save_draft(
+        &self,
+        draft: &sursum_protocol::SongDraft,
+    ) -> anyhow::Result<sursum_protocol::SaveOutcome> {
+        let response = self.http("POST", "/api/songs/save", None, &serde_json::to_string(draft)?).await?;
+        Ok(serde_json::from_str(body_of(&response))?)
+    }
+
+    /// One request with a binary body (an upload header included); returns the response body.
+    async fn request_bytes(&self, request_line: &str, body: &[u8]) -> anyhow::Result<Vec<u8>> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect(self.addr).await?;
+        let head = format!(
+            "{request_line} HTTP/1.1\r\nHost: localhost\r\nX-Sursum-Upload: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(head.as_bytes()).await?;
+        stream.write_all(body).await?;
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).await?;
+        let body_at =
+            response.windows(4).position(|window| window == b"\r\n\r\n").context("no HTTP body")? + 4;
+        Ok(response.split_off(body_at))
+    }
+
     /// Uploads a picture like the remote does (`POST /api/assets`) and returns its id.
     pub async fn upload_asset(&self, bytes: &[u8]) -> anyhow::Result<sursum_protocol::AssetId> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -460,6 +513,11 @@ pub async fn click_until_shown(driver: &WebDriver, button: By, shown: By) -> any
         }
     }
     bail!("{shown:?} did not appear after three clicks on {button:?}")
+}
+
+/// The body of an HTTP response.
+fn body_of(response: &str) -> &str {
+    response.split_once("\r\n\r\n").map_or("", |(_, body)| body)
 }
 
 /// Opens a tab of the remote: "msza", "zestaw" or "ustawienia".

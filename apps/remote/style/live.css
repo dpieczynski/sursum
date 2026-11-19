@@ -293,6 +293,12 @@
   background: var(--warn);
   color: #111;
 }
+.row-badge.review {
+  border: 1px solid var(--warn);
+  background: transparent;
+  color: var(--warn);
+  text-transform: none;
+}
 .set-empty {
   display: flex;
   flex-direction: column;

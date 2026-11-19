@@ -4,14 +4,14 @@
 //! finished library goes to the church as a file (Ustawienia → Eksport bazy).
 
 use leptos::prelude::*;
-use sursum_protocol::SongSummary;
+use sursum_protocol::{RemoteState, SongSummary};
 
 use crate::editor::EditorTarget;
 use crate::live::search_results;
 use crate::messages::{Msg, new_song_named, pl};
 
 #[component]
-pub fn SongsView() -> impl IntoView {
+pub fn SongsView(state: RwSignal<Option<RemoteState>>) -> impl IntoView {
     let query = RwSignal::new(String::new());
     let results = search_results(query);
     let editing = expect_context::<RwSignal<Option<EditorTarget>>>();
@@ -50,6 +50,7 @@ pub fn SongsView() -> impl IntoView {
                     </button>
                 </div>
             </div>
+            <crate::review::ReviewLine state />
             {rows}
         </div>
     }
@@ -90,6 +91,7 @@ fn song_row(song: SongSummary, editing: RwSignal<Option<EditorTarget>>) -> impl 
                 <span class="result-title">{song.title}</span>
                 <span class="result-line">{song.first_line}</span>
             </button>
+            {song.review.then(|| view! { <span class="row-badge review">{pl(Msg::ToReview)}</span> })}
         </li>
     }
 }

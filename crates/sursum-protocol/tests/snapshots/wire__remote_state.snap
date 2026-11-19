@@ -128,5 +128,6 @@ expression: state
   },
   "screen_connected": true,
   "next_step": "gap",
-  "end_of_item": "gap"
+  "end_of_item": "gap",
+  "songs_to_review": 2
 }

@@ -142,6 +142,15 @@ pub enum Msg {
     Close,
     Saved,
     Conflict,
+    ReviewTitle,
+    ReviewHint,
+    NothingToReview,
+    CompareTitle,
+    VersionShown,
+    VersionOther,
+    KeepThis,
+    VersionKept,
+    ToReview,
     TitleMissing,
     LyricsMissing,
     SaveFailed,
@@ -437,6 +446,19 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Close => "Zamknij",
         Msg::Saved => "Zapisano",
         Msg::Conflict => "Ktoś zapisał tę pieśń w międzyczasie – otwórz ją ponownie",
+        Msg::ReviewTitle => "Pieśni do przejrzenia",
+        Msg::ReviewHint => {
+            "Te pieśni zmieniono w dwóch miejscach, np. w domu i w kościele. Wszędzie pokazywana jest \
+             wersja zmieniana więcej razy, a druga czeka tutaj. Wybierz, która ma zostać; potem możesz \
+             ją jeszcze poprawić w edytorze."
+        }
+        Msg::NothingToReview => "Nie ma pieśni do przejrzenia.",
+        Msg::CompareTitle => "Porównaj wersje",
+        Msg::VersionShown => "Pokazywana teraz",
+        Msg::VersionOther => "Druga wersja",
+        Msg::KeepThis => "Zostaw tę",
+        Msg::VersionKept => "Zostawiono wybraną wersję",
+        Msg::ToReview => "do przejrzenia",
         Msg::TitleMissing => "Brak tytułu",
         Msg::LyricsMissing => "Brak tekstu pieśni",
         Msg::SaveFailed => "Nie udało się zapisać",
@@ -775,6 +797,11 @@ pub fn merge_lines(report: &sursum_protocol::MergeReport) -> Vec<String> {
         ));
     }
     lines
+}
+
+/// "Pieśni do przejrzenia: 2" (songs changed in two places, ADR 0025).
+pub fn songs_to_review(count: u32) -> String {
+    format!("Pieśni do przejrzenia: {count}")
 }
 
 /// "Nowa pieśń: „Barka”" (from a search without results).

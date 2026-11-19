@@ -612,6 +612,91 @@ async fn library_file_moves_new_songs_to_another_device_after_a_dry_run() {
     gowarzewo.stop().await.unwrap();
 }
 
+/// Saves `lyrics` over the version a song shows now, like the editor (load the draft, change it,
+/// save on the loaded version).
+async fn edit_song(server: &RunningServer, song_id: &sursum_protocol::SongId, lyrics: &str) {
+    use sursum_protocol::{SaveOutcome, SongDraft};
+    let path = format!("/api/songs/{}/draft", song_id.as_str());
+    let mut draft: SongDraft = serde_json::from_str(&http_get(server, &path).await).unwrap();
+    draft.lyrics = lyrics.to_owned();
+    let saved: SaveOutcome = serde_json::from_str(
+        &http_post(server, "/api/songs/save", &serde_json::to_string(&draft).unwrap()).await,
+    )
+    .unwrap();
+    assert!(matches!(saved, SaveOutcome::Saved { .. }), "{saved:?}");
+}
+
+#[tokio::test]
+async fn a_song_changed_in_two_places_waits_for_review_until_one_version_is_kept() {
+    use sursum_protocol::{KeepVersion, MergeReport, SaveOutcome, SongDraft, SongSummary, SongVersions};
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let tulce = start(dir_a.path(), "boot-1").await;
+    let gowarzewo = start(dir_b.path(), "boot-1").await;
+    let draft =
+        SongDraft {
+            title: "Pieśń wspólna".into(), lyrics: "[V1]\n Wspólna".into(), ..SongDraft::default()
+        };
+    let SaveOutcome::Saved { song_id, .. } = serde_json::from_str(
+        &http_post(&tulce, "/api/songs/save", &serde_json::to_string(&draft).unwrap()).await,
+    )
+    .unwrap() else {
+        panic!("not saved")
+    };
+    http_post_bytes(&gowarzewo, "/api/library/merge", &http_get_bytes(&tulce, "/api/library/export").await)
+        .await;
+    edit_song(&tulce, &song_id, "[V1]\n Z Tulec").await;
+    edit_song(&tulce, &song_id, "[V1]\n Z Tulec, druga poprawka").await;
+    edit_song(&gowarzewo, &song_id, "[V1]\n Z Gowarzewa").await;
+
+    let file = http_get_bytes(&gowarzewo, "/api/library/export").await;
+    let merged: MergeReport =
+        serde_json::from_str(&http_post_bytes(&tulce, "/api/library/merge", &file).await).unwrap();
+    assert_eq!(merged.conflicts, ["Pieśń wspólna"], "{merged:?}");
+    let mut remote = connect(&tulce, Role::Remote, "organist").await;
+    assert_eq!(next_remote_state(&mut remote).await.songs_to_review, 1);
+
+    let listed: Vec<SongSummary> =
+        serde_json::from_str(&http_get(&tulce, "/api/songs/review").await).unwrap();
+    assert!(listed.len() == 1 && listed[0].review, "{listed:?}");
+    let found: Vec<SongSummary> =
+        serde_json::from_str(&http_get(&tulce, "/api/songs?q=wspolna").await).unwrap();
+    assert!(found[0].review, "the search marks it too");
+
+    let path = format!("/api/songs/{}/versions", song_id.as_str());
+    let versions: SongVersions = serde_json::from_str(&http_get(&tulce, &path).await).unwrap();
+    assert_eq!(versions.versions.len(), 2);
+    assert!(versions.versions[0].shown && versions.versions[0].lyrics.contains("druga poprawka"));
+    let other = versions.versions[1].clone();
+    assert!(other.lyrics.contains("Gowarzewa"), "{other:?}");
+
+    // "Zostaw tę" on the other version: it becomes the text everywhere once the file travels.
+    let keep = serde_json::to_string(&KeepVersion { version: other.version.clone() }).unwrap();
+    let kept: SaveOutcome = serde_json::from_str(
+        &http_post(&tulce, &format!("/api/songs/{}/keep", song_id.as_str()), &keep).await,
+    )
+    .unwrap();
+    assert!(matches!(kept, SaveOutcome::Saved { .. }), "{kept:?}");
+    let again: SaveOutcome = serde_json::from_str(
+        &http_post(&tulce, &format!("/api/songs/{}/keep", song_id.as_str()), &keep).await,
+    )
+    .unwrap();
+    assert_eq!(again, SaveOutcome::Conflict, "that version was just replaced");
+    let listed: Vec<SongSummary> =
+        serde_json::from_str(&http_get(&tulce, "/api/songs/review").await).unwrap();
+    assert!(listed.is_empty());
+
+    let file = http_get_bytes(&tulce, "/api/library/export").await;
+    http_post_bytes(&gowarzewo, "/api/library/merge", &file).await;
+    let path = format!("/api/songs/{}/draft", song_id.as_str());
+    let shown: SongDraft = serde_json::from_str(&http_get(&gowarzewo, &path).await).unwrap();
+    assert!(shown.lyrics.contains("Z Gowarzewa"), "{shown:?}");
+    let listed: Vec<SongSummary> =
+        serde_json::from_str(&http_get(&gowarzewo, "/api/songs/review").await).unwrap();
+    assert!(listed.is_empty(), "the review ended in both churches");
+    tulce.stop().await.unwrap();
+    gowarzewo.stop().await.unwrap();
+}
+
 #[tokio::test]
 async fn calibration_changes_the_layout_at_once_and_survives_a_restart() {
     use sursum_protocol::{ErrorCode, ExclusionZone, Insets, MaskMode, Rect, ScreenProfile};

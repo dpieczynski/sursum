@@ -5,7 +5,7 @@
 //! them one at a time, saves the program position and publishes whole snapshots through
 //! `watch` channels. A slow client simply skips intermediate snapshots.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -153,7 +153,33 @@ impl StateHandle {
         report.await.ok().flatten()
     }
 
-    /// Saves an edited or new song (optimistic locking on the revision).
+    /// Songs changed in two places that wait for review, for the list in the remote.
+    pub async fn songs_in_review(&self) -> Vec<SongSummary> {
+        let (reply, songs) = oneshot::channel();
+        if self.requests.send(Request::SongsInReview { reply }).await.is_err() {
+            return Vec::new();
+        }
+        songs.await.unwrap_or_default()
+    }
+
+    /// Every live version of a song, for the comparison screen.
+    pub async fn song_versions(&self, song_id: SongId) -> Option<sursum_protocol::SongVersions> {
+        let (reply, versions) = oneshot::channel();
+        self.requests.send(Request::SongVersions { song_id, reply }).await.ok()?;
+        versions.await.ok().flatten()
+    }
+
+    /// Keeps one version of a song in review and replaces the others.
+    pub async fn keep_version(&self, song_id: SongId, version: String) -> SaveOutcome {
+        let (reply, outcome) = oneshot::channel();
+        let unavailable = SaveOutcome::Invalid { reason: "server_unavailable".to_owned() };
+        if self.requests.send(Request::KeepVersion { song_id, version, reply }).await.is_err() {
+            return unavailable;
+        }
+        outcome.await.unwrap_or(unavailable)
+    }
+
+    /// Saves an edited or new song on the version the editor loaded (ADR 0025).
     pub async fn save_song(&self, draft: SongDraft) -> SaveOutcome {
         let (reply, outcome) = oneshot::channel();
         let unavailable = SaveOutcome::Invalid { reason: "server_unavailable".to_owned() };
@@ -182,6 +208,18 @@ enum Request {
     },
     SaveSong {
         draft: SongDraft,
+        reply: oneshot::Sender<SaveOutcome>,
+    },
+    SongsInReview {
+        reply: oneshot::Sender<Vec<SongSummary>>,
+    },
+    SongVersions {
+        song_id: SongId,
+        reply: oneshot::Sender<Option<sursum_protocol::SongVersions>>,
+    },
+    KeepVersion {
+        song_id: SongId,
+        version: String,
         reply: oneshot::Sender<SaveOutcome>,
     },
     Export {
@@ -246,6 +284,7 @@ pub fn spawn(
     }
     let active_set: Option<SetId> = database.setting(ACTIVE_SET_KEY).context("loading the active set")?;
     let songs = database.load_songs().context("loading the song library")?;
+    let reviews = database.songs_in_review().context("loading the songs in review")?.into_iter().collect();
     tracing::info!(songs = songs.len(), "song library loaded");
     let saved_profile: Option<ScreenProfile> =
         database.setting(SCREEN_PROFILE_KEY).context("loading the screen profile")?;
@@ -258,6 +297,7 @@ pub fn spawn(
         index: SearchIndex::build(&songs),
         data_dir: config.data_dir.clone(),
         songs: songs.into_iter().map(|song| (song.id.clone(), song)).collect(),
+        reviews,
         sets: SetStore::new(sets, active_set),
         program: Program::default(),
         rev: Rev(1),
@@ -299,6 +339,20 @@ pub fn spawn(
                     }
                     Request::Draft { song_id, reply } => {
                         let _ = reply.send(state.draft(&song_id));
+                    }
+                    Request::SongsInReview { reply } => {
+                        let _ = reply.send(state.songs_in_review());
+                    }
+                    Request::SongVersions { song_id, reply } => {
+                        let _ = reply.send(state.song_versions(&song_id));
+                    }
+                    Request::KeepVersion { song_id, version, reply } => {
+                        let outcome = state.keep_version(&song_id, &version);
+                        if matches!(outcome, SaveOutcome::Saved { .. }) {
+                            screen_tx.send_replace(Arc::new(state.screen_state()));
+                            remote_tx.send_replace(Arc::new(state.remote_state()));
+                        }
+                        let _ = reply.send(outcome);
                     }
                     Request::Export { reply } => {
                         let bytes = crate::library::export(&state.database);
@@ -414,6 +468,8 @@ impl Drop for ExitIfActorPanics {
 /// Everything the server knows, owned by the actor thread.
 struct AppState {
     songs: HashMap<SongId, Song>,
+    /// Songs changed in two places that wait for review (ADR 0025).
+    reviews: BTreeSet<SongId>,
     index: SearchIndex,
     data_dir: std::path::PathBuf,
     sets: SetStore,
@@ -720,6 +776,10 @@ impl AppState {
             }
             Err(error) => tracing::error!(?error, "could not reload the song library"),
         }
+        match self.database.songs_in_review() {
+            Ok(reviews) => self.reviews = reviews.into_iter().collect(),
+            Err(error) => tracing::error!(?error, "could not read the songs in review"),
+        }
         self.rev = self.rev.next();
     }
 
@@ -778,12 +838,61 @@ impl AppState {
         SaveOutcome::Saved { song_id: id, version: version.as_str().to_owned() }
     }
 
+    /// The songs in review, by title.
+    fn songs_in_review(&self) -> Vec<SongSummary> {
+        let mut songs: Vec<SongSummary> = self
+            .reviews
+            .iter()
+            .filter_map(|id| self.songs.get(id))
+            .map(|song| song_summary(song, true))
+            .collect();
+        songs.sort_by(|a, b| a.title.cmp(&b.title));
+        songs
+    }
+
+    /// Every live version of a song, the shown one first, in the editor's text form.
+    fn song_versions(&self, song_id: &SongId) -> Option<sursum_protocol::SongVersions> {
+        let heads = self.database.song_heads(song_id).ok()?;
+        let shown = heads.current()?.id().clone();
+        let mut versions: Vec<sursum_protocol::SongVersionView> = heads
+            .versions()
+            .iter()
+            .filter_map(|version| {
+                let song = crate::db::song_from_body(song_id, version.live_body()?).ok()?;
+                let draft = editor::draft_of(&song, version.id());
+                Some(sursum_protocol::SongVersionView {
+                    version: version.id().as_str().to_owned(),
+                    shown: version.id() == &shown,
+                    title: draft.title,
+                    lyrics: draft.lyrics,
+                })
+            })
+            .collect();
+        versions.sort_by_key(|version| !version.shown);
+        Some(sursum_protocol::SongVersions { song_id: song_id.clone(), versions })
+    }
+
+    /// The review's "Zostaw tę": one version replaces the others.
+    fn keep_version(&mut self, song_id: &SongId, version: &str) -> SaveOutcome {
+        let Some(keep) = VersionId::parse(version) else {
+            return SaveOutcome::Invalid { reason: "bad_version".to_owned() };
+        };
+        match self.database.keep_song_version(song_id, &keep) {
+            Ok(Some(resolved)) => {
+                self.reload_library();
+                SaveOutcome::Saved { song_id: song_id.clone(), version: resolved.as_str().to_owned() }
+            }
+            Ok(None) => SaveOutcome::Conflict,
+            Err(error) => SaveOutcome::Invalid { reason: format!("database: {error}") },
+        }
+    }
+
     fn search(&self, query: &str, limit: usize) -> Vec<SongSummary> {
         self.index
             .query(query, limit)
             .into_iter()
             .filter_map(|hit| self.songs.get(&hit.song_id))
-            .map(song_summary)
+            .map(|song| song_summary(song, self.reviews.contains(&song.id)))
             .collect()
     }
 
@@ -857,6 +966,7 @@ impl AppState {
             screen_connected: self.screen_connected,
             next_step: self.program.next_step(&context),
             end_of_item: self.end_of_item,
+            songs_to_review: u32::try_from(self.reviews.len()).unwrap_or(u32::MAX),
         }
     }
 
@@ -919,7 +1029,7 @@ impl AppState {
 }
 
 /// How a song is listed in search results.
-fn song_summary(song: &Song) -> SongSummary {
+fn song_summary(song: &Song, review: bool) -> SongSummary {
     let first_line =
         song.verses.iter().flat_map(|verse| &verse.blocks).flat_map(|block| block.texts()).next();
     SongSummary {
@@ -927,6 +1037,7 @@ fn song_summary(song: &Song) -> SongSummary {
         title: song.title().to_owned(),
         number: song.songbooks.first().map(|entry| entry.entry.clone()),
         first_line: first_line.unwrap_or_default().to_owned(),
+        review,
     }
 }
 

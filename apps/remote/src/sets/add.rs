@@ -131,6 +131,7 @@ fn result_row(
                 <span class="result-title">{song.title}</span>
                 <span class="result-line">{song.first_line}</span>
             </button>
+            {song.review.then(|| view! { <span class="row-badge review">{pl(Msg::ToReview)}</span> })}
             <Show when=already>
                 <span class="row-badge muted">{pl(Msg::InSet)}</span>
             </Show>

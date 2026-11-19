@@ -1,0 +1,27 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: "(summary, versions, KeepVersion { version: \"cd\".repeat(32) })"
+---
+[
+  {
+    "song_id": "song-1",
+    "title": "Pieśń",
+    "number": "12",
+    "first_line": "Pierwsza linia",
+    "review": true
+  },
+  {
+    "song_id": "song-1",
+    "versions": [
+      {
+        "version": "abababababababababababababababababababababababababababababababab",
+        "shown": true,
+        "title": "Pieśń",
+        "lyrics": "[V1]\nPierwsza linia"
+      }
+    ]
+  },
+  {
+    "version": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+  }
+]

@@ -161,6 +161,50 @@
   user-select: text;
 }
 
+/* Songs changed in two places (ADR 0025): the line that opens the list, and the comparison. */
+.review-line {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--warn);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--warn);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+.review-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.review-version {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.review-version.shown {
+  border-color: var(--live);
+}
+.review-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  text-transform: uppercase;
+}
+.review-lyrics {
+  flex: 1;
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
 @media (max-width: 599px) {
   .sets-header {
     flex-wrap: nowrap;

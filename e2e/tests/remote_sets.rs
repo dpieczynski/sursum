@@ -211,3 +211,47 @@ async fn plain_text_becomes_slides_and_closing_asks_before_losing_it() -> anyhow
     })
     .await
 }
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_song_changed_in_two_places_is_reviewed_and_one_version_kept() -> anyhow::Result<()> {
+    let tulce = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let gowarzewo = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let song = tulce.new_song("Pieśń do przejrzenia", "[V1]\n Wspólna").await?;
+    tulce.send_library_to(&gowarzewo).await?;
+    tulce.edit_song(&song, "[V1]\n Z Tulec").await?;
+    tulce.edit_song(&song, "[V1]\n Z Tulec, druga poprawka").await?;
+    gowarzewo.edit_song(&song, "[V1]\n Z Gowarzewa").await?;
+    let report = gowarzewo.send_library_to(&tulce).await?;
+    anyhow::ensure!(report.conflicts == ["Pieśń do przejrzenia"], "{report:?}");
+
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
+        remote.goto(tulce.url("/remote/")).await?;
+        remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
+        open_tab(remote, "zestaw").await?;
+        let line = remote.query(By::Css("[data-testid=review-line]")).first().await?;
+        anyhow::ensure!(shown_text(&line).await?.contains("1"), "one song to review");
+        line.click().await?;
+        remote.query(By::Css("[data-testid=review-song]")).first().await?.click().await?;
+        let compare = remote.query(By::Css("[data-testid=review-compare]")).first().await?;
+        wait_until(Duration::from_secs(5), || async {
+            compare
+                .find_all(By::Css("[data-testid=review-version]"))
+                .await
+                .is_ok_and(|found| found.len() == 2)
+        })
+        .await?;
+        let versions = compare.find_all(By::Css("[data-testid=review-version]")).await?;
+        anyhow::ensure!(shown_text(&versions[0]).await?.contains("druga poprawka"), "the shown one first");
+        anyhow::ensure!(shown_text(&versions[1]).await?.contains("Z Gowarzewa"));
+        versions[1].find(By::Css("[data-testid=keep-version]")).await?.click().await?;
+        // The review ends: the line goes away (the remote's state says so).
+        wait_until(Duration::from_secs(5), || async {
+            remote.find(By::Css("[data-testid=review-line]")).await.is_err()
+        })
+        .await
+        .context("the review line stayed")?;
+        Ok(())
+    })
+    .await
+}

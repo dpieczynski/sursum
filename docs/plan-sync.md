@@ -318,7 +318,7 @@ Each is one pull request.
 | Y1.0 | ADR 0025 from section 2 and 3; roadmap section ✓ | PR #2 merged |
 | Y1.1 | Core module with property tests; the new schema and refusing old databases (section 9.1); songs saved and loaded through it; editor saves on the loaded version; file format 2 for songs with merge and report; the section 1 scenario as a test; conflict copies gone ✓ | Y1.0 |
 | Y1.2 | Streamed merge upload (done with Y1.6) | Y1.1 |
-| Y1.3 | Review list and comparison screen | Y1.2 |
+| Y1.3 | Review list and comparison screen (keep one version; editing comes after keeping) ✓ | Y1.1 |
 | Y1.4 | OpenSong import under section 7 | Y1.1 |
 | Y1.5 | Churches: the document, the id from the name, the first-start form, the device setting and the choice of a known church | Y1.1 |
 | Y1.6 | Sets as versions: every command saves one; date and list order; "Nowy zestaw z tego" (5.1); sets and pictures in the file; report lines; set review and its comparison screen | Y1.2, Y1.3, Y1.5 |

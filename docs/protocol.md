@@ -142,6 +142,11 @@ restart after a server restart, so clients apply every snapshot instead of compa
   computed by the reader, never read. `MergeReport { added, updated, unchanged, kept_local,
   deleted, conflicts }`: `conflicts` are the titles of songs changed in two places (one shown,
   the other kept for review). Format 1 files are refused.
+- **Review** of songs changed in two places: `RemoteState.songs_to_review` counts them and
+  `SongSummary.review` marks them in search results; `GET /api/songs/review` lists them,
+  `GET /api/songs/{id}/versions` answers `SongVersions` (every live version in the editor's text
+  form, the shown one first), and `POST /api/songs/{id}/keep { version }` keeps one version,
+  replacing the others (`SaveOutcome`; `Conflict` if that version is gone).
 - **Display power** commands are executed asynchronously; failures return
   `Rejected(DisplayUnreachable | DisplayBusy | DisplayAuthFailed)` and never block navigation.
 

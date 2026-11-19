@@ -152,6 +152,27 @@ impl Database {
         self.store_heads(Kind::Song, id.as_str(), before, after)
     }
 
+    /// Songs changed in two places that nobody has reviewed yet (two live heads, different texts).
+    pub fn songs_in_review(&self) -> anyhow::Result<Vec<SongId>> {
+        let documents = self.all_heads(Kind::Song)?;
+        Ok(documents
+            .into_iter()
+            .filter(|(_, heads)| heads.needs_review())
+            .map(|(id, _)| SongId(id))
+            .collect())
+    }
+
+    /// Ends a review by keeping one version: a new version with its text replaces every head.
+    /// `None` if that version is not a live head of the song (any more).
+    pub fn keep_song_version(&self, id: &SongId, keep: &VersionId) -> anyhow::Result<Option<VersionId>> {
+        let heads = self.song_heads(id)?;
+        let Some(body) = heads.get(keep).and_then(Version::live_body) else { return Ok(None) };
+        let resolved = heads.resolve(body.to_vec());
+        let resolved_id = resolved.id().clone();
+        self.store_song_heads(id, &heads, &heads.with(resolved))?;
+        Ok(Some(resolved_id))
+    }
+
     /// The version a song shows now; `None` if there is no such live song.
     pub fn song_version(&self, id: &str) -> anyhow::Result<Option<VersionId>> {
         let heads = self.heads(Kind::Song, id)?;

@@ -149,8 +149,7 @@ urządzenia z kościoła; nie wyświetla niczego na ekranie, służy tylko do pi
    plik. Najpierw zobaczysz, co się zmieni; dopiero **Scal** zapisuje. Ten sam plik można
    wczytać wiele razy i nic się nie zdubluje. Jeśli tę samą pieśń zmieniono i w domu, i w
    kościele, zostaje jedna pieśń: pokazana jest wersja, którą zmieniano więcej razy, a druga
-   zostaje przy niej do przejrzenia (okno porównania pojawi się w jednej z kolejnych wersji
-   programu).
+   czeka na przejrzenie (zobacz [Pieśni do przejrzenia](#pieśni-do-przejrzenia)).
 
 Chcesz w domu poprawiać pieśni, które są już w kościele? Najpierw zrób **Eksport bazy** na
 pilocie w kościele i **Scal bazę z pliku** w programie w domu; wtedy masz w domu te same pieśni.
@@ -159,6 +158,19 @@ Pieśni w domu leżą w folderze `%LOCALAPPDATA%\sursum` (na Linuksie `~/.local/
 Program może być uruchomiony tylko raz; jeśli drugie okno mówi „Sursum jest już uruchomiony”,
 poszukaj pierwszego okna na pasku zadań. Gdy coś nie działa, przyda się plik `sursum.log` z
 tego folderu.
+
+## Pieśni do przejrzenia
+
+Gdy tę samą pieśń zmieniono w dwóch miejscach (np. w domu i w kościele), po scaleniu pliku
+zostaje jedna pieśń. Wszędzie pokazywana jest wersja zmieniana więcej razy, a druga czeka na
+decyzję. W zakładce **Zestaw** (w programie na komputerze: **Pieśni**) pojawia się wtedy żółty
+napis **Pieśni do przejrzenia: 1**, a w wynikach wyszukiwania znaczek „do przejrzenia”.
+
+Dotknij napisu, wybierz pieśń i porównaj obie wersje. **Zostaw tę** pod wybraną wersją kończy
+przegląd: ta wersja zostaje, druga znika. Jeśli każda wersja ma coś dobrego, zostaw jedną i
+popraw ją potem w edytorze. Do następnego scalenia przegląd obowiązuje tylko na tym urządzeniu;
+po wymianie pliku znika też w drugim kościele. Przeglądu nie trzeba robić od razu: do tego czasu
+oba kościoły pokazują ten sam tekst.
 
 ## Po mszy
 

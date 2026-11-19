@@ -81,6 +81,9 @@ pub fn router(
         .route("/api/songs/preview", axum::routing::post(preview_song))
         .route("/api/songs/save", axum::routing::post(save_song))
         .route("/api/songs/{id}/draft", get(song_draft))
+        .route("/api/songs/review", get(songs_in_review))
+        .route("/api/songs/{id}/versions", get(song_versions))
+        .route("/api/songs/{id}/keep", axum::routing::post(keep_version))
         .route("/api/library/export", get(export_library))
         .route("/api/backup", get(download_backup))
         .route("/api/update/status", get(update_status))
@@ -615,6 +618,28 @@ async fn song_draft(State(app): State<App>, Path(id): Path<String>) -> Response 
         Some(draft) => axum::Json(draft).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// `GET /api/songs/review`: songs changed in two places that wait for review (ADR 0025).
+async fn songs_in_review(State(app): State<App>) -> Response {
+    axum::Json(app.state.songs_in_review().await).into_response()
+}
+
+/// `GET /api/songs/{id}/versions`: every live version of a song, for the comparison screen.
+async fn song_versions(State(app): State<App>, Path(id): Path<String>) -> Response {
+    match app.state.song_versions(sursum_protocol::SongId(id)).await {
+        Some(versions) => axum::Json(versions).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// `POST /api/songs/{id}/keep`: keeps one version and replaces the others.
+async fn keep_version(
+    State(app): State<App>,
+    Path(id): Path<String>,
+    axum::Json(keep): axum::Json<sursum_protocol::KeepVersion>,
+) -> Response {
+    axum::Json(app.state.keep_version(sursum_protocol::SongId(id), keep.version).await).into_response()
 }
 
 /// `POST /api/songs/preview`: the slides a draft would produce (nothing is saved).
