@@ -28,8 +28,10 @@ below comes before new features. Order: CI image build, one update path, engine 
   (the fixed style is `sursum-slide/src/theme.rs`), `.devcontainer/`. A screen page of an older
   build cannot read the new snapshots: the pilot Pi's kiosk needs one restart after updating
   (`docs/protocol.md`)
-- [ ] Image and `.sursum-system` built by CI on an arm64 runner (the M4 and M7 items below);
-  the release workflow attaches them
+- [ ] Image and `.sursum-system` built by CI on an arm64 runner (the M4 and M7 items below):
+  `release.yml` builds, signs and attaches them for a `v*` tag; `image.yml` builds an unsigned
+  trial (throwaway key) in pull requests that change `image/`, `deploy/`, the justfile or the
+  system updater, and by hand (ADR 0022 amendment). ⚠ First trial run pending; no tag built yet
 - [x] One update path (ADR 0022, built 2026-11-20): `sursum.service` runs the system's
   `/usr/lib/sursum/sursum-server`; the server copies the database when it stages an update and
   `sursum-system-check.service` (before the server, as its user) puts it back after a failed
