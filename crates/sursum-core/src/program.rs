@@ -163,6 +163,7 @@ impl Program {
             | Command::RenameSet { .. }
             | Command::DeleteSet { .. }
             | Command::UndoDeleteSet
+            | Command::KeepSetVersion { .. }
             | Command::SetEndOfItem { .. }
             | Command::SetScreenProfile { .. }
             | Command::Calibrate { .. }

@@ -93,6 +93,15 @@ fn client_messages() {
             },
         },
         ClientMsg::Cmd {
+            seq: 15,
+            base_rev: Rev(7),
+            cmd: Command::KeepSetVersion {
+                set_id: SetId::from("set"),
+                version: "ab".repeat(32),
+                add: vec![ItemId::from("item-2")],
+            },
+        },
+        ClientMsg::Cmd {
             seq: 14,
             base_rev: Rev(7),
             cmd: Command::DateSet { set_id: SetId::from("set"), date: Some("2026-11-22T10:00".into()) },
@@ -137,12 +146,14 @@ fn remote_state() {
                 song_number: Some("123".into()),
             }],
             date: Some("2026-11-22T10:00".into()),
+            review: true,
         }),
         sets: vec![SetSummary {
             set_id: SetId::from("set"),
             name: "Msza".into(),
             items: 1,
             date: Some("2026-11-22T10:00".into()),
+            review: true,
         }],
         can_undo: false,
         display_power: DisplayPowerState::Unavailable { reason: "not_configured".into() },
@@ -302,4 +313,25 @@ fn song_review() {
     let old: SongSummary =
         serde_json::from_str(r#"{"song_id":"s","title":"t","number":null,"first_line":"f"}"#).unwrap();
     assert!(!old.review);
+}
+
+/// A set changed in two places, as the comparison screen gets it.
+#[test]
+fn set_review() {
+    let versions = SetVersions {
+        set_id: SetId::from("set"),
+        versions: vec![SetVersionView {
+            version: "ab".repeat(32),
+            shown: true,
+            name: "Niedziela".into(),
+            date: Some("2026-11-22".into()),
+            items: vec![SetVersionItem {
+                item_id: ItemId::from("item-1"),
+                title: "Pieśń".into(),
+                kind: SetItemKind::Song,
+                missing_elsewhere: true,
+            }],
+        }],
+    };
+    insta::assert_json_snapshot!(versions);
 }

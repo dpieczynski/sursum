@@ -94,7 +94,10 @@ packages: [plan-sync.md](plan-sync.md).
   upload go through temporary files (also Y1.2's rest); report lines for sets and pictures in
   the remote; tests for sets moving, a set changed in two places and pictures (dry run
   included)
-- [ ] Y1.6c Set review: sets changed in two places, the comparison with "Dodaj" 
+- [x] Y1.6c Set review (2026-11-20): sets changed in two places are marked in the list and
+  above the Zestaw view's items; the comparison lists each version's items and keeps one
+  ("Zostaw tę") with the items marked "Dodaj" from the other (`KeepSetVersion`,
+  `GET /api/sets/{id}/versions`, `sursum-core::set_review`); server and e2e tests
 - [ ] Y1.7 Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden
   there
 - [ ] Y1.8 Operator guide

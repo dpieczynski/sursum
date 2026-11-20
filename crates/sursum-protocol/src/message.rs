@@ -100,6 +100,16 @@ pub enum Command {
     DeleteSet { set_id: SetId },
     /// Bring back the set deleted last (the remote offers it right after deleting).
     UndoDeleteSet,
+    /// Ends the review of a set changed in two places (ADR 0025): `version` (from
+    /// `GET /api/sets/{id}/versions`) replaces every version, with the items `add` taken from the
+    /// other versions ("Dodaj"), each after the item it follows there. `NotFound` if the version
+    /// is not one of the set's versions any more.
+    KeepSetVersion {
+        set_id: SetId,
+        version: String,
+        #[serde(default)]
+        add: Vec<ItemId>,
+    },
     /// What "next" does after an item's last slide (a device setting).
     SetEndOfItem { mode: EndOfItem },
     /// Replace this device's screen profile (safe area and exclusion zones, ADR 0008). The server

@@ -176,6 +176,13 @@ popraw ją potem w edytorze. Do następnego scalenia przegląd obowiązuje tylko
 po wymianie pliku znika też w drugim kościele. Przeglądu nie trzeba robić od razu: do tego czasu
 oba kościoły pokazują ten sam tekst.
 
+Tak samo z zestawem zmienionym w dwóch miejscach (np. w domu i w kościele w czasie mszy):
+pokazywana jest wersja zmieniana więcej razy, na liście zestawów ma znaczek „do przejrzenia”, a
+nad jego pozycjami pojawia się napis **Ten zestaw zmieniono w dwóch miejscach**. Dotknij go, a
+zobaczysz obie wersje z pozycjami; te, których brakuje w drugiej wersji, są wyróżnione. Przy
+takiej pozycji **Dodaj** przeniesie ją do wersji, którą zostawisz (trafi za tę samą pozycję co
+wcześniej). **Zostaw tę** kończy przegląd.
+
 ## Po mszy
 
 Dotknij napisu stanu w prawym górnym rogu i przytrzymaj **Uśpij ekran** przez półtorej sekundy

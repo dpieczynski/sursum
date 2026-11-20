@@ -83,6 +83,7 @@ pub fn router(
         .route("/api/songs/{id}/draft", get(song_draft))
         .route("/api/songs/review", get(songs_in_review))
         .route("/api/songs/{id}/versions", get(song_versions))
+        .route("/api/sets/{id}/versions", get(set_versions))
         .route("/api/songs/{id}/keep", axum::routing::post(keep_version))
         .route("/api/library/export", get(export_library))
         .route("/api/backup", get(download_backup))
@@ -692,6 +693,15 @@ async fn songs_in_review(State(app): State<App>) -> Response {
 /// `GET /api/songs/{id}/versions`: every live version of a song, for the comparison screen.
 async fn song_versions(State(app): State<App>, Path(id): Path<String>) -> Response {
     match app.state.song_versions(sursum_protocol::SongId(id)).await {
+        Some(versions) => axum::Json(versions).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// `GET /api/sets/{id}/versions`: every live version of a set, for the comparison screen (the
+/// review ends with the `KeepSetVersion` command).
+async fn set_versions(State(app): State<App>, Path(id): Path<String>) -> Response {
+    match app.state.set_versions(sursum_protocol::SetId(id)).await {
         Some(versions) => axum::Json(versions).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }

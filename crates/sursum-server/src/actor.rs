@@ -169,6 +169,13 @@ impl StateHandle {
         versions.await.ok().flatten()
     }
 
+    /// Every live version of a set in review, for the comparison screen.
+    pub async fn set_versions(&self, set_id: SetId) -> Option<sursum_protocol::SetVersions> {
+        let (reply, versions) = oneshot::channel();
+        self.requests.send(Request::SetVersions { set_id, reply }).await.ok()?;
+        versions.await.ok().flatten()
+    }
+
     /// Keeps one version of a song in review and replaces the others.
     pub async fn keep_version(&self, song_id: SongId, version: String) -> SaveOutcome {
         let (reply, outcome) = oneshot::channel();
@@ -216,6 +223,10 @@ enum Request {
     SongVersions {
         song_id: SongId,
         reply: oneshot::Sender<Option<sursum_protocol::SongVersions>>,
+    },
+    SetVersions {
+        set_id: SetId,
+        reply: oneshot::Sender<Option<sursum_protocol::SetVersions>>,
     },
     KeepVersion {
         song_id: SongId,
@@ -288,6 +299,7 @@ pub fn spawn(
     let active_set: Option<SetId> = database.setting(ACTIVE_SET_KEY).context("loading the active set")?;
     let songs = database.load_songs().context("loading the song library")?;
     let reviews = database.songs_in_review().context("loading the songs in review")?.into_iter().collect();
+    let set_reviews = database.sets_in_review().context("loading the sets in review")?.into_iter().collect();
     tracing::info!(songs = songs.len(), "song library loaded");
     let saved_profile: Option<ScreenProfile> =
         database.setting(SCREEN_PROFILE_KEY).context("loading the screen profile")?;
@@ -301,6 +313,7 @@ pub fn spawn(
         data_dir: config.data_dir.clone(),
         songs: songs.into_iter().map(|song| (song.id.clone(), song)).collect(),
         reviews,
+        set_reviews,
         churches,
         church,
         installation: config.installation,
@@ -351,6 +364,9 @@ pub fn spawn(
                     }
                     Request::SongVersions { song_id, reply } => {
                         let _ = reply.send(state.song_versions(&song_id));
+                    }
+                    Request::SetVersions { set_id, reply } => {
+                        let _ = reply.send(state.set_versions(&set_id));
                     }
                     Request::KeepVersion { song_id, version, reply } => {
                         let outcome = state.keep_version(&song_id, &version);
@@ -476,6 +492,8 @@ struct AppState {
     songs: HashMap<SongId, Song>,
     /// Songs changed in two places that wait for review (ADR 0025).
     reviews: BTreeSet<SongId>,
+    /// Sets changed in two places that wait for review (ADR 0025).
+    set_reviews: BTreeSet<SetId>,
     /// Every church this device knows, by name (ADR 0025).
     churches: Vec<crate::db::Church>,
     /// The church this device serves; `None` until it is named.
@@ -563,6 +581,7 @@ impl AppState {
                 self.sets.rename(set_id, name).cloned().ok_or(ErrorCode::NotFound).map(Some)
             }
             Command::DeleteSet { set_id } => self.delete_set(set_id),
+            Command::KeepSetVersion { set_id, version, add } => self.keep_set_version(set_id, version, add),
             Command::UndoDeleteSet => self.undo_delete_set(),
             Command::SetEndOfItem { mode } => {
                 if let Err(error) = self.database.set_setting(END_OF_ITEM_KEY, mode) {
@@ -696,6 +715,7 @@ impl AppState {
             return Err(ErrorCode::NotFound);
         }
         self.sets.delete(set_id);
+        self.set_reviews.remove(set_id);
         tracing::info!(%set_id, "set deleted");
         Ok(None)
     }
@@ -729,6 +749,78 @@ impl AppState {
         Ok(Some(self.sets.add(copy).clone()))
     }
 
+    /// The live versions of a set and the set each holds, the shown one first.
+    fn set_version_bodies(&self, set_id: &SetId) -> Option<Vec<(VersionId, bool, ServiceSet)>> {
+        let heads = self.database.set_heads(set_id).ok()?;
+        let shown = heads.current()?.id().clone();
+        let mut versions: Vec<(VersionId, bool, ServiceSet)> = heads
+            .versions()
+            .iter()
+            .filter_map(|version| {
+                let set = crate::db::set_from_body(set_id, version.live_body()?).ok()?;
+                Some((version.id().clone(), version.id() == &shown, set))
+            })
+            .collect();
+        versions.sort_by_key(|(_, shown, _)| !shown);
+        Some(versions)
+    }
+
+    /// Every live version of a set this device shows, for the comparison screen.
+    fn set_versions(&self, set_id: &SetId) -> Option<sursum_protocol::SetVersions> {
+        self.sets.get(set_id)?;
+        let versions = self.set_version_bodies(set_id)?;
+        let sets: Vec<ServiceSet> = versions.iter().map(|(_, _, set)| set.clone()).collect();
+        let views = versions
+            .iter()
+            .map(|(version, shown, set)| {
+                let missing = sursum_core::set_review::items_missing_elsewhere(set, &sets);
+                let items = set
+                    .items
+                    .iter()
+                    .zip(missing)
+                    .map(|(item, missing_elsewhere)| sursum_protocol::SetVersionItem {
+                        item_id: item.id.clone(),
+                        title: self.item_title(item),
+                        kind: self.item_kind(item),
+                        missing_elsewhere,
+                    })
+                    .collect();
+                sursum_protocol::SetVersionView {
+                    version: version.as_str().to_owned(),
+                    shown: *shown,
+                    name: set.name.clone(),
+                    date: set.date.clone(),
+                    items,
+                }
+            })
+            .collect();
+        Some(sursum_protocol::SetVersions { set_id: set_id.clone(), versions: views })
+    }
+
+    /// The set review's "Zostaw tę": one version, with the items chosen from the others, replaces
+    /// every version. Like an edit from another remote, it never changes the program (ADR 0005).
+    fn keep_set_version(
+        &mut self,
+        set_id: &SetId,
+        version: &str,
+        add: &[ItemId],
+    ) -> Result<Option<ServiceSet>, ErrorCode> {
+        self.sets.get(set_id).ok_or(ErrorCode::NotFound)?;
+        let keep = VersionId::parse(version).ok_or(ErrorCode::NotFound)?;
+        let versions = self.set_version_bodies(set_id).ok_or(ErrorCode::NotFound)?;
+        let (kept, others): (Vec<_>, Vec<_>) = versions.into_iter().partition(|(id, _, _)| id == &keep);
+        let (_, _, kept) = kept.into_iter().next().ok_or(ErrorCode::NotFound)?;
+        let others: Vec<ServiceSet> = others.into_iter().map(|(_, _, set)| set).collect();
+        let result = sursum_core::set_review::keep_with_items(&kept, &others, add);
+        if let Err(error) = self.database.resolve_set(&result) {
+            tracing::error!(?error, "could not keep a set version");
+            return Err(ErrorCode::NotFound);
+        }
+        tracing::info!(%set_id, "set reviewed");
+        self.reload_sets();
+        Ok(None)
+    }
+
     /// After the device's church changed: sets made before it was named, or for the church it
     /// left, become this church's sets (a version each), then the list is read again.
     fn adopt_sets(&mut self, left: Option<&sursum_protocol::ChurchId>) {
@@ -750,6 +842,10 @@ impl AppState {
 
     /// Reads the sets this device shows again, keeping the active one if it is still there.
     fn reload_sets(&mut self) {
+        match self.database.sets_in_review() {
+            Ok(reviews) => self.set_reviews = reviews.into_iter().collect(),
+            Err(error) => tracing::error!(?error, "could not read the sets in review"),
+        }
         match self.database.load_sets() {
             Ok(sets) => {
                 let shown =
@@ -1066,7 +1162,7 @@ impl AppState {
             program: self.screen_state(),
             next: self.program.peek_next(&context).as_ref().map(live_slide),
             active_set: self.sets.active().map(|set| self.set_view(set)),
-            sets: self.sets.summaries(),
+            sets: self.sets.summaries(&self.set_reviews),
             can_undo: self.sets.can_undo(),
             display_power: self.display_power.clone(),
             screen_profile: self.profile.clone(),
@@ -1107,7 +1203,13 @@ impl AppState {
                 },
             })
             .collect();
-        SetView { set_id: set.id.clone(), name: set.name.clone(), items, date: set.date.clone() }
+        SetView {
+            set_id: set.id.clone(),
+            name: set.name.clone(),
+            items,
+            date: set.date.clone(),
+            review: self.set_reviews.contains(&set.id),
+        }
     }
 
     fn item_kind(&self, item: &SetItem) -> sursum_protocol::SetItemKind {

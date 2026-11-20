@@ -7,6 +7,7 @@
 mod add;
 mod items;
 mod picker;
+mod review;
 mod song_card;
 
 use leptos::prelude::*;
@@ -29,6 +30,7 @@ pub fn SetsView(state: RwSignal<Option<RemoteState>>, commands: Commands) -> imp
     view! {
         <div class="sets-view" data-testid="sets-view">
             <picker::SetHeader state commands />
+            <review::SetReviewLine state commands />
             <crate::review::ReviewLine state />
             <add::AddBar query commands />
             <Show when=searching fallback=items>

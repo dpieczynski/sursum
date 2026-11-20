@@ -4,8 +4,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::SongId;
+use crate::ids::{ItemId, SongId};
 use crate::slide::Deck;
+use crate::state::SetItemKind;
 
 /// A song in the editor's text form.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,4 +147,34 @@ pub struct SongVersionView {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeepVersion {
     pub version: String,
+}
+
+/// `GET /api/sets/{id}/versions`: a set changed in two places (ADR 0025), every live version it
+/// holds, for the comparison screen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetVersions {
+    pub set_id: crate::ids::SetId,
+    /// The version every device shows now comes first.
+    pub versions: Vec<SetVersionView>,
+}
+
+/// One version of a set, as the comparison screen shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetVersionView {
+    pub version: String,
+    /// True for the version every device shows now (the one with more changes).
+    pub shown: bool,
+    pub name: String,
+    pub date: Option<String>,
+    pub items: Vec<SetVersionItem>,
+}
+
+/// An item of one version of a set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetVersionItem {
+    pub item_id: ItemId,
+    pub title: String,
+    pub kind: SetItemKind,
+    /// Another version lacks this item: the comparison offers "Dodaj" next to it.
+    pub missing_elsewhere: bool,
 }

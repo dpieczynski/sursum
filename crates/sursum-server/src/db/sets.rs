@@ -84,6 +84,19 @@ impl Database {
         self.heads(Kind::Set, id.as_str())
     }
 
+    /// Sets changed in two places that nobody has reviewed yet (two live heads, different bodies).
+    pub fn sets_in_review(&self) -> anyhow::Result<Vec<SetId>> {
+        let documents = self.all_heads(Kind::Set)?;
+        Ok(documents.into_iter().filter(|(_, heads)| heads.needs_review()).map(|(id, _)| SetId(id)).collect())
+    }
+
+    /// Ends a review: `set` becomes a version replacing every head (deleted ones included).
+    pub fn resolve_set(&self, set: &ServiceSet) -> anyhow::Result<()> {
+        let heads = self.heads(Kind::Set, set.id.as_str())?;
+        let resolved = heads.resolve(set_body(set)?);
+        self.store_heads(Kind::Set, set.id.as_str(), &heads, &heads.with(resolved))
+    }
+
     /// Records a set's heads after a merge.
     pub fn store_set_heads(&self, id: &SetId, before: &Heads, after: &Heads) -> anyhow::Result<()> {
         self.store_heads(Kind::Set, id.as_str(), before, after)

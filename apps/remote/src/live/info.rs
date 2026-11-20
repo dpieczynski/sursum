@@ -267,6 +267,7 @@ mod tests {
                 name: "Msza".into(),
                 items: vec![item(1, "i1"), item(2, "i2")],
                 date: None,
+                review: false,
             }),
             sets: vec![],
             can_undo: false,

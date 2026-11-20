@@ -1311,3 +1311,78 @@ async fn the_local_owner_mode_is_a_library_on_loopback_only() {
     assert_eq!(session.installation, Installation::Library);
     server.stop().await.unwrap();
 }
+
+/// Adds a pause titled `title` to the active set.
+async fn add_pause(socket: &mut Socket, seq: u32, title: &str) {
+    let outcome = command(socket, seq, Rev(u32::MAX), Command::AddBlank { title: title.into() }).await;
+    assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
+}
+
+fn titles(state: &sursum_protocol::RemoteState) -> Vec<String> {
+    state.active_set.as_ref().unwrap().items.iter().map(|item| item.title.clone()).collect()
+}
+
+#[tokio::test]
+async fn a_set_changed_in_two_places_is_reviewed_with_an_item_added_from_the_other_version() {
+    use sursum_protocol::{MergeReport, SetVersions};
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let tulce = start(dir_a.path(), "boot-1").await;
+    let gowarzewo = start(dir_b.path(), "boot-1").await;
+    let mut organist = connect(&tulce, Role::Remote, "organist").await;
+    let new = Command::NewSet { name: "Niedziela".into(), date: Some("2026-11-22".into()) };
+    assert!(matches!(command(&mut organist, 1, Rev(u32::MAX), new).await, CmdOutcome::Applied { .. }));
+    add_pause(&mut organist, 2, "Wejście").await;
+    let set_id = last_remote_state(&mut organist).await.active_set.unwrap().set_id;
+    http_post_bytes(&gowarzewo, "/api/library/merge", &http_get_bytes(&tulce, "/api/library/export").await)
+        .await;
+
+    // At home one change, in the church two: the church's version is shown.
+    let mut home = connect(&gowarzewo, Role::Remote, "home").await;
+    let activate = Command::ActivateSet { set_id: set_id.clone() };
+    assert!(matches!(command(&mut home, 1, Rev(u32::MAX), activate).await, CmdOutcome::Applied { .. }));
+    add_pause(&mut home, 2, "Z domu").await;
+    add_pause(&mut organist, 3, "Z kościoła 1").await;
+    add_pause(&mut organist, 4, "Z kościoła 2").await;
+    let file = http_get_bytes(&gowarzewo, "/api/library/export").await;
+    let merged: MergeReport =
+        serde_json::from_str(&http_post_bytes(&tulce, "/api/library/merge", &file).await).unwrap();
+    assert_eq!(merged.sets_to_review, ["Niedziela"], "{merged:?}");
+    let state = last_remote_state(&mut organist).await;
+    assert!(state.active_set.as_ref().unwrap().review);
+    assert!(state.sets.iter().any(|set| set.set_id == set_id && set.review));
+    assert_eq!(titles(&state), ["Wejście", "Z kościoła 1", "Z kościoła 2"]);
+
+    let path = format!("/api/sets/{}/versions", set_id.as_str());
+    let versions: SetVersions = serde_json::from_str(&http_get(&tulce, &path).await).unwrap();
+    assert_eq!(versions.versions.len(), 2);
+    let (shown, other) = (&versions.versions[0], &versions.versions[1]);
+    assert!(shown.shown && !other.shown);
+    let from_home = other.items.iter().find(|item| item.title == "Z domu").unwrap();
+    assert!(from_home.missing_elsewhere);
+    assert!(!other.items[0].missing_elsewhere, "both have the first item");
+
+    // "Zostaw tę" on the shown version, with "Dodaj" on the item from home.
+    let keep = Command::KeepSetVersion {
+        set_id: set_id.clone(),
+        version: shown.version.clone(),
+        add: vec![from_home.item_id.clone()],
+    };
+    assert!(matches!(
+        command(&mut organist, 5, Rev(u32::MAX), keep.clone()).await,
+        CmdOutcome::Applied { .. }
+    ));
+    let state = last_remote_state(&mut organist).await;
+    assert_eq!(titles(&state), ["Wejście", "Z domu", "Z kościoła 1", "Z kościoła 2"]);
+    assert!(!state.active_set.as_ref().unwrap().review);
+    let again = command(&mut organist, 6, Rev(u32::MAX), keep).await;
+    assert_eq!(again, CmdOutcome::Rejected { code: sursum_protocol::ErrorCode::NotFound });
+
+    // The reviewed set travels like any change; the review ends at home too.
+    http_post_bytes(&gowarzewo, "/api/library/merge", &http_get_bytes(&tulce, "/api/library/export").await)
+        .await;
+    let state = last_remote_state(&mut home).await;
+    assert_eq!(titles(&state), ["Wejście", "Z domu", "Z kościoła 1", "Z kościoła 2"]);
+    assert!(!state.active_set.as_ref().unwrap().review);
+    tulce.stop().await.unwrap();
+    gowarzewo.stop().await.unwrap();
+}
