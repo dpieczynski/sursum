@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The WPE-on-DRM spike image (ADR 0009 amendment of 2026-11-19): `just image n wpe` with the WPE
+# WebKit packages from the latest successful run of wpewebkit.yml. In pull requests that change
+# the spike it is a trial signed with a throwaway key; started by hand on main it is signed with
+# the update key, so the pilot Pi accepts it as a system update (and rolls back by itself if the
+# screen does not come up; ADR 0019). The results are this run's artifacts, never a release.
+name: WPE spike image
+
+on:
+  pull_request:
+    paths:
+      - "image/layer/sursum-kiosk-wpe.yaml"
+      - "deploy/kiosk/sursum-kiosk-wpe.service"
+      - ".github/workflows/spike-wpe.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  trial:
+    name: WPE spike image (unsigned trial)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: rustup show
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
+      - name: Podman
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      - name: The rebuilt WPE WebKit packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list --workflow wpewebkit.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          test -n "$run" || { echo "no successful wpewebkit.yml run yet" >&2; exit 1; }
+          gh run download "$run" --name wpewebkit-debs --dir target/wpe-debs
+          ls -l target/wpe-debs
+      - name: A throwaway update key
+        run: |
+          cargo run -q -p sursum-server -- system keygen "$RUNNER_TEMP/trial.key" | tee -a "$GITHUB_ENV"
+          echo "SURSUM_BUNDLE_SIGNING_KEY=$RUNNER_TEMP/trial.key" >> "$GITHUB_ENV"
+      - name: Build the spike image
+        env:
+          SURSUM_SSH_PUBKEY: ${{ vars.SURSUM_SSH_PUBKEY }}
+          SURSUM_PODMAN: sudo podman
+        run: just image n wpe
+
+  signed:
+    name: WPE spike image (signed, for the pilot Pi)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-arm
+    environment: release
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: rustup show
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
+      - name: Podman
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      - name: The rebuilt WPE WebKit packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list --workflow wpewebkit.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          test -n "$run" || { echo "no successful wpewebkit.yml run yet" >&2; exit 1; }
+          gh run download "$run" --name wpewebkit-debs --dir target/wpe-debs
+          ls -l target/wpe-debs
+      - name: Build and sign the spike image
+        env:
+          SURSUM_BUNDLE_KEY: ${{ vars.SURSUM_BUNDLE_KEY }}
+          SIGNING_KEY: ${{ secrets.SURSUM_BUNDLE_SIGNING_KEY }}
+          SURSUM_SSH_PUBKEY: ${{ vars.SURSUM_SSH_PUBKEY }}
+          SURSUM_PODMAN: sudo podman
+        run: |
+          set -euo pipefail
+          key_file="$RUNNER_TEMP/update-signing.key"
+          trap 'rm -f "$key_file"' EXIT
+          (umask 077 && printf '%s' "$SIGNING_KEY" > "$key_file")
+          SURSUM_BUNDLE_SIGNING_KEY="$key_file" just image n wpe
+          cp target/image/work/deploy-*/sursum.img.zst "target/sursum-$(git describe --always --dirty)+wpe.img.zst"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wpe-spike
+          path: |
+            target/sursum-system-*+wpe.sursum-system
+            target/sursum-*+wpe.img.zst
+          compression-level: 0
+          retention-days: 30

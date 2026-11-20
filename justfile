@@ -135,13 +135,15 @@ update-keys:
 
 # Device image for a Raspberry Pi 5 (ADR 0013, image/) with this checkout's server in its
 # read-only system (ADR 0022); `just image y` makes a diagnostic image (boot messages instead of
-# black). Also writes the matching system update target/sursum-system-<version>.sursum-system,
+# black); `just image n wpe` makes the WPE-on-DRM spike image instead of the Chromium kiosk, from
+# the rebuilt packages in target/wpe-debs (ADR 0009 amendment of 2026-11-19; version suffix +wpe).
+# Also writes the matching system update target/sursum-system-<version>.sursum-system,
 # the only way devices are updated. The version is `git describe`. Needs the update keys (see
 # update-keys) and the administrator's SSH public key (SURSUM_SSH_PUBKEY: a file, default
 # ~/.ssh/id_ed25519.pub, or the key itself as in CI; never kept in the repository). Builds with
 # the pinned rpi-image-gen in a privileged podman container (SURSUM_PODMAN="sudo podman" where
 # rootless podman cannot, as in CI); natively on arm64, on x86_64 through QEMU (slow).
-image diagnostic="n": update-keys cross-pi
+image diagnostic="n" engine="chromium": update-keys cross-pi
     #!/usr/bin/env bash
     set -euo pipefail
     key="${SURSUM_SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
@@ -152,6 +154,15 @@ image diagnostic="n": update-keys cross-pi
            cp "$key" target/image/admin.pub ;;
     esac
     system_version="$(git describe --always --dirty)"
+    engine_args=()
+    case "{{engine}}" in
+        chromium) ;;
+        wpe) ls target/wpe-debs/libwpewebkit-2.0-1_*.deb >/dev/null \
+                 || { echo "no rebuilt WPE WebKit packages in target/wpe-debs" >&2; exit 1; }
+             engine_args=(IGconf_layer_app=sursum-kiosk-wpe IGconf_sursum_wpe_debs=/src/target/wpe-debs)
+             system_version="$system_version+wpe" ;;
+        *) echo "engine is chromium or wpe, not {{engine}}" >&2; exit 1 ;;
+    esac
     podman="${SURSUM_PODMAN:-podman}"
     # The build host runs natively (rpi-image-gen emulates only the arm64 root file system), so
     # pin it to this machine's architecture: an arm64 base image pulled earlier must not win.
@@ -162,7 +173,7 @@ image diagnostic="n": update-keys cross-pi
         IGconf_sursum_server=/src/target/aarch64-unknown-linux-gnu/release/sursum-server \
         IGconf_ssh_pubkey_user1=/src/target/image/admin.pub \
         IGconf_sursum_diagnostic_boot={{diagnostic}} \
-        IGconf_sursum_system_version="$system_version"
+        IGconf_sursum_system_version="$system_version" "${engine_args[@]}"
     out=target/image/work/image-sursum
     cargo run -q -p sursum-server -- system create --key "$SURSUM_BUNDLE_SIGNING_KEY" \
         --version "$system_version" --boot "$out/boot.vfat" --system "$out/system.erofs" \
