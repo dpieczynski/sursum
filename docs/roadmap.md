@@ -32,7 +32,8 @@ below comes before new features. Order: CI image build, one update path, engine 
   `release.yml` builds, signs and attaches them for a `v*` tag; `image.yml` builds an unsigned
   trial (throwaway key) in pull requests that change `image/`, `deploy/`, the justfile or the
   system updater, and by hand (ADR 0022 amendment). First trial 2026-11-20: 11 minutes natively
-  on `ubuntu-24.04-arm`, image 3.8 GB, update 561 MB. ⚠ No tag built yet
+  on `ubuntu-24.04-arm`, image 3.8 GB, update 561 MB. First release v0.2.0 (2026-11-20):
+  `sursum-v0.2.0.img.zst` 1.07 GB, `.sursum-system` 588 MB, signed and checked in CI
 - [x] One update path (ADR 0022, built 2026-11-20): `sursum.service` runs the system's
   `/usr/lib/sursum/sursum-server`; the server copies the database when it stages an update and
   `sursum-system-check.service` (before the server, as its user) puts it back after a failed
@@ -207,7 +208,7 @@ never run on Windows) is removed.
 - [x] Server side of the systemd watchdog: `Type=notify` readiness and `WATCHDOG=1` pings only while the state actor answers (checked under systemd on a desktop); `deploy/systemd/sursum.service` is the unit the image installs
 - [x] In the image (first item above, booted on the Pi 5): systemd units, silent black boot (no splash image, decided 2026-11-17), forced HDMI mode (instead of a fallback EDID file), nftables, Avahi, the screen guard as the kiosk watchdog, hardware and systemd watchdogs
 - [x] Screen resolution, decided 2026-11-17 (ADR 0013 amendment): HDMI0 forced to 1080p60 (`video=HDMI-A-1:1920x1080@60D` in the kernel command line keeps the connector on; cage ignores it for its mode, so `deploy/kiosk/kiosk-session` sets and keeps `SURSUM_SCREEN_MODE=1920x1080@60` with `wlr-randr`; checked on the Pi with an LG 4K TV: runtime switch from 3840×2160@30 to 1920×1080@60 works). Image v0.1.0-36: cage sets the TV's 4K30 at start and kiosk-session switches to 1080p60 before Chromium starts (the page only ever shows in 1080p) checked on the Pi with the LG TV (2026-11-17): 1920×1080@60 stays after the TV is switched off and on and after an HDMI replug (cage kept the mode; kiosk-session is the safety net), CEC comes back too
-- [x] Release workflow for `v*` tags (`.github/workflows/release.yml`, [releasing.md](releasing.md)): Windows binary, GitHub release (ran for v0.1.0); the Pi bundle is gone with ADR 0022, the image follows with the CI image build (S1)
+- [x] Release workflow for `v*` tags (`.github/workflows/release.yml`, [releasing.md](releasing.md)): card image and signed system update built on arm64, Windows binary, GitHub release (v0.1.0 with a bundle; v0.2.0 with the image, ADR 0022)
 - [x] Image build in CI on arm64 (`ubuntu-24.04-arm`, `sudo podman` privileged, 11 minutes); artifacts `.img.zst` and `.sursum-system` (ADR 0019; rpi-image-gen's `.update.tar.zst` is not used)
 - [x] ~~Signed application bundles~~ (removed 2026-11-20, ADR 0022), core (ADR 0013 amendment): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
 - [x] ~~Bundles on the device~~ (removed 2026-11-20, ADR 0022), server side (ADR 0013 second amendment): trial with a start-counting guard run from the previous release (`ExecStartPre`), automatic rollback incl. the database copy when the schema changed, self-commit after 30 s healthy, upload from the remote (admin, "O programie") with restart into the new release, outcome shown in the remote, `just deploy <host> <version>`; checked with a systemd user unit (crash and hang both roll back)
@@ -265,7 +266,7 @@ together with one `.sursum-system` file.
   goes back if the failed system raised the schema (ADR 0022 amendment; unit test with fake
   slots, ⚠ not yet on the Pi)
 - [x] `just image` also writes the matching `.sursum-system` (and verifies it)
-- [x] The release workflow attaches it (⚠ not yet run for a tag)
+- [x] The release workflow attaches it (first for v0.2.0)
 
 **Done when:** a changed kiosk unit reaches an imaged Pi from the remote without reflashing, data
 and pairing survive, and a deliberately broken system update boots back into the old slot by
