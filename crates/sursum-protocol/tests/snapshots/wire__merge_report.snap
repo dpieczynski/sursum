@@ -10,5 +10,12 @@ expression: report
   "deleted": 1,
   "conflicts": [
     "Pieśń zmieniona w obu kościołach"
-  ]
+  ],
+  "sets_added": 1,
+  "sets_updated": 2,
+  "sets_to_review": [
+    "Niedziela, suma"
+  ],
+  "other_church_sets": 3,
+  "pictures_added": 1
 }

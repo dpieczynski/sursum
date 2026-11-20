@@ -129,10 +129,10 @@ impl StateHandle {
     }
 
     /// The whole library as a `.sursum` file.
-    pub async fn export_library(&self) -> Option<Vec<u8>> {
-        let (reply, bytes) = oneshot::channel();
+    pub async fn export_library(&self) -> Option<crate::library::Export> {
+        let (reply, export) = oneshot::channel();
         self.requests.send(Request::Export { reply }).await.ok()?;
-        bytes.await.ok().flatten()
+        export.await.ok().flatten()
     }
 
     /// Removes pictures nothing uses any more (or, with `dry_run`, counts them).
@@ -223,7 +223,7 @@ enum Request {
         reply: oneshot::Sender<SaveOutcome>,
     },
     Export {
-        reply: oneshot::Sender<Option<Vec<u8>>>,
+        reply: oneshot::Sender<Option<crate::library::Export>>,
     },
     Merge {
         incoming: crate::library::Incoming,
@@ -361,11 +361,11 @@ pub fn spawn(
                         let _ = reply.send(outcome);
                     }
                     Request::Export { reply } => {
-                        let bytes = crate::library::export(&state.database);
-                        if let Err(error) = &bytes {
+                        let export = crate::library::collect(&state.database);
+                        if let Err(error) = &export {
                             tracing::error!(?error, "could not export the library");
                         }
-                        let _ = reply.send(bytes.ok());
+                        let _ = reply.send(export.ok());
                     }
                     Request::CleanUpPictures { dry_run, reply } => {
                         let in_use = state.pictures_in_use();
@@ -849,13 +849,16 @@ impl AppState {
         if !dry_run && let Err(error) = self.database.backup(&self.data_dir, "before-merge") {
             tracing::error!(?error, "could not back up before merging");
         }
-        let report = crate::library::merge(&mut self.database, incoming, dry_run);
+        let (installation, church) = (self.installation, self.church.clone());
+        let ours = move |set: &ServiceSet| shown_here(installation, church.as_ref(), set);
+        let report = crate::library::merge(&mut self.database, incoming, dry_run, &ours);
         if let Err(error) = &report {
             tracing::error!(?error, "merging failed");
         }
         if !dry_run {
             self.reload_library();
             self.reload_churches();
+            self.reload_sets();
         }
         report.ok()
     }
