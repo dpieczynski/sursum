@@ -47,8 +47,22 @@ struct App {
     presence: crate::screen_guard::ScreenPresence,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
-    updates: crate::update::Updates,
+    maintenance: Maintenance,
     installation: sursum_protocol::Installation,
+}
+
+/// What the server needs for work that ends in a restart: a system update (ADR 0019, ADR 0022)
+/// or restoring a device backup (ADR 0018).
+#[derive(Clone)]
+pub struct Maintenance {
+    /// Whether a service manager starts the server again after it exits.
+    pub supervised: bool,
+    /// Notified once a backup is staged: the server should exit so the next start restores it.
+    pub restart: Arc<tokio::sync::Notify>,
+    /// One update or restore at a time.
+    pub busy: Arc<tokio::sync::Mutex<()>>,
+    /// System updates; off unless the device runs the sursum image.
+    pub system: crate::system_update::SystemUpdates,
 }
 
 /// Builds the router.
@@ -58,7 +72,7 @@ pub fn router(
     access: Arc<Access>,
     power: crate::display_power::PowerHandle,
     presence: crate::screen_guard::ScreenPresence,
-    updates: crate::update::Updates,
+    maintenance: Maintenance,
 ) -> Router {
     let app = App {
         power,
@@ -70,7 +84,7 @@ pub fn router(
         allowed_hosts: Arc::new(config.allowed_hosts.clone()),
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
-        updates,
+        maintenance,
         installation: config.installation,
     };
     // Everything that controls the screen or changes data needs a paired device (once a PIN is
@@ -104,12 +118,6 @@ pub fn router(
             "/api/library/merge",
             axum::routing::post(merge_library)
                 .layer(axum::extract::DefaultBodyLimit::disable())
-                .layer(middleware::from_fn(require_upload_header)),
-        )
-        .route(
-            "/api/update",
-            axum::routing::post(install_update)
-                .layer(axum::extract::DefaultBodyLimit::max(MAX_UPDATE_BYTES))
                 .layer(middleware::from_fn(require_upload_header)),
         )
         .route(
@@ -309,50 +317,13 @@ async fn import_opensong(
     }
 }
 
-/// An application bundle is one compressed binary of a few tens of megabytes.
-const MAX_UPDATE_BYTES: usize = 128 * 1024 * 1024;
-
-/// `GET /api/update/status`: the running version and how the last update went.
+/// `GET /api/update/status`: the running build and the state of system updates.
 async fn update_status(State(app): State<App>) -> Response {
     let data_dir = app.data_dir.clone();
-    let can_install = app.updates.can_install();
-    let system = app.updates.system.clone();
-    match tokio::task::spawn_blocking(move || {
-        let system = system.status(&data_dir);
-        crate::update::status(&data_dir, crate::BUILD_ID, can_install, system)
-    })
-    .await
-    {
-        Ok(status) => axum::Json(status).into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
-
-/// `POST /api/update`: installs a signed bundle, answers, then restarts into it.
-async fn install_update(State(app): State<App>, body: axum::body::Bytes) -> Response {
-    use sursum_protocol::{InstallOutcome, InstallRefusal};
-    let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
-    let Some(key) = app.updates.key else { return refuse(InstallRefusal::NoKey) };
-    if !app.updates.supervised {
-        return refuse(InstallRefusal::NotSupervised);
-    }
-    let _installing = app.updates.installing.lock().await;
-    let data_dir = app.data_dir.clone();
-    match tokio::task::spawn_blocking(move || crate::update::install(&data_dir, &body, &key)).await {
-        Ok(Ok(version)) => {
-            tracing::info!(%version, "update installed; restarting into it");
-            let restart = app.updates.restart.clone();
-            tokio::spawn(async move {
-                // Let the answer reach the remote first.
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                restart.notify_one();
-            });
-            axum::Json(InstallOutcome::Installed { version }).into_response()
-        }
-        Ok(Err(error)) => {
-            tracing::warn!(%error, "update refused");
-            refuse(error.refusal())
-        }
+    let system = app.maintenance.system.clone();
+    match tokio::task::spawn_blocking(move || system.status(&data_dir)).await {
+        Ok(system) => axum::Json(sursum_protocol::UpdateStatus { build: crate::BUILD_ID.to_owned(), system })
+            .into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
@@ -386,7 +357,7 @@ async fn install_system_update(State(app): State<App>, body: axum::body::Body) -
     use futures_util::StreamExt as _;
     use sursum_protocol::{InstallOutcome, InstallRefusal};
     let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
-    let system = app.updates.system.clone();
+    let system = app.maintenance.system.clone();
     let data_dir = app.data_dir.clone();
     match system.status(&data_dir) {
         None => return refuse(InstallRefusal::NotSupervised),
@@ -395,7 +366,7 @@ async fn install_system_update(State(app): State<App>, body: axum::body::Body) -
         Some(status) if !status.can_install => return refuse(InstallRefusal::NotSupervised),
         Some(_) => {}
     }
-    let _installing = app.updates.installing.lock().await;
+    let _busy = app.maintenance.busy.lock().await;
     let incoming = match system.incoming(&data_dir) {
         Ok(incoming) => incoming,
         Err(error) => {
@@ -561,10 +532,10 @@ async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Respo
     use futures_util::StreamExt as _;
     use sursum_protocol::{RestoreOutcome, RestoreRefusal};
     let refuse = |reason| axum::Json(RestoreOutcome::Refused { reason }).into_response();
-    if !app.updates.supervised {
+    if !app.maintenance.supervised {
         return refuse(RestoreRefusal::NotSupervised);
     }
-    let _busy = app.updates.installing.lock().await;
+    let _busy = app.maintenance.busy.lock().await;
     let data_dir = app.data_dir.clone();
     let mut upload = match crate::device_backup::TemporaryFile::new(&data_dir) {
         Ok(upload) => upload,
@@ -599,7 +570,7 @@ async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Respo
                 sets = summary.sets,
                 "device backup staged; restarting into it"
             );
-            let restart = app.updates.restart.clone();
+            let restart = app.maintenance.restart.clone();
             tokio::spawn(async move {
                 // Let the answer reach the remote first.
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;

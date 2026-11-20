@@ -25,7 +25,7 @@ impl Platform for Supervised {
 }
 
 fn key() -> ed25519_dalek::SigningKey {
-    sursum_server::bundle::signing_key(&sursum_server::bundle::new_key().unwrap().0).unwrap()
+    sursum_server::signing::signing_key(&sursum_server::signing::new_key().unwrap().0).unwrap()
 }
 
 /// A server on an "imaged device": `system-release` holds `v1`.
@@ -34,7 +34,7 @@ async fn start(dir: &Path, key: &ed25519_dalek::SigningKey) -> RunningServer {
     let mut config = Config::with_data_dir(dir.join("data"));
     config.listen = "127.0.0.1:0".parse().unwrap();
     config.access = sursum_server::auth::AccessMode::Local;
-    config.bundle_key = Some(key.verifying_key());
+    config.update_key = Some(key.verifying_key());
     config.system_release = dir.join("system-release");
     config.system_request = dir.join("request");
     sursum_server::start(config, &Supervised).await.unwrap()

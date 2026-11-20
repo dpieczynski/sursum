@@ -262,22 +262,19 @@ obsługują ekranu.
   bez tekstu, np. ciemną powierzchnię lub przeszkodę (czerwona strefa); tekst będzie ją omijał, a
   sama strefa będzie czarna. Zielona ramka pokazuje, gdzie zmieści się tekst. Pola liczbowe nie
   pozwalają wysunąć strefy poza ekran. Zmiany zapisują się od razu; **Zamknij** kończy kalibrację.
-- **Zainstaluj aktualizację systemu** (w **O programie**, tylko na urządzeniu z obrazem sursum):
-  plik `.sursum-system` zmienia system urządzenia (przeglądarkę ekranu, sterowniki, ustawienia
-  ekranu). **Nigdy w czasie mszy.** Urządzenie zapisuje nowy system obok obecnego i uruchamia
-  się ponownie; ekran gaśnie na kilka minut, potem pilot łączy się sam. Jeśli nowy system nie
-  zadziała, urządzenie samo wraca do poprzedniego, a w **O programie** widać, jak się skończyło.
-  Pieśni, zestawy, ustawienia i wersja programu zostają bez zmian.
+- **Zainstaluj aktualizację** (w **O programie**, tylko na urządzeniu w kościele): wybierz plik
+  `.sursum-system` i potwierdź. Jeden plik zmienia wszystko naraz: program, przeglądarkę ekranu,
+  sterowniki. **Nigdy w czasie mszy.** Urządzenie robi kopię pieśni i zestawów, zapisuje nową
+  wersję obok obecnej i uruchamia się ponownie; ekran gaśnie na kilka minut, potem pilot łączy
+  się sam. Jeśli nowa wersja nie zadziała, urządzenie samo wraca do poprzedniej, a w **O
+  programie** widać, jak się skończyło. Pieśni, zestawy i ustawienia zostają; tylko jeśli nowa
+  wersja zdążyła zmienić bazę, wracają do stanu sprzed aktualizacji (zmiany z tych kilku minut
+  przepadają, **O programie** o tym mówi). Plik bez właściwego podpisu jest odrzucany i nic się
+  nie zmienia.
 - **Usuń pieśń z bazy** (przytrzymaj): w edytorze pieśni, np. dla duplikatów po imporcie. Pieśń
   znika z wyszukiwania; jeśli właśnie jest na ekranie, zostaje na nim do końca.
 - **Urządzenia**: lista sparowanych pilotów; **Odłącz** (przytrzymaj) usuwa zgubiony lub obcy
   tablet (będzie musiał ponownie podać PIN).
-- **Zainstaluj aktualizację** (w **O programie**, tylko na urządzeniu w kościele): wybierz plik
-  `.sursum-app` i potwierdź. **Nigdy w czasie mszy.** Program sprawdza podpis pliku, uruchamia
-  się ponownie, a ekran na kilka sekund gaśnie; pilot odświeża się sam. Nowa wersja przez pierwsze
-  pół minuty jest „na próbę”: jeśli się nie uruchomi albo zawiesza, urządzenie samo wraca do
-  poprzedniej wersji, a w **O programie** pojawia się informacja, że aktualizacja nie zadziałała.
-  Plik bez właściwego podpisu jest odrzucany i nic się nie zmienia.
 - **Przywróć z kopii** (w **Dane urządzenia**): wybierz plik `.sursum-backup` i
   potwierdź. **Nigdy w czasie mszy.** Wszystkie pieśni, zestawy, logo, obrazy i ustawienia
   zostają zastąpione zawartością kopii; program uruchamia się ponownie, a ekran na kilka sekund

@@ -9,7 +9,6 @@
 pub mod actor;
 pub mod assets;
 pub mod auth;
-pub mod bundle;
 pub mod config;
 pub mod db;
 pub mod demo;
@@ -25,8 +24,8 @@ pub mod platform;
 pub mod screen_guard;
 pub mod service;
 pub mod sets;
+pub mod signing;
 pub mod system_update;
-pub mod update;
 pub mod ws;
 
 use std::net::SocketAddr;
@@ -55,8 +54,9 @@ pub struct RunningServer {
 }
 
 impl RunningServer {
-    /// Resolves once an update has been installed from the remote: the caller should
-    /// [`stop`](Self::stop) and exit, and the service manager starts the new release.
+    /// Resolves once a device backup has been staged for restoring: the caller should
+    /// [`stop`](Self::stop) and exit, and the service manager starts the server again, which
+    /// puts the backup in place before opening the database.
     pub async fn restart_requested(&self) {
         self.restart.notified().await;
     }
@@ -105,21 +105,19 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     let state_for_watchdog = state.clone();
     let presence = screen_guard::ScreenPresence::default();
     screen_guard::spawn(&presence, config.screen_guard.clone(), state.clone());
-    let updates = update::Updates {
-        key: config.bundle_key,
+    let maintenance = http::Maintenance {
         supervised: platform.supervised(),
         restart: std::sync::Arc::default(),
-        installing: std::sync::Arc::default(),
+        busy: std::sync::Arc::default(),
         system: system_update::SystemUpdates::detect(
-            config.bundle_key,
+            config.update_key,
             platform.supervised(),
             &config.system_release,
             &config.system_request,
         ),
     };
-    let restart = updates.restart.clone();
-    spawn_trial_commit(state.clone(), config.data_dir.clone());
-    let router = http::router(state, &config, access, power, presence, updates);
+    let restart = maintenance.restart.clone();
+    let router = http::router(state, &config, access, power, presence, maintenance);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;
@@ -140,25 +138,4 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         async move { state.alive().await }
     });
     Ok(RunningServer { addr, shutdown: Some(shutdown), task, restart })
-}
-
-/// After [`update::HEALTHY_AFTER`] of healthy running, ends the trial of this release if it is
-/// on trial (ADR 0013, second amendment).
-fn spawn_trial_commit(state: actor::StateHandle, data_dir: std::path::PathBuf) {
-    let Some(own_release) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Into::into)) else {
-        return;
-    };
-    tokio::spawn(async move {
-        tokio::time::sleep(update::HEALTHY_AFTER).await;
-        if !state.alive().await {
-            return;
-        }
-        let own_release: std::path::PathBuf = own_release;
-        match tokio::task::spawn_blocking(move || update::commit(&data_dir, &own_release)).await {
-            Ok(Ok(Some(version))) => tracing::info!(%version, "the update passed its trial"),
-            Ok(Ok(None)) => {}
-            Ok(Err(error)) => tracing::error!(?error, "could not end the update's trial"),
-            Err(error) => tracing::error!(?error, "the trial commit panicked"),
-        }
-    });
 }

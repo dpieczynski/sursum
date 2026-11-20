@@ -8,24 +8,25 @@ two layers of ours.
 | Path | What |
 |---|---|
 | `config/sursum.yaml` | the build config: Pi 5, partition sizes, host name `sursum`, admin user `admin` (SSH key only) |
-| `layer/sursum-device.yaml` | server user and unit, the first application release, `/var/lib/sursum` shared by both slots, Avahi (`sursum.local`), nftables, hardware watchdog, 64M journal, silent black boot, Ethernet only |
+| `layer/sursum-device.yaml` | the server in the read-only system (ADR 0022), its user and unit, `/var/lib/sursum` shared by both slots, Avahi (`sursum.local`), nftables, hardware watchdog, 64M journal, silent black boot, Ethernet only |
 | `layer/sursum-kiosk.yaml` | cage + Chromium + seatd, the kiosk user and unit, Chromium managed policies, transparent cursors |
 | `build.Containerfile` | a Debian trixie build host with the pinned rpi-image-gen, for podman |
 
 Units, policies and the cursor generator are not copied here: the layers install them from
-`deploy/systemd/` and `deploy/kiosk/`, which the hand-installed pilot (`deploy/pi-manual/`) uses
-too.
+`deploy/systemd/` and `deploy/kiosk/`, so there is one copy of each.
 
 ## Building
 
 ```sh
-just image 0.1.3
+just image
 ```
 
-This builds and signs the application bundle `target/sursum-0.1.3.sursum-app` (needs the bundle
-keys, see [docs/releasing.md](../docs/releasing.md)), takes the administrator's SSH public key from
-`SURSUM_SSH_PUBKEY` (default `~/.ssh/id_ed25519.pub`; it is copied to `target/image/`, never into
-the repository) and runs rpi-image-gen in a privileged podman container. On an x86_64 machine the
+This builds the server for the Pi with the public update key compiled in (needs the update keys,
+see [docs/releasing.md](../docs/releasing.md)), takes the administrator's SSH public key from
+`SURSUM_SSH_PUBKEY` (a file, default `~/.ssh/id_ed25519.pub`, or the key itself; it is written to
+`target/image/`, never into the repository) and runs rpi-image-gen in a privileged podman
+container. The version is `git describe` of the checkout. CI builds the same on a tag (roadmap
+S1). On an x86_64 machine the
 arm64 root filesystem is built through QEMU (`qemu-user-static` with binfmt_misc on the host),
 which works but is slow and not officially supported; native arm64 (a Pi 5 or an arm64 CI runner)
 is the supported way.
@@ -47,10 +48,10 @@ kernel for it).
   and `/persistent` (ext4), which `sursum-grow-persistent` grows to fill the card before its
   first mount. Everything writable is on `/persistent`; `/var` is
   per slot, and `/var/lib/sursum` is shared by both slots, so the database, pictures and
-  application releases survive a system update.
-- **First boot**: `/var/lib/sursum` is copied from the image (release on trial, committed after
-  30 s of healthy running), the server starts, and the first remote that opens
-  `http://sursum.local/` sets the PIN.
+  settings survive a system update. The server is part of each system slot
+  (`/usr/lib/sursum/sursum-server`, ADR 0022).
+- **First boot**: the empty `/var/lib/sursum` is copied from the image, the server starts, and the
+  first remote that opens `http://sursum.local/` sets the PIN and names the church.
 - **Screen**: black from power-on (no rainbow, kernel logo, console or cursor) until the page shows
   the parish logo. The display runs at 1920×1080 at 60 Hz: `video=HDMI-A-1:1920x1080@60D` in the
   kernel command line keeps HDMI0 on even without a display, and the kiosk session sets that mode
@@ -62,14 +63,15 @@ kernel for it).
   `/var/lib/sursum/config.toml` wins) switches the TV on and to standby over HDMI-CEC and lets the
   server restart the kiosk when no screen has been connected for 15 s, through
   `sursum-kiosk-restart.path` (the server itself has no privileges).
-- **System updates** (ADR 0019): `just image` also writes
+- **Updates** (ADR 0019, ADR 0022; the only kind): `just image` also writes
   `target/sursum-system-<version>.sursum-system`. Upload it in the remote (O programie →
-  Zainstaluj aktualizację systemu): the device writes it to the other A/B slot,
-  restarts into it once (tryboot) and keeps it only if the server and the kiosk come up healthy;
-  otherwise the next restart brings the old system back by itself. Data and the application are
-  not touched.
+  Zainstaluj aktualizację): the server copies the database, the device writes the update to the
+  other A/B slot, restarts into it once (tryboot) and keeps it only if the server and the kiosk
+  come up healthy; otherwise the next restart brings the old system back by itself, and
+  `sursum-system-check` puts the database copy back before the old server starts if the new one
+  had raised its schema.
 - **Administration**: `ssh admin@sursum.local` with the key given at build time; no password
-  login. Application updates come from the remote (on trial, ADR 0013) or `just deploy`.
+  login. A developer runs another server build until the next reboot with `just try <host>`.
 - **Logs**: `journalctl` is persistent across reboots (64M).
 
 ## Diagnosing a device
@@ -81,7 +83,7 @@ kernel for it).
 - **Read the journal from the card**: the journal is persistent, so it holds every boot that
   reached systemd. Put the card into a Linux laptop, mount the `persistent` partition read-only
   and run `journalctl -D <mount>/log/journal --list-boots`, then `-b -1` and so on.
-- **A diagnostic image**: `just image <version> y` builds an image that shows the firmware's rainbow
+- **A diagnostic image**: `just image y` builds an image that shows the firmware's rainbow
   screen and the kernel's and systemd's messages on the screen (until the kiosk takes it) instead
   of a black boot (layer variable `sursum.diagnostic_boot`). It is otherwise identical; never ship
   it to a church.

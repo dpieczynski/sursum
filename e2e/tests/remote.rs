@@ -548,27 +548,22 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
-async fn about_tells_when_an_update_was_undone_and_hides_installing_where_it_cannot_work()
--> anyhow::Result<()> {
+async fn about_offers_no_update_off_the_device_image() -> anyhow::Result<()> {
     let server = Server::start().await?;
-    // What the device's guard writes after a release kept failing (ADR 0013, second amendment).
-    let outcome = sursum_protocol::LastUpdate::RolledBack {
-        failed: "0.3.0".into(),
-        restored: "0.2.0".into(),
-        database_restored: false,
-    };
-    std::fs::write(server.data_dir().join("update.json"), serde_json::to_vec(&outcome)?)?;
     with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(server.url("/remote/")).await?;
         remote.query(By::Css("[data-testid=tab-ustawienia]")).first().await?.wait_until().displayed().await?;
         open_tab(remote, "ustawienia").await?;
-        let status = remote.query(By::Css("[data-testid=update-status]")).first().await?;
-        status.wait_until().displayed().await?;
-        let text = shown_text(&status).await?;
-        anyhow::ensure!(text.contains("0.3.0") && text.contains("przywrócono wersję 0.2.0"), "{text}");
-        // A development build under no service manager cannot take updates: no button.
+        let licences = By::XPath("//a[@href='/licenses']");
+        remote.query(licences).first().await?.wait_until().displayed().await?;
+        // A development build is not a device built from the image: nothing to install, no
+        // update lines (the device's own lines are covered by unit tests of `update_lines`).
         let install = By::XPath("//*[contains(text(), 'Zainstaluj aktualizację')]");
         anyhow::ensure!(remote.find(install).await.is_err(), "installing must not be offered");
+        anyhow::ensure!(
+            remote.find(By::Css("[data-testid=update-status]")).await.is_err(),
+            "no update lines"
+        );
         Ok(())
     })
     .await

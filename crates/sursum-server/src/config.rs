@@ -35,9 +35,9 @@ pub struct Config {
     pub display_power: DisplayPowerConfig,
     /// What to do when the screen stays disconnected (restart the kiosk); off when `None`.
     pub screen_guard: Option<crate::screen_guard::ScreenGuardConfig>,
-    /// The key application updates must be signed with: the one compiled in from
+    /// The key system updates must be signed with: the one compiled in from
     /// `SURSUM_BUNDLE_KEY`. Never read from `config.toml`; tests set their own.
-    pub bundle_key: Option<ed25519_dalek::VerifyingKey>,
+    pub update_key: Option<ed25519_dalek::VerifyingKey>,
     /// The running system's version file and the file that asks the root unit to install a
     /// system update (ADR 0019); the device's paths, never read from `config.toml`; tests set
     /// their own.
@@ -76,7 +76,7 @@ impl Config {
             wasm_delay_ms: 0,
             display_power: DisplayPowerConfig::None,
             screen_guard: None,
-            bundle_key: crate::bundle::trusted_key(),
+            update_key: crate::signing::trusted_key(),
             system_release: crate::system_update::SYSTEM_RELEASE.into(),
             system_request: crate::system_update::REQUEST.into(),
         }

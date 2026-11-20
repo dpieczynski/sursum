@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# The sursum server on the device (ADR 0013). Runs the release that `sursum-server bundle install`
-# made current; data lives on the persistent partition, shared by both system slots.
+# The sursum server on the device (ADR 0013, ADR 0022). Runs the read-only system's server, so a
+# system update brings a new one; data lives on the persistent partition, shared by both slots.
+# A developer may point it at another build until the next restart (`just try`, a runtime drop-in).
 # Verified on a desktop with systemd 258: Type=notify readiness and the watchdog pings.
 # Runs in the device image on the pilot Pi 5 since 2026-11-17 (roadmap M4).
 
@@ -8,19 +9,14 @@
 Description=sursum lyrics server
 Wants=network-online.target
 After=network-online.target
-# Never give up restarting: a crash loop of a new release ends in the guard's rollback below.
+# Never give up restarting: a crash loop of a new system ends in its trial's rollback (ADR 0019).
 StartLimitIntervalSec=0
 
 [Service]
 Type=notify
 User=sursum
 Group=sursum
-# Application updates are on trial until they have run healthily for 30 s (ADR 0013, second
-# amendment). Before each start the *previous* release (known good, never the one on trial)
-# counts the starts and, after the third, goes back to itself. The leading "-" ignores a missing
-# previous release (first install).
-ExecStartPre=-/var/lib/sursum/previous/sursum-server --data-dir /var/lib/sursum bundle guard
-ExecStart=/var/lib/sursum/current/sursum-server --data-dir /var/lib/sursum --listen 0.0.0.0:80
+ExecStart=/usr/lib/sursum/sursum-server --data-dir /var/lib/sursum --listen 0.0.0.0:80
 # The image's defaults (screen guard, HDMI-CEC); a missing file is ignored, and the data
 # directory's config.toml wins setting by setting.
 Environment=SURSUM_SYSTEM_CONFIG=/etc/sursum/config.toml
@@ -28,7 +24,7 @@ Environment=SURSUM_SYSTEM_CONFIG=/etc/sursum/config.toml
 RuntimeDirectory=sursum
 # /dev/cec0 belongs to the video group (HDMI-CEC power control).
 SupplementaryGroups=video
-# A start that hangs before it is ready counts as a failed start of the release on trial.
+# A start that hangs before it is ready is a failed start (and fails a system on trial).
 TimeoutStartSec=30
 # The server pings only while its state actor answers; a hung server is restarted, and the screen
 # keeps its slide meanwhile (the kiosk reconnects by itself). 30 s leaves room for a big import

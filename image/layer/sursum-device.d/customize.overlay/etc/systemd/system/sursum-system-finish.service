@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # At every boot: ends a system update's trial (ADR 0019). In the new slot it waits until the
 # server and the kiosk are healthy and makes the slot the default, or reboots, which starts the
-# old slot again (tryboot lasts one boot). Back in the old slot it records the rollback.
+# old slot again (tryboot lasts one boot). A rollback is sursum-system-check's, before the server.
 [Unit]
 Description=Confirm or roll back a system update on trial
 After=sursum.service sursum-kiosk.service

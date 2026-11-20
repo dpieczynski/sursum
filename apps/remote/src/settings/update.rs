@@ -1,54 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Updates in "O programie": the program (`.sursum-app`, ADR 0013, second amendment) and,
-//! on devices running the sursum image, the system (`.sursum-system`, ADR 0019). Both are signed
-//! files the server checks before anything changes; both end on trial and are undone by the
-//! device itself if the new version does not come up. The remote shows how the last ones ended
-//! and reconnects (or reloads) by itself after the restart.
+//! Updates in "O programie" on devices running the sursum image: one signed `.sursum-system` file
+//! brings the server, the kiosk and the system together (ADR 0019, ADR 0022). The server checks
+//! it before anything changes; the new version runs on trial and the device goes back by itself
+//! if it does not come up. The remote shows how the last update ended and reconnects (and
+//! reloads) by itself after the restart.
 
 use leptos::prelude::*;
 use sursum_protocol::{InstallOutcome, UpdateStatus};
 use wasm_bindgen::JsCast;
 
 use crate::api::{get_json, post_file};
-use crate::maintenance::{Maintenance, UpdateKind};
-use crate::messages::{Msg, install_refusal, installed_version, last_update, pl, system_lines};
+use crate::maintenance::Maintenance;
+use crate::messages::{Msg, install_refusal, installed_version, pl, update_lines};
 use crate::ui::Sheet;
-
-/// What differs between a program and a system update.
-#[derive(Debug, Clone, Copy)]
-struct Kind {
-    url: &'static str,
-    accept: &'static str,
-    label: Msg,
-    title: Msg,
-    warning: Msg,
-    installed: Msg,
-    testid: &'static str,
-    /// Which progress the maintenance sheet follows after an accepted upload.
-    update: UpdateKind,
-}
-
-const PROGRAM: Kind = Kind {
-    url: "/api/update",
-    accept: ".sursum-app",
-    label: Msg::UpdateInstall,
-    title: Msg::UpdateTitle,
-    warning: Msg::UpdateWarning,
-    installed: Msg::UpdateInstalled,
-    testid: "update",
-    update: UpdateKind::Program,
-};
-
-const SYSTEM: Kind = Kind {
-    url: "/api/system/update",
-    accept: ".sursum-system",
-    label: Msg::SystemUpdateInstall,
-    title: Msg::SystemUpdateTitle,
-    warning: Msg::SystemUpdateWarning,
-    installed: Msg::SystemUpdateInstalled,
-    testid: "system-update",
-    update: UpdateKind::System,
-};
 
 /// Where an install is.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,7 +32,7 @@ pub fn Updates() -> impl IntoView {
     leptos::task::spawn_local(async move { status.set(get_json("/api/update/status").await) });
     let lines = move || {
         status.get().map(|status| {
-            status_lines(&status)
+            update_lines(&status)
                 .into_iter()
                 .map(|line| {
                     view! {
@@ -80,41 +44,21 @@ pub fn Updates() -> impl IntoView {
                 .collect_view()
         })
     };
-    let can_install = move || status.get().is_some_and(|status| status.can_install);
-    let can_install_system =
+    let can_install =
         move || status.get().and_then(|status| status.system).is_some_and(|system| system.can_install);
     view! {
         {lines}
         <Show when=can_install>
             <div class="setting-row">
-                <InstallButton kind=PROGRAM />
-            </div>
-        </Show>
-        <Show when=can_install_system>
-            <div class="setting-row">
-                <InstallButton kind=SYSTEM />
+                <InstallButton />
             </div>
         </Show>
     }
-}
-
-fn status_lines(status: &UpdateStatus) -> Vec<String> {
-    let mut lines = Vec::new();
-    if status.on_trial {
-        lines.push(pl(Msg::UpdateOnTrial).to_owned());
-    }
-    if let Some(last) = &status.last {
-        lines.push(last_update(last));
-    }
-    if let Some(system) = &status.system {
-        lines.extend(system_lines(system));
-    }
-    lines
 }
 
 /// A file picker; the chosen file is installed only after the warning was confirmed.
 #[component]
-fn InstallButton(kind: Kind) -> impl IntoView {
+fn InstallButton() -> impl IntoView {
     let maintenance = expect_context::<Maintenance>();
     let step = RwSignal::new(Step::Idle);
     // `web_sys::File` is not `Send`, so it lives in a local store.
@@ -134,12 +78,12 @@ fn InstallButton(kind: Kind) -> impl IntoView {
         let Some(file) = chosen.get_value() else { return };
         step.set(Step::Installing);
         leptos::task::spawn_local(async move {
-            match post_file::<InstallOutcome>(kind.url, &file).await {
+            match post_file::<InstallOutcome>("/api/system/update", &file).await {
                 // The maintenance sheet follows it from here, over every view.
                 Some(InstallOutcome::Installed { version }) => {
                     chosen.set_value(None);
                     step.set(Step::Idle);
-                    maintenance.start(kind.update, version);
+                    maintenance.start(version);
                 }
                 outcome => step.set(Step::Done(outcome)),
             }
@@ -154,25 +98,22 @@ fn InstallButton(kind: Kind) -> impl IntoView {
         }
     };
     let confirming = move || matches!(step.get(), Step::Confirm(_));
-    let answer_id = format!("{}-answer", kind.testid);
-    let confirm_id = format!("{}-confirm", kind.testid);
     let sheet = move || {
         (step.get() != Step::Idle).then(|| {
             let lines = move || {
-                sheet_lines(kind, &step.get()).into_iter().map(|line| view! { <p>{line}</p> }).collect_view()
+                sheet_lines(&step.get()).into_iter().map(|line| view! { <p>{line}</p> }).collect_view()
             };
-            let (answer_id, confirm_id) = (answer_id.clone(), confirm_id.clone());
             view! {
                 <Sheet
-                    title=pl(kind.title).to_owned()
+                    title=pl(Msg::SystemUpdateTitle).to_owned()
                     on_close=close
-                    testid=kind.testid
+                    testid="system-update"
                     locked=Signal::derive(locked)
                 >
                     <Show when=locked>
                         <div class="progress-spinner" role="progressbar" aria-busy="true"></div>
                     </Show>
-                    <div class="sheet-status" data-testid=answer_id>
+                    <div class="sheet-status" data-testid="system-update-answer">
                         {lines}
                     </div>
                     <Show when=confirming>
@@ -180,7 +121,11 @@ fn InstallButton(kind: Kind) -> impl IntoView {
                             <button class="btn" on:click=move |_| close()>
                                 {pl(Msg::Cancel)}
                             </button>
-                            <button class="btn btn--primary" data-testid=confirm_id.clone() on:click=install>
+                            <button
+                                class="btn btn--primary"
+                                data-testid="system-update-confirm"
+                                on:click=install
+                            >
                                 {pl(Msg::UpdateConfirm)}
                             </button>
                         </div>
@@ -191,20 +136,20 @@ fn InstallButton(kind: Kind) -> impl IntoView {
     };
     view! {
         <label class="btn btn--sm">
-            {pl(kind.label)} <input type="file" accept=kind.accept on:change=on_change />
+            {pl(Msg::UpdateInstall)} <input type="file" accept=".sursum-system" on:change=on_change />
         </label>
         {sheet}
     }
 }
 
 /// What the sheet says at each step.
-fn sheet_lines(kind: Kind, step: &Step) -> Vec<String> {
+fn sheet_lines(step: &Step) -> Vec<String> {
     match step {
         Step::Idle => Vec::new(),
-        Step::Confirm(name) => vec![name.clone(), pl(kind.warning).to_owned()],
+        Step::Confirm(name) => vec![name.clone(), pl(Msg::SystemUpdateWarning).to_owned()],
         Step::Installing => vec![pl(Msg::UpdateInstalling).to_owned()],
         Step::Done(Some(InstallOutcome::Installed { version })) => {
-            vec![installed_version(version), pl(kind.installed).to_owned()]
+            vec![installed_version(version), pl(Msg::SystemUpdateInstalled).to_owned()]
         }
         Step::Done(Some(InstallOutcome::Refused { reason })) => vec![pl(install_refusal(*reason)).to_owned()],
         Step::Done(None) => vec![pl(Msg::UpdateSendFailed).to_owned()],

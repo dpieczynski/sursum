@@ -6,23 +6,19 @@ way to run the screen (ADR 0023).
 
 - **Never assume a stock OS with `apt install`.** Packages and system configuration belong in the
   image layers under `image/layer/` (they install units and kiosk files from `deploy/`, so there is
-  one copy of each); the device's root filesystem is read-only (A/B slots). The one
-  exception is `deploy/pi-manual/`, the interim hand install on Raspberry Pi OS Lite from before
-  the image existed (the image has run on the pilot Pi 5 since 2026-11-17); do not extend it and
-  never let the image depend on it.
+  one copy of each); the device's root filesystem is read-only (A/B slots).
 - Everything that must persist lives in **`/var/lib/sursum`**, which is slot-shared on the
-  `/persistent` partition: database, backups, assets, `config.toml`, `kiosk.env`, and the app in
-  `releases/<version>/` with a `current` symlink. Anything else written at runtime is lost on a
-  slot change, by design.
-- **One update path is decided but not built** (ADR 0022): the server moves into the read-only
-  system and `.sursum-system` becomes the only update file. Do not extend the bundle path below.
-- **Application updates** are signed `.sursum-app` bundles (Ed25519): upload from the remote or
-  `just deploy` for developers (no USB stick: ADR 0013 amendment of 2026-11-17). Always: DB
-  snapshot before migration, trial with automatic rollback. Never deploy during a service.
-- **System updates** (ADR 0019) are signed `.sursum-system` files (`just image` writes one),
-  uploaded from the remote, written to the other A/B slot and started once through tryboot, with
-  automatic rollback. Everything outside the server binary (kiosk unit, browser, policies,
-  kernel) changes only this way or by reflashing.
+  `/persistent` partition: database, backups, assets, `config.toml`, `kiosk.env`, update state
+  (`system-update/`). Anything else written at runtime is lost on a slot change, by design.
+- **One update path** (ADR 0022): the server is part of the read-only system
+  (`/usr/lib/sursum/sursum-server`), so a device has one version. Updates are signed
+  (Ed25519) `.sursum-system` files (`just image` writes one; ADR 0019), uploaded from the remote,
+  written to the other A/B slot and started once through tryboot, with automatic rollback; the
+  database copy taken before the update goes back if a failed system had raised its schema
+  (`sursum-system-check.service`, before the server). No USB stick (ADR 0013 amendment of
+  2026-11-17). Never update during a service.
+- **Developers** try a server build with `just try <host>`: the binary in `/run` and a runtime
+  drop-in, gone at the next reboot. Never leave one running before a service.
 - **Silent boot**: from power-on the HDMI output may show only black, logo or content (black
   until the page draws; there is no splash image). Any change to `cmdline.txt`, `config.txt` or
   the kiosk unit must be verified on a real Pi (ideally with an HDMI capture) before merging.
@@ -45,4 +41,4 @@ way to run the screen (ADR 0023).
   rebuild of Debian's source package, WebKit's own MiniBrowser, no cage) replaces all of this
   (ADR 0009 amendment of 2026-11-19).
 - Pin the rpi-image-gen version. Never commit secrets (PINs, signing keys, certificates); the
-  bundle signing key lives outside the repo (CI secret).
+  update signing key lives outside the repo (CI secret `SURSUM_BUNDLE_SIGNING_KEY`).
