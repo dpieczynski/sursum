@@ -316,8 +316,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::TabLive => "Msza",
         Msg::TabSongs => "Pieśni",
         Msg::LibraryHint => {
-            "Wyszukaj pieśń, żeby ją poprawić, albo dopisz nową. Gotową bazę zapisz \
-             w Ustawieniach (Eksport bazy) i scal na urządzeniu w kościele (Scal bazę z pliku)."
+            "Wyszukaj pieśń, żeby ją poprawić, albo dopisz nową. Gotowe pieśni i zestawy zapisz w \
+             pliku (Ustawienia → Synchronizacja → Zapisz plik) i wczytaj go na urządzeniu w kościele \
+             (Wczytaj plik)."
         }
         Msg::DiscardTitle => "Odrzucić zmiany?",
         Msg::DiscardHint => "Pieśń ma niezapisane zmiany. Po zamknięciu przepadną.",
@@ -344,7 +345,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::Line => "Linia",
         Msg::SectionDisplay => "Wyświetlanie",
         Msg::SectionDevice => "To urządzenie",
-        Msg::SectionLibrary => "Baza pieśni",
+        Msg::SectionLibrary => "Synchronizacja",
         Msg::SectionAbout => "O programie",
         Msg::EndOfItemLabel => "Po ostatnim slajdzie pieśni „Dalej”…",
         Msg::EndGap => "najpierw wygasza ekran (pusty slajd), potem następna pozycja",
@@ -496,7 +497,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::SetsOfChurch => "Zestawy kościoła",
         Msg::ChooseChurch => "Wybierz kościół",
         Msg::NoChurchesHere => {
-            "Wczytaj plik z kościoła (Ustawienia → Baza pieśni → Scal bazę z pliku), żeby przygotowywać \
+            "Wczytaj plik z kościoła (Ustawienia → Synchronizacja → Wczytaj plik), żeby przygotowywać \
              jego zestawy. Zestaw zrobiony przed wyborem kościoła pokaże się w każdym kościele."
         }
         Msg::SetReviewLine => "Ten zestaw zmieniono w dwóch miejscach. Porównaj wersje",
@@ -533,14 +534,14 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::InvalidPin => "PIN musi mieć od 6 do 12 cyfr",
         Msg::PinAlreadySet => "PIN został już ustawiony na innym urządzeniu – połącz się, wpisując go",
         Msg::ImportFailed => "Import nie powiódł się – czy to plik ZIP z folderem OpenSong?",
-        Msg::ExportLibrary => "Eksport bazy",
-        Msg::MergeLibrary => "Scal bazę z pliku",
+        Msg::ExportLibrary => "Zapisz plik",
+        Msg::MergeLibrary => "Wczytaj plik",
         Msg::MergeChecking => "Sprawdzanie pliku…",
-        Msg::MergeWouldDo => "Sprawdzono plik. Po scaleniu:",
-        Msg::MergeConfirm => "Scal",
-        Msg::Merging => "Scalanie…",
-        Msg::MergeDone => "Scalono.",
-        Msg::MergeFailed => "Scalanie nie powiodło się – czy to plik .sursum z tej wersji programu?",
+        Msg::MergeWouldDo => "Sprawdzono plik. Po wczytaniu:",
+        Msg::MergeConfirm => "Wczytaj",
+        Msg::Merging => "Wczytywanie…",
+        Msg::MergeDone => "Wczytano.",
+        Msg::MergeFailed => "Wczytanie nie powiodło się – czy to plik .sursum z tej wersji programu?",
         Msg::Calibrate => "Kalibracja ekranu",
         Msg::CalibrationTitle => "Kalibracja ekranu",
         Msg::CalibrationHelp => {

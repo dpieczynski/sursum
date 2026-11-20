@@ -132,10 +132,10 @@ Ref.
 - Kto zna OpenSong, może pisać jak dotąd: `[V1]`, `[C]`, `[B]`. Kolejność sekcji (np. `V1 C V2 C`)
   jest w części **Zaawansowane**.
 
-## Pieśni przygotowane w domu
+## Przygotowanie w domu
 
-Pieśni można przygotować na własnym komputerze z Windows (na Linuksie też działa) programem
-**Sursum** i przynieść je do kościoła w jednym pliku. Program działa bez internetu i bez
+Pieśni i zestawy można przygotować na własnym komputerze z Windows (na Linuksie też działa)
+programem **Sursum** i przynieść je do kościoła w jednym pliku. Program działa bez internetu i bez
 urządzenia z kościoła; nie wyświetla niczego na ekranie, służy do pieśni i zestawów.
 
 1. Pobierz plik `sursum-<wersja>-windows-x86_64.exe` (od osoby, która opiekuje się sursum w
@@ -150,33 +150,54 @@ urządzenia z kościoła; nie wyświetla niczego na ekranie, służy do pieśni 
    W zakładce Zestaw przygotujesz zestaw na mszę: najpierw w polu **Zestawy kościoła** wybierz
    kościół (program zna kościoły z plików wczytanych z kościoła), potem pracujesz jak na pilocie.
    Zestaw trafi do wybranego kościoła razem z plikiem; w drugim kościele będzie niewidoczny.
-4. Gdy skończysz: **Ustawienia → Baza pieśni → Eksport bazy**. Zapisz plik
+4. Gdy skończysz: **Ustawienia → Synchronizacja → Zapisz plik**. Zapisz plik
    `biblioteka.sursum` (np. na pendrive albo wyślij go sobie pocztą).
-5. W kościele, na pilocie: **Ustawienia → Baza pieśni → Scal bazę z pliku** i wybierz ten
-   plik. Najpierw zobaczysz, co się zmieni; dopiero **Scal** zapisuje. Ten sam plik można
-   wczytać wiele razy i nic się nie zdubluje. Jeśli tę samą pieśń zmieniono i w domu, i w
-   kościele, zostaje jedna pieśń: pokazana jest wersja, którą zmieniano więcej razy, a druga
-   czeka na przejrzenie (zobacz [Pieśni do przejrzenia](#pieśni-do-przejrzenia)).
+5. W kościele, na pilocie: **Ustawienia → Synchronizacja → Wczytaj plik** i wybierz ten plik.
+   Najpierw zobaczysz, co się zmieni; dopiero **Wczytaj** zapisuje (rozdział
+   [Synchronizacja](#synchronizacja)).
 
-Chcesz w domu poprawiać pieśni, które są już w kościele? Najpierw zrób **Eksport bazy** na
-pilocie w kościele i **Scal bazę z pliku** w programie w domu; wtedy masz w domu te same pieśni.
+Chcesz w domu poprawiać pieśni albo zestawy, które są już w kościele? Najpierw **Zapisz plik**
+na pilocie w kościele i **Wczytaj plik** w programie w domu; wtedy masz w domu to samo co w
+kościele.
 
 Pieśni w domu leżą w folderze `%LOCALAPPDATA%\sursum` (na Linuksie `~/.local/share/sursum`).
 Program może być uruchomiony tylko raz; jeśli drugie okno mówi „Sursum jest już uruchomiony”,
 poszukaj pierwszego okna na pasku zadań. Gdy coś nie działa, przyda się plik `sursum.log` z
 tego folderu.
 
+## Synchronizacja
+
+Każde urządzenie (w Tulcach, w Gowarzewie, program w domu) ma własną bazę pieśni i zestawów.
+Między nimi wędruje jeden rodzaj pliku, `biblioteka.sursum`: **Zapisz plik** na jednym
+urządzeniu, **Wczytaj plik** na drugim. Kierunek i kolejność są dowolne, a ten sam plik można
+wczytać wiele razy.
+
+- W pliku są wszystkie pieśni, kościoły parafii, zestawy wszystkich kościołów i ich obrazy.
+  Urządzenie w kościele pokazuje tylko zestawy swojego kościoła; zestawy drugiego kościoła
+  przechowuje, żeby przekazać je dalej.
+- Przed zapisem pilot pokazuje, co się zmieni: nowe i zmienione pieśni, zestawy tego kościoła,
+  nowe obrazy. Dopiero **Wczytaj** zapisuje; urządzenie robi przedtem kopię swojej bazy.
+- Nic się nie dubluje. Pieśń poprawiona w jednym miejscu jest po wczytaniu poprawiona wszędzie.
+  Starszy plik niczego nie cofa i nie przywraca usuniętej pieśni ani zestawu.
+- Usunięcie wędruje jak każda zmiana, ale nie zabiera ze sobą poprawki zrobionej w tym czasie
+  gdzie indziej: taka pieśń zostaje.
+- Gdy tę samą pieśń albo ten sam zestaw zmieniono w dwóch miejscach, zostaje jeden: wszędzie
+  pokazywana jest wersja zmieniana więcej razy, a druga czeka na przejrzenie (niżej).
+- Wczytanie pliku nigdy nie zmienia tego, co jest na ekranie, ani nie przełącza zestawu.
+- Każdy zestaw ma datę mszy (można ją pominąć: wtedy jest szkicem na górze listy). Lista
+  zestawów jest uporządkowana według tej daty, tak samo na każdym urządzeniu.
+
 ## Pieśni do przejrzenia
 
-Gdy tę samą pieśń zmieniono w dwóch miejscach (np. w domu i w kościele), po scaleniu pliku
+Gdy tę samą pieśń zmieniono w dwóch miejscach (np. w domu i w kościele), po wczytaniu pliku
 zostaje jedna pieśń. Wszędzie pokazywana jest wersja zmieniana więcej razy, a druga czeka na
 decyzję. W zakładce **Zestaw** (w programie na komputerze: **Pieśni**) pojawia się wtedy żółty
 napis **Pieśni do przejrzenia: 1**, a w wynikach wyszukiwania znaczek „do przejrzenia”.
 
 Dotknij napisu, wybierz pieśń i porównaj obie wersje. **Zostaw tę** pod wybraną wersją kończy
 przegląd: ta wersja zostaje, druga znika. Jeśli każda wersja ma coś dobrego, zostaw jedną i
-popraw ją potem w edytorze. Do następnego scalenia przegląd obowiązuje tylko na tym urządzeniu;
-po wymianie pliku znika też w drugim kościele. Przeglądu nie trzeba robić od razu: do tego czasu
+popraw ją potem w edytorze. Do następnej wymiany pliku przegląd obowiązuje tylko na tym
+urządzeniu; potem znika też w drugim kościele. Przeglądu nie trzeba robić od razu: do tego czasu
 oba kościoły pokazują ten sam tekst.
 
 Tak samo z zestawem zmienionym w dwóch miejscach (np. w domu i w kościele w czasie mszy):
@@ -210,13 +231,15 @@ spróbuj za chwilę”). To normalne.
 
 ![Zakładka Ustawienia](images/remote/tablet-ustawienia.png)
 
+- **Kościół**: nazwa kościoła tego urządzenia (zestawy urządzenia należą do niego) i, jeśli
+  inne urządzenie wpisało tę nazwę inaczej, wybór kościoła znanego z pliku.
 - **Ekran**: zasilanie projektora lub monitora, **Logo parafii**, **Kalibracja ekranu**.
 - **Wyświetlanie**: czy po ostatnim slajdzie pieśni najpierw jest pusty ekran (domyślnie), czy od
   razu następna pozycja. Dotyczy wszystkich pilotów.
 - **To urządzenie**: strona przycisków (prawa lub lewa), wibracja, **Pełny ekran** (chowa paski
   przeglądarki), **Pedał i klawisze**.
-- **Baza pieśni**: **Eksport bazy** (same pieśni, do wymiany z drugim kościołem), **Scal bazę
-  z pliku**, **Import z OpenSong (ZIP)**.
+- **Synchronizacja**: **Zapisz plik** i **Wczytaj plik** (pieśni i zestawy, do wymiany z drugim
+  kościołem i z programem w domu), **Import z OpenSong (ZIP)**.
 - **Dane urządzenia**: **Pobierz kopię** (wszystko: pieśni, zestawy, logo, obrazy, kalibracja
   i ustawienia), **Przywróć z kopii** i **Usuń nieużywane obrazy**.
 - **Urządzenia** i **O programie** (wersja, **Zainstaluj aktualizację**).
@@ -232,14 +255,8 @@ obsługują ekranu.
   do konkretnych plików. Ponowny import aktualizuje tylko pieśni zmienione w OpenSong i nigdy nie
   cofa poprawek zrobionych w sursum ani nie przywraca usuniętych pieśni. Jeśli pieśń zmieniono i
   w OpenSong, i w sursum, zostają obie wersje i pieśń trafia do przejrzenia.
-- **Eksport bazy** / **Scal bazę z pliku**: wymiana pieśni i zestawów między kościołami. Plik
-  `.sursum` z jednego kościoła scalasz w drugim. Plik zawiera też zestawy wszystkich kościołów
-  razem z ich obrazami; każde urządzenie pokazuje tylko zestawy swojego kościoła, a pozostałe
-  przechowuje i przekazuje dalej. Najpierw zobaczysz, co się zmieni, i dopiero **Scal**
-  zapisuje. Wczytanie tego samego albo starszego pliku niczego nie psuje. Gdy tę samą pieśń
-  zmieniono w obu miejscach, zostaje jedna pieśń z wersją zmienianą więcej razy, a druga wersja
-  czeka przy niej na przejrzenie; raport scalania wymienia takie pieśni. Pliki z wcześniejszych
-  wersji programu nie są wczytywane.
+- **Zapisz plik** / **Wczytaj plik**: zobacz [Synchronizacja](#synchronizacja). Pliki z
+  wcześniejszych wersji programu nie są wczytywane.
 - **Kalibracja ekranu**: tylko poza mszą. Po potwierdzeniu na ekranie w kościele pojawia się
   siatka z literami i cyframi. Przeciągnij palcem po podglądzie w pilocie, żeby zaznaczyć strefę
   bez tekstu, np. ciemną powierzchnię lub przeszkodę (czerwona strefa); tekst będzie ją omijał, a

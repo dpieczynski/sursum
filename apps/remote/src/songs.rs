@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The Pieśni view of the desktop program's library (ADR 0020): there is no screen and no
 //! service at home, only songs. Search, open a song in the editor, or write a new one; the
-//! finished library goes to the church as a file (Ustawienia → Eksport bazy).
+//! finished library goes to the church as a file (Ustawienia → Synchronizacja → Zapisz plik).
 
 use leptos::prelude::*;
 use sursum_protocol::{RemoteState, SongSummary};

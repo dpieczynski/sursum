@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Baza pieśni: a copy of the whole library (any paired remote), merging another church's file
-//! and importing from OpenSong.
+//! Synchronizacja: the library file (songs, churches, every church's sets and their pictures,
+//! ADR 0025) to save and to load on another device, and importing from OpenSong.
 
 use leptos::prelude::*;
 
