@@ -2,7 +2,7 @@
 //! Removing unused pictures on request: pictures in a set and the logo stay, the rest goes.
 
 use sursum_core::model::{ItemKind, ServiceSet, SetItem};
-use sursum_protocol::{AssetId, ImageFit, ItemId, PictureCleanup, PictureCleanupRequest, SetId};
+use sursum_protocol::{AssetId, ItemId, PictureCleanup, PictureCleanupRequest, SetId};
 use sursum_server::db::Database;
 use sursum_server::{Config, RunningServer};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -44,11 +44,7 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
         let mut database = Database::open(dir.path()).unwrap();
         let item = SetItem {
             id: ItemId::from("i1"),
-            kind: ItemKind::Image {
-                title: "Ogłoszenia".into(),
-                asset_id: poster.clone(),
-                fit: ImageFit::Contain,
-            },
+            kind: ItemKind::Image { title: "Ogłoszenia".into(), asset_id: poster.clone() },
         };
         database
             .save_set(&ServiceSet {
@@ -63,7 +59,7 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
     }
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     let server = sursum_server::start(config, &sursum_server::SystemPlatform).await.unwrap();
 
     let counted = clean_up(&server, true).await;

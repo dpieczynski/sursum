@@ -21,6 +21,11 @@ build: build-web
 desktop: build-web
     cargo build --release -p sursum-desktop
 
+# The desktop program for Windows as one file (ADR 0020): MSVC links the WebView2 loader in, so
+# it is built on Windows (CI and releases). The web apps and the program share the build id above.
+desktop-windows: build-web
+    cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
+
 # Install the desktop program for this Linux user: the binary in ~/.local/bin, the menu entry and
 # its icon (GTK finds the window's icon by the application id).
 desktop-install: desktop

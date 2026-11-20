@@ -547,11 +547,7 @@ impl AppState {
                     return (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false);
                 }
                 let title = if title.trim().is_empty() { "Obraz" } else { title.trim() };
-                let kind = ItemKind::Image {
-                    title: title.to_owned(),
-                    asset_id: asset_id.clone(),
-                    fit: sursum_protocol::ImageFit::Contain,
-                };
+                let kind = ItemKind::Image { title: title.to_owned(), asset_id: asset_id.clone() };
                 self.sets.insert(None, new_item_id(), kind).cloned().ok_or(ErrorCode::NoActiveSet).map(Some)
             }
             Command::AddBlank { title } => {

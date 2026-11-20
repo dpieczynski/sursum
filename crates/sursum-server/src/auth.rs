@@ -6,8 +6,8 @@
 //! that wrong attempts are rate-limited per address. A paired device keeps a random 256-bit token
 //! in an `HttpOnly; SameSite=Strict` cookie; only its hash is stored. Until a PIN is set, nobody
 //! may control the screen: the first remote sets the PIN and is paired by doing so (or the
-//! installer runs `sursum-server set-pin`). Only an explicit development flag
-//! (`--open-without-pin`) lets everyone in without a PIN.
+//! installer runs `sursum-server set-pin`). Only a server on a loopback address may run without a
+//! PIN ([`AccessMode::Local`]): the desktop program, `just dev` and the tests.
 //!
 //! One level of rights (ADR 0024): a paired device may do everything the remote offers, from
 //! navigation to imports, calibration, updates and the device list. Revoking a device removes its
@@ -89,12 +89,10 @@ pub enum AccessMode {
     /// must set it and nobody else gets in.
     #[default]
     Pin,
-    /// Development and tests (`--open-without-pin`): as long as no PIN is set, every device on
-    /// the local network may do everything.
-    OpenForDevelopment,
-    /// The desktop program (ADR 0020): the server listens on loopback only, so whoever sits at
-    /// this computer is its owner; there is no PIN and no pairing.
-    LocalOwner,
+    /// No PIN and no pairing: whoever reaches the server may do everything. The server refuses
+    /// to start this way on anything but a loopback address, so that is whoever sits at this
+    /// computer: the desktop program (ADR 0020), `just dev` and the tests (`--open-without-pin`).
+    Local,
 }
 
 /// Access rules shared by all requests.
@@ -137,13 +135,12 @@ impl Access {
         }
     }
 
-    /// True if a request with these headers may use the remote: a paired device, the desktop
-    /// program's owner, or anyone while the development mode runs without a PIN.
+    /// True if a request with these headers may use the remote: a paired device, or anyone on a
+    /// loopback-only server.
     pub fn allows(&self, headers: &HeaderMap) -> bool {
         match self.mode {
-            AccessMode::LocalOwner => true,
-            mode if !self.pin_required() => mode == AccessMode::OpenForDevelopment,
-            _ => self.device(headers).is_some(),
+            AccessMode::Local => true,
+            AccessMode::Pin => self.device(headers).is_some(),
         }
     }
 
@@ -164,9 +161,9 @@ impl Access {
         self.revocations.subscribe()
     }
 
-    /// True once a PIN is set (never for the local owner, who needs none).
+    /// True once a PIN is set (never on a loopback-only server, which needs none).
     pub fn pin_required(&self) -> bool {
-        self.mode != AccessMode::LocalOwner && self.pin.read().expect("not poisoned").is_some()
+        self.mode == AccessMode::Pin && self.pin.read().expect("not poisoned").is_some()
     }
 
     /// True while no PIN is set on a device that needs one: the first remote has to set it.
@@ -291,8 +288,6 @@ mod tests {
         assert!(access.claim_pin(PinHash::new("246813").unwrap()));
         assert!(!access.claim_pin(PinHash::new("135792").unwrap()), "only the first setup wins");
         assert!(!access.setup_needed() && access.pin_required());
-        let open = Access::new(None, vec![], AccessMode::OpenForDevelopment);
-        assert!(!open.setup_needed() && open.allows(&HeaderMap::new()), "development mode");
     }
 
     #[test]
@@ -354,12 +349,12 @@ mod tests {
     }
 
     #[test]
-    fn the_local_owner_needs_no_pin() {
-        let owner = Access::new(None, vec![], AccessMode::LocalOwner);
+    fn a_loopback_only_server_needs_no_pin() {
+        let owner = Access::new(None, vec![], AccessMode::Local);
         assert!(owner.allows(&HeaderMap::new()));
         assert!(!owner.setup_needed() && !owner.pin_required());
         // A PIN that came with an old database changes nothing: there is nobody to pair.
-        let with_pin = Access::new(Some(PinHash::new("246813").unwrap()), vec![], AccessMode::LocalOwner);
+        let with_pin = Access::new(Some(PinHash::new("246813").unwrap()), vec![], AccessMode::Local);
         assert!(with_pin.allows(&HeaderMap::new()));
         assert!(!with_pin.pin_required());
     }

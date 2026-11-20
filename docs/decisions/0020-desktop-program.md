@@ -86,3 +86,11 @@ server is small: about 100 lines per platform pair, no new logic.
   upload requests need headers that force a CORS preflight.
 - **iPad**: minimum iPadOS 16.4; the repository is private, so the iPad Simulator job runs by
   hand or weekly, not on every pull request (roadmap P2).
+
+## Amendment (2026-11-20): one access mode without a PIN
+
+The development mode (`--open-without-pin`) and the local owner mode were two ways of saying "no
+PIN, everything allowed"; they differed only in that development allowed any address and a PIN set
+later. They are now one mode, `AccessMode::Local`, with the local owner's rules: loopback only
+(refused otherwise), never a PIN. `just dev` and the tests already listen on loopback; trying a
+real tablet against a development build means pairing it with a PIN like any device.

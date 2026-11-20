@@ -22,17 +22,17 @@ they cannot drift apart within one build.
 There is one level of rights (ADR 0024): a paired remote may do everything. Without a PIN nobody
 may control the screen: `/api/session` says `setup_needed`, and `POST /api/setup { pin, name, church }`
 sets the PIN once (`invalid_pin` or `church_missing` → 400, `already_set` → 409), names the
-device's church (ADR 0025) and pairs that browser. Only the
-development flag `--open-without-pin` (used by `just dev` and the tests) lets everyone in while no
-PIN is set. Refusals: HTTP 401 (not paired); WebSocket commands answer
+device's church (ADR 0025) and pairs that browser. Only a server on a loopback address runs
+without a PIN (the *local* access mode, below). Refusals: HTTP 401 (not paired); WebSocket commands answer
 `Rejected { code: forbidden }`, after which the remote reloads into the pairing form. Revoking a
 device closes its WebSocket and refuses its reconnects with 401, so an idle remote gets no
 `forbidden`: after every lost or refused connection it asks `/api/session` and reloads into the
 pairing form when that says `paired: false` (a network error leaves it waiting to reconnect).
 
-The desktop program (ADR 0020) runs the server in the *local owner* mode: it listens on loopback
+The desktop program (ADR 0020) runs the server in the *local* access mode: it listens on loopback
 only (the server refuses to start otherwise), there is no PIN and no pairing, and every request is
-allowed. `/api/session` then says `"installation": "library"` (a device says `"screen"`; older
+allowed. The development flag `--open-without-pin` (used by `just dev` and the tests) is the same
+mode on a device installation (with a screen). `/api/session` then says `"installation": "library"` (a device says `"screen"`; older
 servers send nothing, which reads as `"screen"`), and the remote offers songs, the editor, sets
 for any church (a church chosen with `UseChurch` decides which sets are listed and whose new sets
 are; before one is chosen every set is listed), the library file and the backup download
@@ -115,7 +115,8 @@ in `sursum-slide` (`theme.rs`).
 screen page from the previous build cannot read the new snapshots, keeps its last slide and,
 because it reloads only at a moment with no text on screen, never notices. On a device the
 kiosk must restart once after such an update (a system update or a reboot does it). Removed on
-2026-11-19: `ScreenState.theme`, `RemoteState.sections`, `ClientMsg::Log`.
+2026-11-19: `ScreenState.theme`, `RemoteState.sections`, `ClientMsg::Log`; on 2026-11-20:
+`Deck.background` and the image `fit` (pictures are always whole, on black).
 
 ## Snapshots, not patches
 

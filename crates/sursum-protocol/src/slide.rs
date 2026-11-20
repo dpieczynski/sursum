@@ -18,7 +18,6 @@ pub struct Deck {
     /// Title shown in the remote (never on the screen unless a theme asks for it).
     pub title: String,
     pub slides: Vec<Slide>,
-    pub background: Background,
 }
 
 /// One slide.
@@ -39,32 +38,6 @@ pub enum SlideBody {
     Lyrics { lines: Vec<String> },
     /// Free text slide, e.g. an announcement.
     Text { title: Option<String>, lines: Vec<String> },
-    /// An image, e.g. a poster.
-    Image { asset_id: AssetId, fit: ImageFit },
-}
-
-/// How an image fills the content area.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ImageFit {
-    /// Whole image visible, letterboxed (default).
-    #[default]
-    Contain,
-    /// Fill the area, cropping if needed.
-    Cover,
-}
-
-/// Opaque background of a content layer. It must be opaque so a crossfade never dims the
-/// screen or shows two slides at once.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Background {
-    /// A CSS colour, e.g. `#000000`.
-    Color { css: String },
-}
-
-impl Default for Background {
-    fn default() -> Self {
-        Background::Color { css: "#000000".to_owned() }
-    }
+    /// An image, e.g. a poster: always whole, inside the content area, on black.
+    Image { asset_id: AssetId },
 }

@@ -22,7 +22,7 @@ pub fn shown_slide(live: &LiveSlide) -> Option<Slide> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sursum_protocol::{Background, Deck, DeckId, ItemId};
+    use sursum_protocol::{Deck, DeckId, ItemId};
 
     fn live(gap: bool) -> LiveSlide {
         let slide = Slide {
@@ -36,7 +36,6 @@ mod tests {
             item_id: ItemId::from("i"),
             title: "t".into(),
             slides: vec![slide],
-            background: Background::default(),
         };
         LiveSlide { deck, slide_index: 0, gap }
     }

@@ -43,13 +43,12 @@ below comes before new features. Order: CI image build, one update path, engine 
   first frame, RAM after 8 h, crossfade, system size. Then an ADR: switch (and delete cage,
   seatd, `wlr-randr`, `kiosk-session`, the cursor theme, the policies; move the WPE tests to
   2.54 with MiniBrowser) or stay on Chromium for good (and delete the WPE tests and cog)
-- [ ] Smaller findings of the audit, not decided, cheapest first: `ImageFit::Cover` is never
-  chosen and `Background` has one variant (both in stored set items and decks); ~~the demo set
-  comes back whenever no set exists~~ (fixed in Y1.6a: made once, on the first start); the "build
-  the web apps with one build id"
-  block is copied into each workflow; `OpenForDevelopment` and `LocalOwner` are both "no PIN,
-  everything allowed"; `.sursum` and `.sursum-backup` overlap (and the backup restore swaps the
-  database file, which ties it to systemd)
+- [x] Smaller findings of the audit (2026-11-20): `ImageFit` and `Deck.background` removed
+  (pictures always whole, layers black in `slide.css`); the Windows build is `just desktop-windows`
+  in both workflows (one build id from the justfile); `OpenForDevelopment` and `LocalOwner` are
+  one mode, `AccessMode::Local` (loopback only, never a PIN; ADR 0020 amendment); the demo set
+  was fixed in Y1.6a. Kept on purpose: `.sursum` and `.sursum-backup` (sharing between places
+  by merging versus restoring one device exactly, with its calibration and settings)
 
 ## Y1 — Synchronizing songs and sets (ADR 0025)
 

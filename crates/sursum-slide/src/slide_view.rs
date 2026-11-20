@@ -2,7 +2,7 @@
 //! One slide, drawn inside a 1920×1080 stage.
 
 use leptos::prelude::*;
-use sursum_protocol::{AssetId, Background, ImageFit, Rect, Slide, SlideBody};
+use sursum_protocol::{AssetId, Rect, Slide, SlideBody};
 
 use crate::theme::THEME;
 
@@ -28,19 +28,6 @@ pub fn text_box_style(content: Rect, font_px: u32) -> String {
     )
 }
 
-/// CSS for an opaque layer background.
-pub fn background_style(background: &Background) -> String {
-    format!("background:{};", background_value(background))
-}
-
-/// The value of the `background` property alone, for an element whose other inline styles
-/// (opacity, stacking) are set elsewhere and must not be replaced.
-pub fn background_value(background: &Background) -> String {
-    match background {
-        Background::Color { css } => css.clone(),
-    }
-}
-
 /// Where the server serves an uploaded picture.
 pub fn asset_url(asset_id: &AssetId) -> String {
     format!("/assets/{}", asset_id.as_str())
@@ -51,7 +38,7 @@ pub fn asset_url(asset_id: &AssetId) -> String {
 pub fn SlideView(slide: Slide, content: Rect, font_px: u32, wrap: bool) -> impl IntoView {
     let lines = match slide.body {
         SlideBody::Lyrics { lines } | SlideBody::Text { lines, .. } => lines,
-        SlideBody::Image { asset_id, fit } => return image_view(&asset_id, fit, content).into_any(),
+        SlideBody::Image { asset_id } => return image_view(&asset_id, content).into_any(),
     };
     view! {
         <div class=lines_class(wrap) style=text_box_style(content, font_px)>
@@ -61,14 +48,11 @@ pub fn SlideView(slide: Slide, content: Rect, font_px: u32, wrap: bool) -> impl 
     .into_any()
 }
 
-/// A picture inside the content rectangle (so it also avoids exclusion zones).
-fn image_view(asset_id: &AssetId, fit: ImageFit, content: Rect) -> impl IntoView {
-    let object_fit = match fit {
-        ImageFit::Contain => "contain",
-        ImageFit::Cover => "cover",
-    };
+/// A picture inside the content rectangle (so it also avoids exclusion zones), always whole: a
+/// poster cropped at the edges would lose its text.
+fn image_view(asset_id: &AssetId, content: Rect) -> impl IntoView {
     let style = format!(
-        "left:{}px;top:{}px;width:{}px;height:{}px;object-fit:{object_fit};",
+        "left:{}px;top:{}px;width:{}px;height:{}px;object-fit:contain;",
         content.x, content.y, content.width, content.height
     );
     view! { <img class="sursum-image" src=asset_url(asset_id) style=style alt="" /> }

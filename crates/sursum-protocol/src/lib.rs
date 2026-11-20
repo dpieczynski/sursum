@@ -30,7 +30,7 @@ pub use message::{
 };
 pub use pairing::{DeviceView, Installation, PairOutcome, PairRequest, SessionInfo};
 pub use pictures::{PictureCleanup, PictureCleanupRequest};
-pub use slide::{Background, Deck, ImageFit, Slide, SlideBody};
+pub use slide::{Deck, Slide, SlideBody};
 pub use state::{
     ChurchView, DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState,
     SetItemKind, SetItemView, SetSummary, SetView, SongSummary,

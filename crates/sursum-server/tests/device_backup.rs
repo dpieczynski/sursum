@@ -28,7 +28,7 @@ impl Platform for Supervised {
 async fn start(data_dir: &std::path::Path, supervised: bool) -> RunningServer {
     let mut config = Config::with_data_dir(data_dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     sursum_server::start(config, &Supervised(supervised)).await.unwrap()
 }
 

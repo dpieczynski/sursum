@@ -18,8 +18,20 @@ type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn start(data_dir: &std::path::Path, boot_id: &str) -> RunningServer {
     let mut config = Config::with_data_dir(data_dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     sursum_server::start(config, &FixedPlatform(Some(boot_id.to_owned()))).await.unwrap()
+}
+
+/// A device as in the church: the PIN is stored and remotes must pair with it.
+async fn start_with_pin(data_dir: &std::path::Path, pin: &str) -> RunningServer {
+    {
+        let database = sursum_server::db::Database::open(data_dir).unwrap();
+        let pin = sursum_server::auth::PinHash::new(pin).unwrap();
+        database.set_setting(sursum_server::auth::PIN_SETTING, &pin).unwrap();
+    }
+    let mut config = Config::with_data_dir(data_dir);
+    config.listen = "127.0.0.1:0".parse().unwrap();
+    sursum_server::start(config, &FixedPlatform(Some("boot-1".to_owned()))).await.unwrap()
 }
 
 async fn send(socket: &mut Socket, message: &ClientMsg) {
@@ -533,12 +545,7 @@ async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
 #[tokio::test]
 async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() {
     let dir = tempfile::tempdir().unwrap();
-    {
-        let database = sursum_server::db::Database::open(dir.path()).unwrap();
-        let pin = sursum_server::auth::PinHash::new("2468").unwrap();
-        database.set_setting(sursum_server::auth::PIN_SETTING, &pin).unwrap();
-    }
-    let server = start(dir.path(), "boot-1").await;
+    let server = start_with_pin(dir.path(), "2468").await;
     let url = format!("ws://{}/ws/remote", server.addr);
     assert!(tokio_tungstenite::connect_async(&url).await.is_err(), "an unpaired remote must be refused");
     assert!(http_get(&server, "/api/songs?q=a").await.is_empty(), "the API is closed too");
@@ -841,12 +848,7 @@ async fn connect_as(server: &RunningServer, cookie: &str, client: &str) -> Socke
 async fn paired_remotes_may_change_the_setup_and_revoked_remotes_are_cut_off() {
     use sursum_protocol::DeviceView;
     let dir = tempfile::tempdir().unwrap();
-    {
-        let database = sursum_server::db::Database::open(dir.path()).unwrap();
-        let pin = sursum_server::auth::PinHash::new("2468").unwrap();
-        database.set_setting(sursum_server::auth::PIN_SETTING, &pin).unwrap();
-    }
-    let server = start(dir.path(), "boot-1").await;
+    let server = start_with_pin(dir.path(), "2468").await;
     let organist = cookie_of(&pair_with(&server, "2468").await);
     let sacristan = cookie_of(&pair_with(&server, "2468").await);
     let mut organist_socket = connect_as(&server, &organist, "organist").await;
@@ -993,7 +995,7 @@ async fn start_with_projector(
 ) -> RunningServer {
     let mut config = Config::with_data_dir(dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     config.display_power = sursum_server::config::DisplayPowerConfig::Pjlink {
         host: projector.to_string(),
         password: Some(password.to_owned()),
@@ -1101,7 +1103,7 @@ async fn a_screen_that_stays_away_gets_its_kiosk_restarted_and_remotes_know() {
     let marker = dir.path().join("kiosk-restarted");
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     config.screen_guard = Some(sursum_server::screen_guard::ScreenGuardConfig {
         restart_command: vec!["sh".into(), "-c".into(), format!("touch '{}'", marker.display())],
         grace_s: 1,
@@ -1300,7 +1302,7 @@ async fn the_local_owner_mode_is_a_library_on_loopback_only() {
     let dir = tempfile::tempdir().unwrap();
     let mut config = Config::with_data_dir(dir.path());
     config.listen = "0.0.0.0:0".parse().unwrap();
-    config.access = AccessMode::LocalOwner;
+    config.access = AccessMode::Local;
     config.installation = Installation::Library;
     assert!(sursum_server::start(config.clone(), &FixedPlatform(None)).await.is_err());
 
@@ -1396,7 +1398,7 @@ async fn the_desktop_program_prepares_a_set_for_the_church_chosen_and_it_reaches
     let gowarzewo = start(dir_b.path(), "boot-1").await;
     let mut config = Config::with_data_dir(dir_c.path());
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     config.installation = Installation::Library;
     let home = sursum_server::start(config, &FixedPlatform(None)).await.unwrap();
 

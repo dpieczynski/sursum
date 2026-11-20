@@ -32,7 +32,7 @@ async fn start(
 ) -> RunningServer {
     let mut config = Config::with_data_dir(data_dir);
     config.listen = "127.0.0.1:0".parse().unwrap();
-    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.access = sursum_server::auth::AccessMode::Local;
     config.bundle_key = key.map(ed25519_dalek::SigningKey::verifying_key);
     sursum_server::start(config, &Supervised(supervised)).await.unwrap()
 }
