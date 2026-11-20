@@ -89,6 +89,7 @@ jobs:
           cp target/desktop-windows/sursum.exe "target/sursum-$version-windows-x86_64.exe"
           cp target/image/work/deploy-*/sursum.img.zst "target/sursum-$version.img.zst"
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+            --notes "Built by GitHub Actions from this tag. Code signing policy: https://github.com/dpieczynski/sursum#code-signing-policy" \
             "target/sursum-$version.img.zst" \
             "target/sursum-system-$version.sursum-system" \
             "target/sursum-$version-windows-x86_64.exe"
