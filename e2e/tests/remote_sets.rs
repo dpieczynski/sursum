@@ -280,13 +280,7 @@ async fn a_set_changed_in_two_places_is_reviewed_with_an_item_added_from_the_oth
 
     with_engine(Browser::for_remote(), 1280, 800, async |remote| {
         remote.goto(tulce.url("/remote/")).await?;
-        let tab = remote.query(By::Css("[data-testid=tab-zestaw]")).first().await;
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        if tab.is_ok() {
-            remote.screenshot(std::path::Path::new("/tmp/claude-1000/-var-home-dpieczynski-Projects-sursum/7b2c7d60-6e71-47dd-a5f3-b70a2bcb1a75/scratchpad/set-review.png")).await?;
-            std::fs::write("/tmp/claude-1000/-var-home-dpieczynski-Projects-sursum/7b2c7d60-6e71-47dd-a5f3-b70a2bcb1a75/scratchpad/set-review.html", remote.source().await?)?;
-        }
-        tab.context("tab")?.wait_until().clickable().await.context("clickable")?;
+        remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
         open_tab(remote, "zestaw").await?;
         let line = remote.query(By::Css("[data-testid=set-review-line]")).first().await.context("line")?;
         line.click().await?;
