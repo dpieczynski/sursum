@@ -1,0 +1,23 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: versions
+---
+{
+  "set_id": "set",
+  "versions": [
+    {
+      "version": "abababababababababababababababababababababababababababababababab",
+      "shown": true,
+      "name": "Niedziela",
+      "date": "2026-11-22",
+      "items": [
+        {
+          "item_id": "item-1",
+          "title": "Pieśń",
+          "kind": "song",
+          "missing_elsewhere": true
+        }
+      ]
+    }
+  ]
+}

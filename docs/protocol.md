@@ -164,6 +164,12 @@ restart after a server restart, so clients apply every snapshot instead of compa
   `GET /api/songs/{id}/versions` answers `SongVersions` (every live version in the editor's text
   form, the shown one first), and `POST /api/songs/{id}/keep { version }` keeps one version,
   replacing the others (`SaveOutcome`; `Conflict` if that version is gone).
+- **Review** of sets changed in two places: `SetSummary.review` and `SetView.review` mark them;
+  `GET /api/sets/{id}/versions` answers `SetVersions` (every live version with its name, date and
+  items, the shown one first; `SetVersionItem.missing_elsewhere` marks items another version
+  lacks), and the command `KeepSetVersion { set_id, version, add }` keeps one version with the
+  items `add` from the others, each after the item it follows there (or at the end); `NotFound`
+  if that version is gone. Like any set edit it never changes the program (ADR 0005).
 - **Display power** commands are executed asynchronously; failures return
   `Rejected(DisplayUnreachable | DisplayBusy | DisplayAuthFailed)` and never block navigation.
 

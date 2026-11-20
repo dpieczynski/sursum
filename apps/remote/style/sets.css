@@ -208,6 +208,23 @@
   font-size: 14px;
   text-transform: uppercase;
 }
+/* A set's items in the comparison; an item another version lacks is marked. */
+.review-items {
+  flex: 1;
+  margin: 0;
+  padding-left: 1.6em;
+}
+.review-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+}
+.review-item.differs .review-item-title {
+  color: var(--warn);
+  font-weight: 700;
+}
 .review-lyrics {
   flex: 1;
   margin: 0;

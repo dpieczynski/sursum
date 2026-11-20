@@ -74,7 +74,8 @@ impl SetStore {
 
     /// The list for switching sets: sets without a date first (drafts, newest first), then by
     /// date, the latest on top (ADR 0025). The same order on every device; no clock involved.
-    pub fn summaries(&self) -> Vec<SetSummary> {
+    /// Sets in `in_review` are marked.
+    pub fn summaries(&self, in_review: &std::collections::BTreeSet<SetId>) -> Vec<SetSummary> {
         let mut sets: Vec<&ServiceSet> = self.sets.iter().rev().collect();
         sets.sort_by_key(|set| (set.date.is_some(), std::cmp::Reverse(set.date.clone())));
         sets.into_iter()
@@ -83,6 +84,7 @@ impl SetStore {
                 name: set.name.clone(),
                 items: u32::try_from(set.items.len()).unwrap_or(u32::MAX),
                 date: set.date.clone(),
+                review: in_review.contains(&set.id),
             })
             .collect()
     }
@@ -235,7 +237,8 @@ mod tests {
         assert_eq!(store.active_id(), Some(&first));
         assert_eq!(store.undo_delete().map(|set| set.name.as_str()), Some("Środa"));
         assert_eq!(store.active_id(), Some(&second));
-        let order: Vec<SetId> = store.summaries().into_iter().map(|set| set.set_id).collect();
+        let order: Vec<SetId> =
+            store.summaries(&Default::default()).into_iter().map(|set| set.set_id).collect();
         assert_eq!(order, [second, first]);
         assert!(store.undo_delete().is_none(), "only once");
     }
@@ -278,7 +281,8 @@ mod tests {
         let mut store = SetStore::default();
         store.create(SetId::from("a"), "Pierwszy", None, None);
         store.create(SetId::from("b"), "Drugi", None, None);
-        let names: Vec<String> = store.summaries().into_iter().map(|set| set.name).collect();
+        let names: Vec<String> =
+            store.summaries(&Default::default()).into_iter().map(|set| set.name).collect();
         assert_eq!(names, ["Drugi", "Pierwszy"]);
         assert_eq!(
             store.rename(&SetId::from("a"), "  Niedziela ").map(|set| set.name.as_str()),
@@ -297,13 +301,14 @@ mod tests {
         store.create(SetId::from("b"), "Szkic", None, None);
         store.create(SetId::from("c"), "Niedziela 22.11", Some("2026-11-22T10:00".into()), None);
         store.create(SetId::from("d"), "Środa 18.11", Some("2026-11-18".into()), None);
-        let names: Vec<String> = store.summaries().into_iter().map(|set| set.name).collect();
+        let names: Vec<String> =
+            store.summaries(&Default::default()).into_iter().map(|set| set.name).collect();
         assert_eq!(names, ["Szkic", "Niedziela 22.11", "Środa 18.11", "Niedziela 15.11"]);
         assert_eq!(
             store.set_date(&SetId::from("b"), Some("2026-11-29".into())).map(|set| set.id.as_str()),
             Some("b")
         );
-        assert_eq!(store.summaries()[0].name, "Szkic", "now the latest date");
+        assert_eq!(store.summaries(&Default::default())[0].name, "Szkic", "now the latest date");
     }
 
     #[test]
@@ -319,6 +324,6 @@ mod tests {
         assert_eq!(store.active().unwrap().items.len(), 0);
         assert!(store.activate(&SetId::from("s1")));
         assert!(!store.activate(&SetId::from("nope")));
-        assert_eq!(store.summaries().len(), 2);
+        assert_eq!(store.summaries(&Default::default()).len(), 2);
     }
 }

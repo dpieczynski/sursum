@@ -141,6 +141,7 @@ fn set_row(
                     {date.map(|date| format!("{date} · "))} {format!("{} {}", set.items, pl(Msg::Items))}
                 </span>
                 {chosen.then(|| view! { <span class="row-badge muted">{pl(Msg::Chosen)}</span> })}
+                {set.review.then(|| view! { <span class="row-badge review">{pl(Msg::ToReview)}</span> })}
             </button>
             <button class="btn btn--sm btn--quiet" data-testid="copy-set-row" on:click=copy>
                 {pl(Msg::CopySetShort)}

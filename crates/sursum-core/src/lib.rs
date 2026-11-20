@@ -11,5 +11,6 @@ pub mod layout;
 pub mod model;
 pub mod program;
 pub mod search;
+pub mod set_review;
 pub mod slides;
 pub mod versions;

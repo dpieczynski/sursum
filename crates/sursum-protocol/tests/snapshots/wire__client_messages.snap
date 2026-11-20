@@ -133,6 +133,19 @@ expression: messages
   },
   {
     "t": "cmd",
+    "seq": 15,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "keep_set_version",
+      "set_id": "set",
+      "version": "abababababababababababababababababababababababababababababababab",
+      "add": [
+        "item-2"
+      ]
+    }
+  },
+  {
+    "t": "cmd",
     "seq": 14,
     "base_rev": 7,
     "cmd": {

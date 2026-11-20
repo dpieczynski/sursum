@@ -163,6 +163,8 @@ pub enum Msg {
     KeepThis,
     VersionKept,
     ToReview,
+    SetReviewLine,
+    SetReviewHint,
     TitleMissing,
     LyricsMissing,
     SaveFailed,
@@ -488,6 +490,11 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KeepThis => "Zostaw tę",
         Msg::VersionKept => "Zostawiono wybraną wersję",
         Msg::ToReview => "do przejrzenia",
+        Msg::SetReviewLine => "Ten zestaw zmieniono w dwóch miejscach. Porównaj wersje",
+        Msg::SetReviewHint => {
+            "Wszędzie pokazywana jest wersja zmieniana więcej razy. Zostaw jedną z nich; „Dodaj” przy \
+             pozycji, której brakuje w drugiej wersji, przeniesie ją do tej, którą zostawisz."
+        }
         Msg::TitleMissing => "Brak tytułu",
         Msg::LyricsMissing => "Brak tekstu pieśni",
         Msg::SaveFailed => "Nie udało się zapisać",

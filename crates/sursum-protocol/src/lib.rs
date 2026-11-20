@@ -19,7 +19,7 @@ mod update;
 pub use backup::{BackupSummary, RestoreOutcome, RestoreRefusal};
 pub use editor::{
     DraftPreview, ImportReport, KeepVersion, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome,
-    SongDraft, SongVersionView, SongVersions,
+    SetVersionItem, SetVersionView, SetVersions, SongDraft, SongVersionView, SongVersions,
 };
 pub use ids::{AssetId, ChurchId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{

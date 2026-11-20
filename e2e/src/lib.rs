@@ -353,6 +353,23 @@ impl Remote {
             }
         }
     }
+
+    /// The newest remote state the server sent (waits for one, then takes any that follow
+    /// within 200 ms).
+    pub async fn state(&mut self) -> anyhow::Result<sursum_protocol::RemoteState> {
+        let mut latest = None;
+        loop {
+            let wait = if latest.is_some() { Duration::from_millis(200) } else { Duration::from_secs(5) };
+            let Ok(frame) = tokio::time::timeout(wait, self.socket.next()).await else {
+                return latest.context("no remote state arrived");
+            };
+            if let Message::Text(text) = frame.context("socket closed")??
+                && let ServerMsg::Remote { state } = serde_json::from_str(text.as_str())?
+            {
+                latest = Some(state);
+            }
+        }
+    }
 }
 
 /// A screen profile with `margin` on every side and one exclusion zone, set the way the

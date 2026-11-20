@@ -114,6 +114,9 @@ pub struct SetSummary {
     /// When the service is (ADR 0025); the list is ordered by it.
     #[serde(default)]
     pub date: Option<String>,
+    /// Changed in two places and not reviewed yet (ADR 0025): marked in the list.
+    #[serde(default)]
+    pub review: bool,
 }
 
 /// The active set as the remote shows it.
@@ -125,6 +128,9 @@ pub struct SetView {
     /// When the service is (ADR 0025).
     #[serde(default)]
     pub date: Option<String>,
+    /// Changed in two places and not reviewed yet: the Zestaw view offers the comparison.
+    #[serde(default)]
+    pub review: bool,
 }
 
 /// A song as listed in search results.

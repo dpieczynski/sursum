@@ -258,6 +258,61 @@ async fn a_song_changed_in_two_places_is_reviewed_and_one_version_kept() -> anyh
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_set_changed_in_two_places_is_reviewed_with_an_item_added_from_the_other_version()
+-> anyhow::Result<()> {
+    use sursum_protocol::Command;
+    let tulce = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let gowarzewo = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    let mut organist = tulce.remote("organist").await?;
+    organist.command(Command::NewSet { name: "Niedziela".into(), date: None }).await?;
+    organist.command(Command::AddBlank { title: "Wejście".into() }).await?;
+    let set_id = organist.state().await?.active_set.context("no active set")?.set_id;
+    tulce.send_library_to(&gowarzewo).await?;
+    let mut home = gowarzewo.remote("home").await?;
+    home.command(Command::ActivateSet { set_id }).await?;
+    home.command(Command::AddBlank { title: "Z domu".into() }).await?;
+    organist.command(Command::AddBlank { title: "Z kościoła 1".into() }).await?;
+    organist.command(Command::AddBlank { title: "Z kościoła 2".into() }).await?;
+    let report = gowarzewo.send_library_to(&tulce).await?;
+    anyhow::ensure!(report.sets_to_review == ["Niedziela"], "{report:?}");
+    let state = organist.state().await?;
+    anyhow::ensure!(state.active_set.is_some_and(|set| set.review), "the active set waits for review");
+
+    with_engine(Browser::for_remote(), 1280, 800, async |remote| {
+        remote.goto(tulce.url("/remote/")).await?;
+        remote.query(By::Css("[data-testid=tab-zestaw]")).first().await?.wait_until().clickable().await?;
+        open_tab(remote, "zestaw").await?;
+        let line = remote.query(By::Css("[data-testid=set-review-line]")).first().await.context("line")?;
+        line.click().await?;
+        let compare = remote.query(By::Css("[data-testid=set-compare]")).first().await.context("sheet")?;
+        wait_until(Duration::from_secs(5), || async {
+            compare.find_all(By::Css("[data-testid=set-version]")).await.is_ok_and(|found| found.len() == 2)
+        })
+        .await?;
+        let versions = compare.find_all(By::Css("[data-testid=set-version]")).await?;
+        anyhow::ensure!(shown_text(&versions[0]).await?.contains("Z kościoła 2"), "the shown one first");
+        versions[1].find(By::Css("[data-testid=add-from-version]")).await?.click().await?;
+        versions[0].find(By::Css("[data-testid=keep-set-version]")).await?.click().await?;
+        // The review ends with the item from home in place.
+        wait_until(Duration::from_secs(5), || async {
+            remote.find(By::Css("[data-testid=set-review-line]")).await.is_err()
+        })
+        .await
+        .context("the review line stayed")?;
+        let items = remote.find(By::Css("[data-testid=set-items]")).await?;
+        let text = shown_text(&items).await?;
+        let order: Vec<usize> = ["Wejście", "Z domu", "Z kościoła 1", "Z kościoła 2"]
+            .iter()
+            .map(|title| text.find(title).unwrap_or(usize::MAX))
+            .collect();
+        anyhow::ensure!(order.windows(2).all(|pair| pair[0] < pair[1]), "items out of order: {text}");
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn a_set_is_copied_with_a_new_date_and_the_original_stays() -> anyhow::Result<()> {
     with_sets(async |_server, screen, remote| {
         let before_screen = attribute(screen, SCREEN_ROOT, "data-deck-id").await;
