@@ -51,7 +51,13 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
             },
         };
         database
-            .save_set(&ServiceSet { id: SetId::from("s1"), name: "Niedziela".into(), items: vec![item] })
+            .save_set(&ServiceSet {
+                id: SetId::from("s1"),
+                name: "Niedziela".into(),
+                items: vec![item],
+                date: None,
+                church: None,
+            })
             .unwrap();
         database.set_setting("logo", &Some(logo.clone())).unwrap();
     }

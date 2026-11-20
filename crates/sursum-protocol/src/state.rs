@@ -111,6 +111,9 @@ pub struct SetSummary {
     pub set_id: SetId,
     pub name: String,
     pub items: u32,
+    /// When the service is (ADR 0025); the list is ordered by it.
+    #[serde(default)]
+    pub date: Option<String>,
 }
 
 /// The active set as the remote shows it.
@@ -119,6 +122,9 @@ pub struct SetView {
     pub set_id: SetId,
     pub name: String,
     pub items: Vec<SetItemView>,
+    /// When the service is (ADR 0025).
+    #[serde(default)]
+    pub date: Option<String>,
 }
 
 /// A song as listed in search results.

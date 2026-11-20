@@ -121,6 +121,28 @@ expression: messages
   },
   {
     "t": "cmd",
+    "seq": 13,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "copy_set",
+      "set_id": "set",
+      "name": "Niedziela",
+      "date": "2026-11-29",
+      "church": null
+    }
+  },
+  {
+    "t": "cmd",
+    "seq": 14,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "date_set",
+      "set_id": "set",
+      "date": "2026-11-22T10:00"
+    }
+  },
+  {
+    "t": "cmd",
     "seq": 12,
     "base_rev": 7,
     "cmd": {

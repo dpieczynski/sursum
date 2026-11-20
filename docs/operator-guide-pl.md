@@ -26,8 +26,12 @@ kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia 
    Za pierwszym razem pilot poprosi o **PIN** i nazwę urządzenia, np. „Tablet organisty”; potem
    pamięta połączenie.
 3. **Przygotuj zestaw** w zakładce **Zestaw**:
-   - **Zmień zestaw** pokazuje zestawy od najnowszego i pozwala utworzyć **Nowy zestaw**;
-     **Zmień nazwę** poprawia nazwę bieżącego. **Usuń zestaw** trzeba przytrzymać; zaraz potem
+   - **Zmień zestaw** pokazuje zestawy tego kościoła: najpierw te bez daty (szkice), potem według
+     daty, od najpóźniejszej. **Nowy zestaw** pyta o nazwę i (niekoniecznie) datę mszy. **Nowy z
+     tego** przy zestawie z listy albo **Nowy zestaw z tego** nad listą pozycji tworzy kopię z
+     tymi samymi pozycjami, np. na następną niedzielę: wpisz nową datę i zmień, co trzeba;
+     oryginał zostaje bez zmian. **Zmień nazwę** poprawia nazwę i datę bieżącego zestawu.
+     **Usuń zestaw** trzeba przytrzymać; zaraz potem
      można go przywrócić przyciskiem **Cofnij** w dymku na dole. Nie da się usunąć zestawu, którego
      pozycja jest właśnie na ekranie.
    - W polu wyszukiwania wpisz numer, początek tytułu albo kilka słów z tekstu. Polskie znaki nie

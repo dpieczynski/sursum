@@ -73,8 +73,25 @@ pub enum Command {
     MoveItem { item_id: ItemId, to_index: u32 },
     /// Put back the last removed item.
     UndoRemove,
-    /// Create an empty set and make it active.
-    NewSet { name: String },
+    /// Create an empty set and make it active. `date` is when the service is (`YYYY-MM-DD`,
+    /// optionally `THH:MM`); lists of sets are ordered by it (ADR 0025).
+    NewSet {
+        name: String,
+        #[serde(default)]
+        date: Option<String>,
+    },
+    /// Set or clear a set's date.
+    DateSet { set_id: SetId, date: Option<String> },
+    /// "Nowy zestaw z tego": a new, independent set with the items of `set_id` (new item ids),
+    /// for the church given (the desktop program) or this device's church; it becomes active.
+    CopySet {
+        set_id: SetId,
+        name: String,
+        #[serde(default)]
+        date: Option<String>,
+        #[serde(default)]
+        church: Option<ChurchId>,
+    },
     /// Make another set active (the screen keeps its slide until the next navigation).
     ActivateSet { set_id: SetId },
     /// Rename a set.
@@ -137,6 +154,8 @@ pub enum ErrorCode {
     DisplayAuthFailed,
     /// The set cannot be deleted: one of its items is on screen.
     SetOnScreen,
+    /// A set's date is not `YYYY-MM-DD` (optionally with `THH:MM`).
+    InvalidDate,
 }
 
 /// Result of one command.

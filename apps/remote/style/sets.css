@@ -100,6 +100,17 @@
   min-height: var(--tap-sm);
 }
 
+/* The set's date next to its name (ADR 0025). */
+.sets-date {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 400;
+}
+.sets-date:empty {
+  display: none;
+}
+
 /* Set picker */
 .picker-list {
   margin: 0;

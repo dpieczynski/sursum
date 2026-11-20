@@ -427,7 +427,7 @@ async fn set_edits_persist_never_change_the_screen_and_removal_can_be_undone() {
     assert_eq!(state.program.live.unwrap().deck.item_id, live_item);
 
     // A new set becomes active; switching back works.
-    command(&mut remote, 1, Rev(0), Command::NewSet { name: "Nowy".into() }).await;
+    command(&mut remote, 1, Rev(0), Command::NewSet { name: "Nowy".into(), date: None }).await;
     let state = next_remote_state(&mut remote).await;
     assert_eq!(state.sets.len(), 2);
     assert_eq!(state.active_set.as_ref().unwrap().name, "Nowy");
@@ -1163,6 +1163,49 @@ async fn a_gap_follows_each_item_unless_turned_off_and_survives_a_restart() {
 }
 
 #[tokio::test]
+async fn sets_have_dates_can_be_copied_and_belong_to_the_church_named_later() {
+    use sursum_protocol::ErrorCode;
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "organist").await;
+    let mut observer = connect(&server, Role::Remote, "observer").await;
+    let first = next_remote_state(&mut observer).await;
+    let demo = first.active_set.unwrap();
+    assert!(first.church.is_none(), "not named yet");
+
+    let wrong = Command::NewSet { name: "Zła data".into(), date: Some("22.11.2026".into()) };
+    assert_eq!(
+        command(&mut remote, 1, Rev(0), wrong).await,
+        CmdOutcome::Rejected { code: ErrorCode::InvalidDate }
+    );
+    let dated = Command::NewSet { name: "Niedziela".into(), date: Some("2026-11-22T10:00".into()) };
+    assert!(matches!(command(&mut remote, 2, Rev(0), dated).await, CmdOutcome::Applied { .. }));
+    let copy = Command::CopySet {
+        set_id: demo.set_id.clone(),
+        name: "Następna niedziela".into(),
+        date: Some("2026-11-29".into()),
+        church: None,
+    };
+    assert!(matches!(command(&mut remote, 3, Rev(0), copy).await, CmdOutcome::Applied { .. }));
+    let state = last_remote_state(&mut observer).await;
+    let copied = state.active_set.unwrap();
+    assert_eq!(copied.name, "Następna niedziela", "the copy becomes active");
+    assert_eq!(copied.items.len(), demo.items.len());
+    assert!(copied.items.iter().zip(&demo.items).all(|(a, b)| a.item_id != b.item_id && a.title == b.title));
+    let names: Vec<String> = state.sets.into_iter().map(|set| set.name).collect();
+    assert_eq!(names, ["Msza (przykład)", "Następna niedziela", "Niedziela"], "drafts first, then by date");
+
+    // Naming the church makes the sets made so far this church's sets; they stay shown.
+    let named = Command::NameChurch { name: "Tulce".into() };
+    assert!(matches!(command(&mut remote, 4, Rev(0), named).await, CmdOutcome::Applied { .. }));
+    let state = last_remote_state(&mut observer).await;
+    assert_eq!(state.sets.len(), 3);
+    assert_eq!(state.church.map(|church| church.name).as_deref(), Some("Tulce"));
+    drop((remote, observer));
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn sets_can_be_renamed_and_deleted_but_not_while_on_screen() {
     use sursum_protocol::ErrorCode;
     let dir = tempfile::tempdir().unwrap();
@@ -1175,9 +1218,9 @@ async fn sets_can_be_renamed_and_deleted_but_not_while_on_screen() {
     assert!(matches!(command(&mut remote, 2, Rev(0), rename).await, CmdOutcome::Applied { .. }));
     let outcome = command(&mut remote, 3, Rev(0), Command::DeleteSet { set_id: demo.clone() }).await;
     assert_eq!(outcome, CmdOutcome::Rejected { code: ErrorCode::SetOnScreen });
-    command(&mut remote, 4, Rev(0), Command::NewSet { name: "Stary".into() }).await;
+    command(&mut remote, 4, Rev(0), Command::NewSet { name: "Stary".into(), date: None }).await;
     let old = last_remote_state(&mut observer).await.active_set.unwrap().set_id;
-    command(&mut remote, 5, Rev(0), Command::NewSet { name: "Następna".into() }).await;
+    command(&mut remote, 5, Rev(0), Command::NewSet { name: "Następna".into(), date: None }).await;
     let outcome = command(&mut remote, 6, Rev(0), Command::DeleteSet { set_id: old.clone() }).await;
     assert!(matches!(outcome, CmdOutcome::Applied { .. }), "{outcome:?}");
     // One tap brings it back, in its place, and it is stored again.

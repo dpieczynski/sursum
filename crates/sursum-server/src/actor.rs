@@ -271,22 +271,23 @@ pub fn spawn(
     mut database: Database,
     platform: &dyn Platform,
 ) -> anyhow::Result<StateHandle> {
-    // On the very first start the library gets the demo songs and a demo set.
-    let mut sets = database.load_sets().context("loading sets")?;
-    if sets.is_empty() {
+    // On a device's very first start (only then) the library gets the demo songs and a demo
+    // set with an id of its own: with a fixed id, two devices' demo sets would be one set.
+    if database.setting::<bool>(STARTED_KEY).context("loading the first-start mark")?.is_none() {
         let demo_songs = demo::songs();
         for song in &demo_songs {
             database.save_song(song, Base::Current).context("storing demo songs")?;
         }
-        let demo_set = demo::set(&demo_songs);
-        database.save_set(&demo_set).context("storing the demo set")?;
-        sets.push(demo_set);
+        database.save_set(&demo::set(&demo_songs, new_set_id())).context("storing the demo set")?;
+        database.set_setting(STARTED_KEY, &true).context("marking the first start")?;
     }
+    let churches = database.churches().context("loading the churches")?;
+    let church = database.this_church().context("loading this device's church")?;
+    let sets = database.load_sets().context("loading sets")?;
+    let sets = sets.into_iter().filter(|set| shown_here(config.installation, church.as_ref(), set)).collect();
     let active_set: Option<SetId> = database.setting(ACTIVE_SET_KEY).context("loading the active set")?;
     let songs = database.load_songs().context("loading the song library")?;
     let reviews = database.songs_in_review().context("loading the songs in review")?.into_iter().collect();
-    let churches = database.churches().context("loading the churches")?;
-    let church = database.this_church().context("loading this device's church")?;
     tracing::info!(songs = songs.len(), "song library loaded");
     let saved_profile: Option<ScreenProfile> =
         database.setting(SCREEN_PROFILE_KEY).context("loading the screen profile")?;
@@ -302,6 +303,7 @@ pub fn spawn(
         reviews,
         churches,
         church,
+        installation: config.installation,
         sets: SetStore::new(sets, active_set),
         program: Program::default(),
         rev: Rev(1),
@@ -478,6 +480,8 @@ struct AppState {
     churches: Vec<crate::db::Church>,
     /// The church this device serves; `None` until it is named.
     church: Option<sursum_protocol::ChurchId>,
+    /// A device with a screen, or the desktop program's library (which shows every set).
+    installation: sursum_protocol::Installation,
     index: SearchIndex,
     data_dir: std::path::PathBuf,
     sets: SetStore,
@@ -540,9 +544,13 @@ impl AppState {
             Command::RemoveItem { item_id } => self.remove_item(item_id),
             Command::MoveItem { item_id, to_index } => self.move_item(item_id, *to_index as usize),
             Command::UndoRemove => self.sets.undo_remove().cloned().ok_or(ErrorCode::NotFound).map(Some),
-            Command::NewSet { name } => {
-                let set = self.sets.create(SetId(format!("set-{}", uuid::Uuid::new_v4())), name).clone();
-                Ok(Some(set))
+            Command::NewSet { name, date } => checked_date(date.as_deref())
+                .map(|date| Some(self.sets.create(new_set_id(), name, date, self.church.clone()).clone())),
+            Command::DateSet { set_id, date } => checked_date(date.as_deref()).and_then(|date| {
+                self.sets.set_date(set_id, date).cloned().ok_or(ErrorCode::NotFound).map(Some)
+            }),
+            Command::CopySet { set_id, name, date, church } => {
+                self.copy_set(set_id, name, date.as_deref(), church)
             }
             Command::ActivateSet { set_id } => {
                 if self.sets.activate(set_id) {
@@ -593,6 +601,7 @@ impl AppState {
             Command::NameChurch { name } => match self.database.name_church(name) {
                 Ok(Some(_)) => {
                     self.reload_churches();
+                    self.adopt_sets(None);
                     Ok(None)
                 }
                 Ok(None) => Err(ErrorCode::Unsupported),
@@ -603,7 +612,9 @@ impl AppState {
             },
             Command::UseChurch { church_id } => match self.database.use_church(church_id) {
                 Ok(true) => {
+                    let left = self.church.clone();
                     self.reload_churches();
+                    self.adopt_sets(left.as_ref());
                     Ok(None)
                 }
                 Ok(false) => Err(ErrorCode::NotFound),
@@ -690,12 +701,63 @@ impl AppState {
     }
 
     fn undo_delete_set(&mut self) -> Result<Option<ServiceSet>, ErrorCode> {
+        // Saving it again (by the caller) puts a live version on top of the deletion.
         let set = self.sets.undo_delete().cloned().ok_or(ErrorCode::NotFound)?;
-        if let Err(error) = self.database.restore_set(set.id.as_str()) {
-            tracing::error!(?error, "could not restore a set");
-        }
         tracing::info!(set_id = %set.id, "set restored");
         Ok(Some(set))
+    }
+
+    /// "Nowy zestaw z tego": a new, independent set with the same items (new item ids), for this
+    /// device's church; the desktop program may choose the church. It becomes active.
+    fn copy_set(
+        &mut self,
+        set_id: &SetId,
+        name: &str,
+        date: Option<&str>,
+        church: &Option<sursum_protocol::ChurchId>,
+    ) -> Result<Option<ServiceSet>, ErrorCode> {
+        let date = checked_date(date)?;
+        let source = self.sets.get(set_id).ok_or(ErrorCode::NotFound)?;
+        let church = match self.installation {
+            sursum_protocol::Installation::Library => church.clone().or_else(|| source.church.clone()),
+            sursum_protocol::Installation::Screen => self.church.clone(),
+        };
+        let items =
+            source.items.iter().map(|item| SetItem { id: new_item_id(), kind: item.kind.clone() }).collect();
+        let name = if name.trim().is_empty() { source.name.clone() } else { name.trim().to_owned() };
+        let copy = ServiceSet { id: new_set_id(), name, items, date, church };
+        Ok(Some(self.sets.add(copy).clone()))
+    }
+
+    /// After the device's church changed: sets made before it was named, or for the church it
+    /// left, become this church's sets (a version each), then the list is read again.
+    fn adopt_sets(&mut self, left: Option<&sursum_protocol::ChurchId>) {
+        let Some(church) = self.church.clone() else { return };
+        let sets = match self.database.load_sets() {
+            Ok(sets) => sets,
+            Err(error) => return tracing::error!(?error, "could not read the sets"),
+        };
+        for mut set in sets {
+            if set.church.is_none() || set.church.as_ref() == left {
+                set.church = Some(church.clone());
+                if let Err(error) = self.database.save_set(&set) {
+                    tracing::error!(?error, "could not move a set to this church");
+                }
+            }
+        }
+        self.reload_sets();
+    }
+
+    /// Reads the sets this device shows again, keeping the active one if it is still there.
+    fn reload_sets(&mut self) {
+        match self.database.load_sets() {
+            Ok(sets) => {
+                let shown =
+                    sets.into_iter().filter(|set| shown_here(self.installation, self.church.as_ref(), set));
+                self.sets = SetStore::new(shown.collect(), self.sets.active_id().cloned());
+            }
+            Err(error) => tracing::error!(?error, "could not read the sets"),
+        }
     }
 
     fn add_song(&mut self, song_id: &SongId) -> Result<Option<ServiceSet>, ErrorCode> {
@@ -830,7 +892,7 @@ impl AppState {
         if let Err(error) = self.database.backup(&self.data_dir, "before-import") {
             tracing::error!(?error, "could not back up before importing");
         }
-        let report = match crate::import::store(&mut self.database, library) {
+        let report = match crate::import::store(&mut self.database, library, self.church.as_ref()) {
             Ok((report, sets)) => {
                 for set in sets {
                     self.sets.upsert(set);
@@ -1042,7 +1104,7 @@ impl AppState {
                 },
             })
             .collect();
-        SetView { set_id: set.id.clone(), name: set.name.clone(), items }
+        SetView { set_id: set.id.clone(), name: set.name.clone(), items, date: set.date.clone() }
     }
 
     fn item_kind(&self, item: &SetItem) -> sursum_protocol::SetItemKind {
@@ -1093,7 +1155,34 @@ fn song_summary(song: &Song, review: bool) -> SongSummary {
     }
 }
 
-/// A new, globally unique item id (sets are shared between devices later).
+/// A set date from the remote, checked; `Err(InvalidDate)` for anything else than
+/// `YYYY-MM-DD[THH:MM]`. Empty text clears the date.
+fn checked_date(date: Option<&str>) -> Result<Option<String>, ErrorCode> {
+    match date.map(str::trim).filter(|date| !date.is_empty()) {
+        None => Ok(None),
+        Some(date) if sursum_core::model::is_set_date(date) => Ok(Some(date.to_owned())),
+        Some(_) => Err(ErrorCode::InvalidDate),
+    }
+}
+
+/// True if this device shows `set`: the desktop program shows every set; a device with a screen
+/// shows its church's sets and those made before its church was named (ADR 0025).
+fn shown_here(
+    installation: sursum_protocol::Installation,
+    church: Option<&sursum_protocol::ChurchId>,
+    set: &ServiceSet,
+) -> bool {
+    installation == sursum_protocol::Installation::Library
+        || set.church.is_none()
+        || set.church.as_ref() == church
+}
+
+/// A new, globally unique set id (sets travel between devices).
+fn new_set_id() -> SetId {
+    SetId(format!("set-{}", uuid::Uuid::new_v4()))
+}
+
+/// A new, globally unique item id (sets travel between devices).
 fn new_item_id() -> ItemId {
     ItemId(format!("item-{}", uuid::Uuid::new_v4()))
 }
@@ -1106,6 +1195,8 @@ const END_OF_ITEM_KEY: &str = "end_of_item";
 const LOGO_KEY: &str = "logo";
 /// Settings key of the screen profile calibrated from a remote (its only source, ADR 0008).
 const SCREEN_PROFILE_KEY: &str = "screen_profile";
+/// Settings key marking that the device has started once (the demo set is made only then).
+const STARTED_KEY: &str = "started";
 /// The screen until the calibration panel saves a profile: 48 px margins, no exclusion zones.
 const UNCALIBRATED: ScreenProfile =
     ScreenProfile { safe_area: sursum_protocol::Insets::uniform(48), exclusions: Vec::new() };

@@ -18,8 +18,8 @@ pub fn songs() -> Vec<Song> {
         .collect()
 }
 
-/// A demo set: both songs and an announcement slide.
-pub fn set(songs: &[Song]) -> ServiceSet {
+/// A demo set with `id`: both songs and an announcement slide.
+pub fn set(songs: &[Song], id: SetId) -> ServiceSet {
     let mut items: Vec<SetItem> = songs
         .iter()
         .enumerate()
@@ -35,7 +35,7 @@ pub fn set(songs: &[Song]) -> ServiceSet {
             slides: vec!["Zapraszamy na adorację\nw czwartek o 19:00".to_owned()],
         },
     });
-    ServiceSet { id: SetId::from("demo-set"), name: "Msza (przykład)".to_owned(), items }
+    ServiceSet { id, name: "Msza (przykład)".to_owned(), items, date: None, church: None }
 }
 
 #[cfg(test)]
@@ -46,6 +46,6 @@ mod tests {
     fn demo_songs_parse_and_form_a_set() {
         let songs = songs();
         assert_eq!(songs.len(), 2);
-        assert_eq!(set(&songs).items.len(), 3);
+        assert_eq!(set(&songs, SetId::from("demo")).items.len(), 3);
     }
 }
