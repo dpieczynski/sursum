@@ -3,8 +3,8 @@
 Offline song-lyrics display for churches: a small appliance (Raspberry Pi 5 next to the projector)
 shows lyrics to the congregation, and a one-hand remote in a tablet or PC browser controls it.
 
-> **Status: pre-alpha.** Runs on a pilot Raspberry Pi 5 from its own device image (application and
-> system updates from the remote, with automatic rollback) and on a Linux PC with the screen and
+> **Status: pre-alpha.** Runs on a pilot Raspberry Pi 5 from its own device image (signed updates
+> from the remote, with automatic rollback) and on a Linux PC with the screen and
 > the remote in browsers; not yet used in a service. A desktop program (`sursum`, ADR 0020) lets
 > parishioners prepare songs at home and bring them to the church as a file; its Windows build
 > starts, the rest of the first run is still to be checked. Supported: Android tablets and
@@ -56,6 +56,37 @@ Until a PIN is set nobody can control the screen: the first remote that opens th
 (or run `sursum-server --data-dir … set-pin 123456`). A paired remote may do everything
 (ADR 0024). The screen's margins and exclusion zones are set in the remote's calibration panel. `just dev` passes `--open-without-pin`: no PIN,
 and the server only listens on loopback (it refuses any other address) — for development only.
+
+## Download
+
+Releases are built by GitHub Actions from the tagged commit and published on the
+[releases page](https://github.com/dpieczynski/sursum/releases): the card image and the signed
+system update for the Raspberry Pi 5, and the desktop program for Windows. See also the code
+signing policy below.
+
+## Code signing policy
+
+The Windows program (`sursum.exe`) is meant to be signed through the SignPath Foundation's
+programme for open-source projects; this has been applied for, and until it is granted the program
+is unsigned. Once it is:
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [dpieczynski](https://github.com/dpieczynski) (the maintainer; changes
+  from anyone else come as pull requests the maintainer reviews)
+- Approvers: [dpieczynski](https://github.com/dpieczynski) (approves every signing request by hand)
+
+Only binaries built by this repository's GitHub Actions workflows from its own source code are
+signed; upstream libraries are not signed with this certificate.
+
+Privacy: this program will not transfer any information to other networked systems unless
+specifically requested by the user or the person installing or operating it. The church device
+serves its own pages and data only to the remotes on its local network, and the desktop program
+listens on this computer only (loopback); neither sends telemetry or contacts the internet.
+
+The Raspberry Pi image and its system updates are signed with the project's own update key
+(Ed25519, [docs/releasing.md](docs/releasing.md)), not with this certificate.
 
 ## Contributing
 
