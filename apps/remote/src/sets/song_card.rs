@@ -84,23 +84,29 @@ pub fn SongCard(
         editing.set(Some(EditorTarget::Existing(edit_id.clone())));
         open.set(None);
     };
+    // The desktop program has no screen to show it on.
+    let has_screen =
+        expect_context::<sursum_protocol::Installation>() == sursum_protocol::Installation::Screen;
     let show = move |_| {
         if commands.try_send(Command::ShowNow { song_id: show_id.clone() }) {
             open.set(None);
         }
     };
+    let show_now = has_screen.then(|| {
+        view! {
+            <button class="btn btn--quiet" data-testid="card-show-now" on:click=show>
+                {pl(Msg::ShowNowOnScreen)}
+            </button>
+        }
+    });
     view! {
         <Sheet title=pl(Msg::SongCard).to_owned() on_close=close testid="song-card">
             <h3 class="card-title">{title} {move || number().map(|number| format!(" · {number}"))}</h3>
             <div class="card-slides">{slides}</div>
             <div class="sheet-actions">
-                <button class="btn btn--quiet" data-testid="card-show-now" on:click=show>
-                    {pl(Msg::ShowNowOnScreen)}
-                </button>
-                <button class="btn" data-testid="card-edit" on:click=edit>
+                {show_now} <button class="btn" data-testid="card-edit" on:click=edit>
                     {pl(Msg::Edit)}
-                </button>
-                <button class=add_class data-testid="card-add" on:click=add>
+                </button> <button class=add_class data-testid="card-add" on:click=add>
                     {add_label}
                 </button>
             </div>

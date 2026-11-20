@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The frame around every view: tabs (Msza · Zestaw · Ustawienia, or Pieśni · Ustawienia in the
-//! desktop program's library) and the screen status in the top bar, problem banners, and the
+//! The frame around every view: tabs (Msza · Zestaw · Ustawienia, or Pieśni · Zestaw · Ustawienia
+//! in the desktop program's library) and the screen status in the top bar, problem banners, and the
 //! regions the stylesheet arranges for phone, upright tablet and wide screens. The live regions (what is on screen, the slides, the controls) stay put
 //! when the tab changes; on narrow screens other tabs show the live strip instead. Problem
 //! banners take a line under the top bar, so they push the live text down a little but never
@@ -33,7 +33,7 @@ impl View {
     pub fn tabs(installation: Installation) -> &'static [View] {
         match installation {
             Installation::Screen => &[View::Live, View::Set, View::Settings],
-            Installation::Library => &[View::Songs, View::Settings],
+            Installation::Library => &[View::Songs, View::Set, View::Settings],
         }
     }
 

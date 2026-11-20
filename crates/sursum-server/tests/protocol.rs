@@ -1386,3 +1386,61 @@ async fn a_set_changed_in_two_places_is_reviewed_with_an_item_added_from_the_oth
     tulce.stop().await.unwrap();
     gowarzewo.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn the_desktop_program_prepares_a_set_for_the_church_chosen_and_it_reaches_that_church() {
+    use sursum_protocol::Installation;
+    let (dir_a, dir_b, dir_c) =
+        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let tulce = start(dir_a.path(), "boot-1").await;
+    let gowarzewo = start(dir_b.path(), "boot-1").await;
+    let mut config = Config::with_data_dir(dir_c.path());
+    config.listen = "127.0.0.1:0".parse().unwrap();
+    config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+    config.installation = Installation::Library;
+    let home = sursum_server::start(config, &FixedPlatform(None)).await.unwrap();
+
+    let mut tulce_remote = connect(&tulce, Role::Remote, "organist").await;
+    let name = Command::NameChurch { name: "Tulce".into() };
+    assert!(matches!(command(&mut tulce_remote, 1, Rev(u32::MAX), name).await, CmdOutcome::Applied { .. }));
+    let mut gowarzewo_remote = connect(&gowarzewo, Role::Remote, "organist").await;
+    let name = Command::NameChurch { name: "Gowarzewo".into() };
+    assert!(matches!(
+        command(&mut gowarzewo_remote, 1, Rev(u32::MAX), name).await,
+        CmdOutcome::Applied { .. }
+    ));
+    for church in [&tulce, &gowarzewo] {
+        http_post_bytes(&home, "/api/library/merge", &http_get_bytes(church, "/api/library/export").await)
+            .await;
+    }
+
+    // At home: every set until a church is chosen, then that church's sets only.
+    let mut desk = connect(&home, Role::Remote, "desk").await;
+    let state = last_remote_state(&mut desk).await;
+    assert!(state.church.is_none());
+    assert_eq!(state.churches.len(), 2);
+    let all = state.sets.len();
+    let gowarzewo_id =
+        state.churches.iter().find(|church| church.name == "Gowarzewo").unwrap().church_id.clone();
+    let choose = Command::UseChurch { church_id: gowarzewo_id };
+    assert!(matches!(command(&mut desk, 1, Rev(u32::MAX), choose).await, CmdOutcome::Applied { .. }));
+    let state = last_remote_state(&mut desk).await;
+    assert_eq!(state.church.as_ref().map(|church| church.name.as_str()), Some("Gowarzewo"));
+    assert!(state.sets.len() < all, "Tulce's sets are not listed: {:?}", state.sets);
+    let new = Command::NewSet { name: "Adwent".into(), date: Some("2026-11-29".into()) };
+    assert!(matches!(command(&mut desk, 2, Rev(u32::MAX), new).await, CmdOutcome::Applied { .. }));
+
+    // The file brings it to Gowarzewo, which shows it, and to Tulce, which keeps it hidden.
+    let file = http_get_bytes(&home, "/api/library/export").await;
+    for church in [&gowarzewo, &tulce] {
+        http_post_bytes(church, "/api/library/merge", &file).await;
+    }
+    let names = |state: &sursum_protocol::RemoteState| -> Vec<String> {
+        state.sets.iter().map(|set| set.name.clone()).collect()
+    };
+    assert!(names(&last_remote_state(&mut gowarzewo_remote).await).contains(&"Adwent".to_owned()));
+    assert!(!names(&last_remote_state(&mut tulce_remote).await).contains(&"Adwent".to_owned()));
+    for server in [tulce, gowarzewo, home] {
+        server.stop().await.unwrap();
+    }
+}

@@ -633,7 +633,12 @@ impl AppState {
                 Ok(true) => {
                     let left = self.church.clone();
                     self.reload_churches();
-                    self.adopt_sets(left.as_ref());
+                    match self.installation {
+                        sursum_protocol::Installation::Screen => self.adopt_sets(left.as_ref()),
+                        // The desktop program prepares sets for any church: choosing one only
+                        // changes which sets it lists and whose new sets are.
+                        sursum_protocol::Installation::Library => self.reload_sets(),
+                    }
                     Ok(None)
                 }
                 Ok(false) => Err(ErrorCode::NotFound),
@@ -739,7 +744,9 @@ impl AppState {
         let date = checked_date(date)?;
         let source = self.sets.get(set_id).ok_or(ErrorCode::NotFound)?;
         let church = match self.installation {
-            sursum_protocol::Installation::Library => church.clone().or_else(|| source.church.clone()),
+            sursum_protocol::Installation::Library => {
+                church.clone().or_else(|| self.church.clone()).or_else(|| source.church.clone())
+            }
             sursum_protocol::Installation::Screen => self.church.clone(),
         };
         let items =
@@ -1270,16 +1277,16 @@ fn checked_date(date: Option<&str>) -> Result<Option<String>, ErrorCode> {
     }
 }
 
-/// True if this device shows `set`: the desktop program shows every set; a device with a screen
-/// shows its church's sets and those made before its church was named (ADR 0025).
+/// True if this device shows `set`: its church's sets and those made before a church was named
+/// (ADR 0025). The desktop program shows the sets of the church chosen in its Zestaw view, or
+/// every set until one is chosen.
 fn shown_here(
     installation: sursum_protocol::Installation,
     church: Option<&sursum_protocol::ChurchId>,
     set: &ServiceSet,
 ) -> bool {
-    installation == sursum_protocol::Installation::Library
-        || set.church.is_none()
-        || set.church.as_ref() == church
+    let nothing_chosen = installation == sursum_protocol::Installation::Library && church.is_none();
+    nothing_chosen || set.church.is_none() || set.church.as_ref() == church
 }
 
 /// A new, globally unique set id (sets travel between devices).

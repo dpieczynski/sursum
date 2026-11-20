@@ -164,6 +164,9 @@ pub enum Msg {
     VersionKept,
     ToReview,
     SetReviewLine,
+    SetsOfChurch,
+    ChooseChurch,
+    NoChurchesHere,
     SetReviewHint,
     TitleMissing,
     LyricsMissing,
@@ -490,6 +493,12 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::KeepThis => "Zostaw tę",
         Msg::VersionKept => "Zostawiono wybraną wersję",
         Msg::ToReview => "do przejrzenia",
+        Msg::SetsOfChurch => "Zestawy kościoła",
+        Msg::ChooseChurch => "Wybierz kościół",
+        Msg::NoChurchesHere => {
+            "Wczytaj plik z kościoła (Ustawienia → Baza pieśni → Scal bazę z pliku), żeby przygotowywać \
+             jego zestawy. Zestaw zrobiony przed wyborem kościoła pokaże się w każdym kościele."
+        }
         Msg::SetReviewLine => "Ten zestaw zmieniono w dwóch miejscach. Porównaj wersje",
         Msg::SetReviewHint => {
             "Wszędzie pokazywana jest wersja zmieniana więcej razy. Zostaw jedną z nich; „Dodaj” przy \

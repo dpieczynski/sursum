@@ -136,7 +136,7 @@ Ref.
 
 Pieśni można przygotować na własnym komputerze z Windows (na Linuksie też działa) programem
 **Sursum** i przynieść je do kościoła w jednym pliku. Program działa bez internetu i bez
-urządzenia z kościoła; nie wyświetla niczego na ekranie, służy tylko do pieśni.
+urządzenia z kościoła; nie wyświetla niczego na ekranie, służy do pieśni i zestawów.
 
 1. Pobierz plik `sursum-<wersja>-windows-x86_64.exe` (od osoby, która opiekuje się sursum w
    parafii, albo ze strony wydań) i uruchom go dwuklikiem. Instalacja nie jest potrzebna.
@@ -144,9 +144,12 @@ urządzenia z kościoła; nie wyświetla niczego na ekranie, służy tylko do pi
    komputer”. Program nie ma jeszcze podpisu cyfrowego, dlatego Windows go nie zna. Kliknij
    **Więcej informacji**, a potem **Uruchom mimo to**. Kolejne uruchomienia odbywają się już
    bez pytania.
-3. Program ma dwie zakładki: **Pieśni** i **Ustawienia**. W zakładce Pieśni wyszukaj pieśń, żeby
-   ją poprawić, albo dotknij **Nowa pieśń**. Pisze się tak samo jak w kościele (rozdział
-   [Nowa pieśń](#nowa-pieśń)), a obok widać, jak slajdy będą wyglądać na ekranie.
+3. Program ma trzy zakładki: **Pieśni**, **Zestaw** i **Ustawienia**. W zakładce Pieśni wyszukaj
+   pieśń, żeby ją poprawić, albo dotknij **Nowa pieśń**. Pisze się tak samo jak w kościele
+   (rozdział [Nowa pieśń](#nowa-pieśń)), a obok widać, jak slajdy będą wyglądać na ekranie.
+   W zakładce Zestaw przygotujesz zestaw na mszę: najpierw w polu **Zestawy kościoła** wybierz
+   kościół (program zna kościoły z plików wczytanych z kościoła), potem pracujesz jak na pilocie.
+   Zestaw trafi do wybranego kościoła razem z plikiem; w drugim kościele będzie niewidoczny.
 4. Gdy skończysz: **Ustawienia → Baza pieśni → Eksport bazy**. Zapisz plik
    `biblioteka.sursum` (np. na pendrive albo wyślij go sobie pocztą).
 5. W kościele, na pilocie: **Ustawienia → Baza pieśni → Scal bazę z pliku** i wybierz ten

@@ -190,8 +190,8 @@ pub struct RemoteState {
     /// How many songs were changed in two places and wait for review (ADR 0025).
     #[serde(default)]
     pub songs_to_review: u32,
-    /// The church this device serves; `None` until it is named (and always in the desktop
-    /// program, which serves none).
+    /// The church this device serves; `None` until it is named. In the desktop program, the
+    /// church whose sets the Zestaw view lists (`None` until one is chosen: every set).
     #[serde(default)]
     pub church: Option<ChurchView>,
     /// Every church this device knows (its own and those from library files), by name.

@@ -334,7 +334,7 @@ Each is one pull request.
 | Y1.6a | Sets as versions: every command saves one; date and list order; "Nowy zestaw z tego" (5.1); church-bound sets; the demo set once ✓ | Y1.5 |
 | Y1.6b | Sets and pictures in the file; report lines; streamed merge upload ✓ | Y1.6a |
 | Y1.6c | Set review and its comparison screen ✓ | Y1.6b |
-| Y1.7 | Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden there (it cannot work without a service manager) | Y1.6 |
+| Y1.7 | Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden there (it cannot work without a service manager) ✓ | Y1.6 |
 | Y1.8 | Operator guide: Synchronizacja, review, sets at home, dates, "Nowy zestaw z tego"; new screenshots | Y1.3, Y1.7 |
 
 ## 12. Second step: "Połącz pieśni"
