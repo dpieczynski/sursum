@@ -2,8 +2,8 @@
 # X-Env-Layer-Name: sursum-device
 # X-Env-Layer-Version: 0.1.0
 # X-Env-Layer-Category: app
-# X-Env-Layer-Desc: The sursum server and the device around it (ADR 0013): the server user and
-#  unit, the first application release, /var/lib/sursum shared by both system slots, the
+# X-Env-Layer-Desc: The sursum server and the device around it (ADR 0013, ADR 0022): the server
+#  in the read-only system, its user and unit, /var/lib/sursum shared by both system slots, the
 #  persistent partition grown to fill the card, mDNS
 #  (sursum.local), a local-network-only firewall, the hardware watchdog, a small persistent
 #  journal, a silent black boot and Ethernet only. Hooks run in the image source directory
@@ -11,12 +11,12 @@
 #
 # X-Env-VarPrefix: sursum
 #
-# X-Env-Var-bundle:
-# X-Env-Var-bundle-Desc: Path of the signed .sursum-app installed as the first release
-#  (`just image` passes it). Later releases come from the remote, on trial (ADR 0013).
-# X-Env-Var-bundle-Required: y
-# X-Env-Var-bundle-Valid: string
-# X-Env-Var-bundle-Set: y
+# X-Env-Var-server:
+# X-Env-Var-server-Desc: Path of the server built for the Pi (`just image` passes it), installed
+#  as /usr/lib/sursum/sursum-server. Later versions come with system updates (ADR 0022).
+# X-Env-Var-server-Required: y
+# X-Env-Var-server-Valid: string
+# X-Env-Var-server-Set: y
 #
 # X-Env-Var-system_version:
 # X-Env-Var-system_version-Desc: The system's version (the build's git describe), written to
@@ -46,27 +46,19 @@ mmdebstrap:
     # The server's user owns /var/lib/sursum (a system user: /etc is read-only on the device).
     - chroot $1 useradd --system --home-dir /var/lib/sursum --shell /usr/sbin/nologin sursum
     - install -m 0644 ../deploy/systemd/sursum.service $1/etc/systemd/system/sursum.service
-    # The first release, installed by the bundle's own binary (run through QEMU), exactly as on a
-    # running device; /var/lib/sursum is copied to the persistent partition on first boot.
+    # The server is part of the read-only system (ADR 0022): root-owned, so neither a
+    # compromised server process nor anything on the data partition can replace it, and the
+    # root units that write system updates run this same binary. /var/lib/sursum (empty here)
+    # is copied to the persistent partition on first boot.
     - |
       set -eu
-      bundle="${IGconf_sursum_bundle}"
-      test -f "$bundle" || { echo "sursum: no bundle at $bundle" >&2; exit 1; }
-      work=$1/tmp/sursum-first-release
-      mkdir -p "$work"
-      cp "$bundle" "$work/first.sursum-app"
-      unzip -q -o "$work/first.sursum-app" sursum-server -d "$work"
-      chmod 0755 "$work/sursum-server"
+      server="${IGconf_sursum_server}"
+      test -f "$server" || { echo "sursum: no server at $server" >&2; exit 1; }
+      install -D -m 0755 "$server" $1/usr/lib/sursum/sursum-server
       install -d -m 0750 $1/var/lib/sursum
-      chroot $1 /tmp/sursum-first-release/sursum-server --data-dir /var/lib/sursum \
-        bundle install /tmp/sursum-first-release/first.sursum-app
-      chroot $1 chown -R sursum:sursum /var/lib/sursum
-      # A root-owned copy in the read-only system verifies and writes system updates (ADR 0019),
-      # so a compromised server (which can replace its own releases) cannot plant a system.
-      install -D -m 0755 "$work/sursum-server" $1/usr/lib/sursum/sursum-server
-      rm -rf "$work"
+      chroot $1 chown sursum:sursum /var/lib/sursum
     - |
       set -eu
       install -d -m 0755 $1/etc/sursum
       echo "${IGconf_sursum_system_version}" > $1/etc/sursum/system-release
-    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables sursum-grow-persistent sursum-system-update.path sursum-system-finish
+    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum avahi-daemon nftables sursum-grow-persistent sursum-system-update.path sursum-system-check sursum-system-finish

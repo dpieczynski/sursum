@@ -1,19 +1,10 @@
 ---
 source: crates/sursum-protocol/tests/wire.rs
-expression: "(status, LastUpdate::Committed { version: \"0.2.0\".into() }, outcomes)"
+expression: "(status, committed, outcomes)"
 ---
 [
   {
-    "build": "0.2.0",
-    "release": "0.2.0",
-    "on_trial": true,
-    "last": {
-      "outcome": "rolled_back",
-      "failed": "0.3.0",
-      "restored": "0.2.0",
-      "database_restored": true
-    },
-    "can_install": true,
+    "build": "v0.1.0-34-g980afa5",
     "system": {
       "version": "v0.1.0-34-g980afa5",
       "on_trial": false,
@@ -21,19 +12,20 @@ expression: "(status, LastUpdate::Committed { version: \"0.2.0\".into() }, outco
       "target": null,
       "last": {
         "outcome": "rolled_back",
-        "failed": "v0.1.0-40-g1a2b3c4"
+        "failed": "v0.1.0-40-g1a2b3c4",
+        "database_restored": true
       },
       "can_install": true
     }
   },
   {
     "outcome": "committed",
-    "version": "0.2.0"
+    "version": "v0.2.0"
   },
   [
     {
       "outcome": "installed",
-      "version": "0.3.0"
+      "version": "v0.2.0"
     },
     {
       "outcome": "refused",

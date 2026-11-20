@@ -48,7 +48,7 @@ started them another way).
 - **Protocol integration tests** (`sursum-server/tests`, tokio-tungstenite): server on port 0 with
   a `tempfile` data dir; hello/snapshot, commands, two remotes, rejected `Origin`, missing cookie,
   PIN rate limit, restart with the same/different `boot_id` (injected `Platform`), abort during a
-  write, app-bundle signature and rollback.
+  write, system update signature, trial and rollback with the database copy.
 - **WASM tests** (`just test-wasm`: `wasm-bindgen-test` with `chromium-driver`, Chromium only): DOM
   measuring in `fit_deck` (`crates/sursum-slide/tests/dom.rs`: the chosen size fits and is the
   largest, one size per deck, same result in a scaled and an unscaled stage). The pure parts of

@@ -1,26 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Signed system updates (`.sursum-system`, ADR 0019): replacing the read-only system of an imaged
-//! device (kiosk, Chromium, cage, kernel) from the remote, without the internet and without
-//! reflashing, with the Raspberry Pi firmware's `tryboot` as the safety net.
+//! device from the remote, without the internet and without reflashing, with the Raspberry Pi
+//! firmware's `tryboot` as the safety net. Since ADR 0022 this is the only update path: the
+//! server itself is part of the system (`/usr/lib/sursum/sursum-server`), so one update brings a
+//! new server, kiosk, browser and kernel together, and a device has one version.
 //!
 //! A file is a ZIP with:
 //! - `manifest.json`: format, version (the image's build id) and the size and SHA-256 of each image;
-//! - `manifest.sig`: the Ed25519 signature of exactly those manifest bytes (the application
-//!   bundles' key, [`crate::bundle`]);
+//! - `manifest.sig`: the Ed25519 signature of exactly those manifest bytes ([`crate::signing`]);
 //! - `boot.img` and `system.img`: the raw boot (vfat) and system (erofs) partition images.
 //!
 //! The flow, from the remote's upload to the next boot:
 //! 1. The server (unprivileged) receives the file into `system-update/` in the data directory,
-//!    [`verify`]s it, renames it to `ready.sursum-system` and asks for the install by creating
-//!    [`REQUEST`].
-//! 2. A root unit runs this binary's copy in the read-only system (so a compromised server
-//!    cannot plant a system): [`apply`] verifies again, writes both images to the **other**
-//!    slot, records the trial and points `[tryboot]` at that slot; the unit then reboots with
+//!    [`verify`]s it, copies the database (`backups/*-before-<version>.db`) and notes its schema,
+//!    renames the file to `ready.sursum-system` and asks for the install by creating [`REQUEST`].
+//! 2. A root unit runs the read-only system's server (so a compromised server process cannot
+//!    plant a system): [`apply`] verifies again, writes both images to the **other** slot,
+//!    records the trial and points `[tryboot]` at that slot; the unit then reboots with
 //!    `0 tryboot`.
-//! 3. At the next boot, a root unit checks the trial ([`trial_state`]): booted back into the old
-//!    slot means the new one failed (rolled back); booted into the new one, it waits until the
-//!    server and the kiosk are healthy and [`commit`]s by making that slot the default, or
-//!    reboots, which brings the old slot back (tryboot lasts one boot only).
+//! 3. At the next boot, before the server starts, [`trial_state`] tells whether the device came
+//!    back to the old slot: then the new system failed, and [`end_failed_trial`] puts the database
+//!    copy back if the new server had raised the schema (the old one cannot open it) and records
+//!    the rollback. In the new slot, a root unit waits after the server's start until the server
+//!    and the kiosk are healthy and [`commit`]s by making that slot the default, or reboots,
+//!    which brings the old slot back (tryboot lasts one boot only).
 
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -31,7 +34,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use sursum_protocol::{LastSystemUpdate, SystemStatus};
 
-use crate::bundle::{from_hex, hex, valid_version};
+use crate::db::Database;
+use crate::signing::{from_hex, hex, valid_version};
 
 /// The running system's version, written into the image at build time.
 pub const SYSTEM_RELEASE: &str = "/etc/sursum/system-release";
@@ -44,14 +48,16 @@ const FORMAT: u32 = 1;
 const DIR: &str = "system-update";
 const INCOMING: &str = "incoming.part";
 const READY: &str = "ready.sursum-system";
-/// The ready update's version, written next to it so the status can name it cheaply.
-const READY_VERSION: &str = "ready.version";
+/// What the server noted about the ready update ([`Ready`]), written next to it.
+const READY_NOTE: &str = "ready.json";
 const TRIAL: &str = "trial.json";
 const OUTCOME: &str = "outcome.json";
 const MANIFEST: &str = "manifest.json";
 const SIGNATURE: &str = "manifest.sig";
 const BOOT: &str = "boot.img";
 const SYSTEM: &str = "system.img";
+/// Databases a failed system had migrated are kept here after the rollback, never deleted.
+const ROLLED_BACK_DIR: &str = "rolled-back";
 
 /// What a system update says about itself (signed).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,12 +81,26 @@ pub enum SystemUpdateError {
     Failed(anyhow::Error),
 }
 
+/// What the server noted when it staged an update, for the trial [`apply`] records.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Ready {
+    version: String,
+    /// The database copy taken just before the update, relative to the data directory.
+    backup: Option<PathBuf>,
+    /// The database schema the running system's server uses.
+    schema_before: i64,
+}
+
 /// The trial of a newly written system, read at the next boot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Trial {
     version: String,
     /// PARTLABEL of the boot partition the new system was written to, e.g. `boot_b`.
     slot: String,
+    /// The database copy taken before the update, relative to the data directory.
+    backup: Option<PathBuf>,
+    /// The schema before the update: a rollback puts the copy back if the new server raised it.
+    schema_before: i64,
 }
 
 /// Where the device keeps its A/B slots; [`Slots::device`] on a Pi, fake trees in tests.
@@ -249,6 +269,8 @@ pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::
     let result = (|| {
         let manifest = verify(&ready, trusted)?;
         version = Some(manifest.version.clone());
+        let note = read_json::<Ready>(&dir, READY_NOTE)?.context("the staged update has no note")?;
+        ensure!(note.version == manifest.version, "the staged update's note names another version");
         let (active, _) = slots.boot_partition("active")?;
         let (other, label) = slots.boot_partition("other")?;
         write_images(
@@ -257,15 +279,21 @@ pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::
             &slots.device_of("other", "boot"),
             &slots.device_of("other", "system"),
         )?;
-        write_json(&dir, TRIAL, &Trial { version: manifest.version.clone(), slot: label })?;
+        let trial = Trial {
+            version: manifest.version.clone(),
+            slot: label,
+            backup: note.backup,
+            schema_before: note.schema_before,
+        };
+        write_json(&dir, TRIAL, &trial)?;
         slots.write_autoboot(active, other)?;
         Ok(manifest.version)
     })();
     let _ = std::fs::remove_file(&ready);
-    let _ = std::fs::remove_file(dir.join(READY_VERSION));
+    let _ = std::fs::remove_file(dir.join(READY_NOTE));
     if result.is_err() {
         let failed = version.unwrap_or_else(|| "the uploaded update".into());
-        write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed })?;
+        write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed, database_restored: false })?;
     }
     result
 }
@@ -275,24 +303,66 @@ pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::
 pub enum TrialState {
     /// No system update is on trial.
     None,
-    /// The device started the old slot again: the new system did not come up healthy.
-    RolledBack(String),
+    /// The device started the old slot again: the new system did not come up healthy (or did not
+    /// boot at all). [`end_failed_trial`] before the server starts.
+    BootedBack(String),
     /// The new system runs on trial; [`commit`] once it is healthy.
     OnTrial(String),
 }
 
-/// Root, at boot: is a new system on trial, and did the device start it? A start of the old slot
-/// is recorded as rolled back.
+/// At boot: is a new system on trial, and did the device start it? Changes nothing.
 pub fn trial_state(data_dir: &Path, slots: &Slots) -> anyhow::Result<TrialState> {
     let dir = data_dir.join(DIR);
     let Some(trial) = read_json::<Trial>(&dir, TRIAL)? else { return Ok(TrialState::None) };
     let (_, active) = slots.boot_partition("active")?;
-    if active == trial.slot {
-        return Ok(TrialState::OnTrial(trial.version));
-    }
-    write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed: trial.version.clone() })?;
+    Ok(if active == trial.slot {
+        TrialState::OnTrial(trial.version)
+    } else {
+        TrialState::BootedBack(trial.version)
+    })
+}
+
+/// Before the server starts, back in the old slot after a failed trial (ADR 0022): if the new
+/// system's server had raised the database schema, the old server could not open it, so the
+/// migrated database is moved to `rolled-back/` and the copy taken before the update is put back
+/// (changes made during the trial are lost; the remote says so). Records the rollback and ends
+/// the trial. Runs as the server's user, so every file it writes stays the server's.
+pub fn end_failed_trial(data_dir: &Path) -> anyhow::Result<LastSystemUpdate> {
+    let dir = data_dir.join(DIR);
+    let trial = read_json::<Trial>(&dir, TRIAL)?.context("no system update on trial")?;
+    let database_restored = restore_database_if_migrated(data_dir, &trial)?;
+    let outcome = LastSystemUpdate::RolledBack { failed: trial.version.clone(), database_restored };
+    write_json(&dir, OUTCOME, &outcome)?;
     std::fs::remove_file(dir.join(TRIAL))?;
-    Ok(TrialState::RolledBack(trial.version))
+    Ok(outcome)
+}
+
+/// Puts the pre-update copy back if the schema is newer than before the update; true if it did.
+fn restore_database_if_migrated(data_dir: &Path, trial: &Trial) -> anyhow::Result<bool> {
+    if Database::schema_version(data_dir)? <= trial.schema_before {
+        return Ok(false);
+    }
+    let backup = trial
+        .backup
+        .as_ref()
+        .map(|backup| data_dir.join(backup))
+        .filter(|backup| backup.is_file())
+        .context("the new system changed the database and its pre-update copy is gone")?;
+    let aside = data_dir.join(ROLLED_BACK_DIR);
+    std::fs::create_dir_all(&aside)?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    for suffix in ["", "-wal", "-shm"] {
+        let file = data_dir.join(format!("{}{suffix}", crate::db::DATABASE_FILE));
+        if file.exists() {
+            std::fs::rename(&file, aside.join(format!("{stamp}-{}{suffix}", crate::db::DATABASE_FILE)))?;
+        }
+    }
+    let staged = data_dir.join(format!(".{}.restoring", crate::db::DATABASE_FILE));
+    std::fs::copy(&backup, &staged)?;
+    std::fs::File::open(&staged)?.sync_all()?;
+    std::fs::rename(&staged, data_dir.join(crate::db::DATABASE_FILE))?;
+    std::fs::File::open(data_dir)?.sync_all()?;
+    Ok(true)
 }
 
 /// Root, once the system on trial is healthy: makes its slot the one the firmware starts.
@@ -345,7 +415,7 @@ impl SystemUpdates {
         let installing = dir.join(READY).exists() || (trial.is_some() && !on_trial);
         let target = match &trial {
             Some(trial) => Some(trial.version.clone()),
-            None => std::fs::read_to_string(dir.join(READY_VERSION)).ok().map(|text| text.trim().to_owned()),
+            None => read_json::<Ready>(&dir, READY_NOTE).ok().flatten().map(|note| note.version),
         };
         Some(SystemStatus {
             version,
@@ -364,17 +434,29 @@ impl SystemUpdates {
         Ok(dir.join(INCOMING))
     }
 
-    /// Verifies a received upload and hands it to the root unit. Returns the new version.
+    /// Verifies a received upload, copies the database and hands the update to the root unit.
+    /// Returns the new version. The copy goes through a plain connection (no migration, no
+    /// repair), so it is safe while the server runs.
     pub fn stage(&self, data_dir: &Path, incoming: &Path) -> Result<String, SystemUpdateError> {
-        let failed = |error: std::io::Error| SystemUpdateError::Failed(error.into());
         let key = self.key.as_ref().ok_or_else(|| SystemUpdateError::Failed(anyhow::anyhow!("no key")))?;
         let manifest = verify(incoming, key).map_err(SystemUpdateError::BadFile)?;
         if self.version.as_deref() == Some(manifest.version.as_str()) {
             return Err(SystemUpdateError::AlreadyCurrent);
         }
-        std::fs::write(data_dir.join(DIR).join(READY_VERSION), &manifest.version).map_err(failed)?;
-        std::fs::rename(incoming, data_dir.join(DIR).join(READY)).map_err(failed)?;
-        std::fs::write(&self.request, b"").map_err(failed)?;
+        let staged = (|| -> anyhow::Result<()> {
+            let backup = Database::backup_file(data_dir, &format!("before-{}", manifest.version))?;
+            let note = Ready {
+                version: manifest.version.clone(),
+                backup: backup.and_then(|path| path.strip_prefix(data_dir).ok().map(Path::to_path_buf)),
+                schema_before: Database::schema_version(data_dir)?,
+            };
+            let dir = data_dir.join(DIR);
+            write_json(&dir, READY_NOTE, &note)?;
+            std::fs::rename(incoming, dir.join(READY))?;
+            std::fs::write(&self.request, b"")?;
+            Ok(())
+        })();
+        staged.map_err(SystemUpdateError::Failed)?;
         Ok(manifest.version)
     }
 }
@@ -424,7 +506,7 @@ mod tests {
     use super::*;
 
     fn key() -> SigningKey {
-        crate::bundle::signing_key(&crate::bundle::new_key().unwrap().0).unwrap()
+        crate::signing::signing_key(&crate::signing::new_key().unwrap().0).unwrap()
     }
 
     /// A fake device: two slots of partitions as plain files, their sysfs entries, `bootfs`.
@@ -554,11 +636,52 @@ mod tests {
         updates.stage(data.path(), &updates.incoming(data.path()).unwrap()).unwrap();
         apply(data.path(), &key.verifying_key(), &device.slots).unwrap();
         // The trial boot failed: the firmware started slot A again.
-        assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::RolledBack("v2".into()));
+        assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::BootedBack("v2".into()));
+        let rolled_back = LastSystemUpdate::RolledBack { failed: "v2".into(), database_restored: false };
+        assert_eq!(end_failed_trial(data.path()).unwrap(), rolled_back);
+        assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::None);
         let status = updates.status(data.path()).unwrap();
-        assert_eq!(status.last, Some(LastSystemUpdate::RolledBack { failed: "v2".into() }));
+        assert_eq!(status.last, Some(rolled_back));
         assert!(status.can_install && !status.on_trial);
         assert!(device.autoboot().contains("boot_partition=2\n"), "slot A stays the default");
+    }
+
+    #[test]
+    fn a_rollback_puts_back_the_database_the_failed_system_migrated() {
+        let key = key();
+        let data = tempfile::tempdir().unwrap();
+        let mut device = Device::new('a');
+        let database = Database::open(data.path()).unwrap();
+        database.set_setting("marker", &"before").unwrap();
+        drop(database);
+        let file = update(data.path(), &key, "v2");
+        let updates = uploaded(data.path(), &file, &key, &device.slots);
+        updates.stage(data.path(), &updates.incoming(data.path()).unwrap()).unwrap();
+        apply(data.path(), &key.verifying_key(), &device.slots).unwrap();
+
+        // The new system's server changes data and migrates the schema, then never gets healthy.
+        device.boot_into('b');
+        let database = Database::open(data.path()).unwrap();
+        database.set_setting("marker", &"during the trial").unwrap();
+        drop(database);
+        let schema = Database::supported_schema();
+        rusqlite::Connection::open(data.path().join(crate::db::DATABASE_FILE))
+            .unwrap()
+            .pragma_update(None, "user_version", schema + 1)
+            .unwrap();
+        device.boot_into('a');
+
+        assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::BootedBack("v2".into()));
+        let outcome = end_failed_trial(data.path()).unwrap();
+        assert_eq!(outcome, LastSystemUpdate::RolledBack { failed: "v2".into(), database_restored: true });
+        assert_eq!(Database::schema_version(data.path()).unwrap(), schema);
+        let database = Database::open(data.path()).unwrap();
+        assert_eq!(database.setting::<String>("marker").unwrap().as_deref(), Some("before"));
+        let kept = std::fs::read_dir(data.path().join(ROLLED_BACK_DIR))
+            .unwrap()
+            .filter(|entry| entry.as_ref().unwrap().file_name().to_string_lossy().ends_with("-sursum.db"))
+            .count();
+        assert_eq!(kept, 1, "the migrated database is kept aside");
     }
 
     #[test]

@@ -1,6 +1,7 @@
 # 0022 — One update path: the server ships inside the system image
 
-Status: Accepted (2026-11-19); not built yet, see the roadmap section S1. Supersedes the
+Status: Accepted (2026-11-19); built 2026-11-20 (see the amendment), CI image build in the
+roadmap section S1. Supersedes the
 application-bundle half of ADR 0013 (level 1 and its three amendments on bundles and the trial)
 and the sentence "a system update does not change the application" in ADR 0019.
 
@@ -64,3 +65,26 @@ code base.
   keeps two versions, two trials and two entries in the remote.
 - **Bundles only**: every kiosk, browser or kernel change is a reflash again, which the
   maintainer found too tiresome even while piloting (ADR 0019).
+
+## Amendment (2026-11-20): built, and the open points decided
+
+- **A developer's build on a device**: `just try <host>` copies the Pi build to `/run` (RAM) and
+  points `sursum.service` at it with a runtime drop-in (`/run/systemd/system/…`). Any reboot
+  brings back the system's server, so a test build cannot outlive a restart into a service. No
+  server code; the remote names it ("Działa wersja testowa …") because the build differs from
+  the system's version. The proposed `/var/lib/sursum/dev/` binary was rejected: it survives
+  reboots and would need changes in the unit and the remote.
+- **The database copy and its restore**: the server copies the database and notes the schema
+  when it stages an update (it is the database's user and runs anyway); the root unit carries
+  both into the trial. Back in the old slot, `sursum-system-check.service` runs *before*
+  `sursum.service`, as the server's user (so every file it writes stays the server's), and puts
+  the copy back only if the schema rose. `LastSystemUpdate::RolledBack` says whether it did.
+- **The pilot Pi starts clean**: its data predates ADR 0025, which no current build reads, so it
+  is reflashed with a new image and set up again (PIN, church, OpenSong import, calibration,
+  logo) instead of restoring a device backup.
+- **CI builds the image** on a `v*` tag (signed, attached to the release), as an unsigned trial
+  in pull requests that change `image/` or `deploy/`, and by hand. The administrator's SSH key
+  in released images is the maintainer's public key, the repository variable `SURSUM_SSH_PUBKEY`.
+- The update key keeps its names (`SURSUM_BUNDLE_KEY`, `SURSUM_BUNDLE_SIGNING_KEY`): renaming
+  them would mean re-entering the secret for no gain. `sursum-server system keygen` replaces
+  `bundle keygen`.

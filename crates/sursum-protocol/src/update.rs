@@ -1,24 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Application updates from the remote (signed `.sursum-app` bundles, ADR 0013): what the device
-//! runs, how the last update ended, and the answer to an upload.
+//! Updates from the remote (signed `.sursum-system` files, ADR 0019 and ADR 0022): what the device
+//! runs, how the last update ended, and the answer to an upload. There is one update path: the
+//! server is part of the system, so a device has one version.
 
 use serde::{Deserialize, Serialize};
 
-/// `GET /api/update`: the running version and the state of updates on this device.
+/// `GET /api/update/status`: the running version and the state of updates on this device.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateStatus {
-    /// Build id of the running server (also shown when it does not run from a release).
+    /// Build id of the running server. On a device it equals the system's version, unless a
+    /// developer runs another build for a while (`just try`, until the next restart).
     pub build: String,
-    /// The installed release that runs (`current`), when the device uses releases.
-    pub release: Option<String>,
-    /// The running release is still on trial: it goes back by itself if it keeps failing.
-    pub on_trial: bool,
-    /// How the most recent update ended, if any.
-    pub last: Option<LastUpdate>,
-    /// Whether this server can take an update from the remote at all (signed builds under a
-    /// service manager only), so the remote does not offer what would be refused.
-    pub can_install: bool,
-    /// The device's system (the read-only A/B image, ADR 0019), on devices built from the image.
+    /// The device's system (the read-only A/B image), on devices built from the image; `None`
+    /// elsewhere (the desktop program, development), which take no updates.
     #[serde(default)]
     pub system: Option<SystemStatus>,
 }
@@ -53,26 +47,16 @@ pub enum LastSystemUpdate {
     Committed { version: String },
     /// The new system did not come up healthy (or could not be written); the device runs the
     /// system it had before.
-    RolledBack { failed: String },
-}
-
-/// How the most recent update ended.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "outcome", rename_all = "snake_case")]
-pub enum LastUpdate {
-    /// The new release ran healthily through its trial and stays.
-    Committed { version: String },
-    /// The new release kept failing, so the device went back to the release before it.
     RolledBack {
         failed: String,
-        restored: String,
-        /// The database was put back to the copy taken before the update (the new release had
+        /// The database was put back to the copy taken before the update (the new system had
         /// already changed its structure); changes made during the failed trial are gone.
+        #[serde(default)]
         database_restored: bool,
     },
 }
 
-/// The answer to `POST /api/update`.
+/// The answer to `POST /api/system/update`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum InstallOutcome {
@@ -82,19 +66,19 @@ pub enum InstallOutcome {
     Refused { reason: InstallRefusal },
 }
 
-/// Why an uploaded bundle was not installed.
+/// Why an uploaded update was not installed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallRefusal {
-    /// This build was made without a bundle key and accepts no updates.
+    /// This build was made without the update key and accepts no updates.
     NoKey,
-    /// The server does not run under a service manager that would start it again.
+    /// Not a device built from the sursum image, or not under its service manager.
     NotSupervised,
-    /// Not a bundle, damaged, or not signed with this device's key.
+    /// Not an update file, damaged, or not signed with this device's key.
     BadBundle,
     /// That version already runs.
     AlreadyCurrent,
-    /// Writing the release failed (e.g. a full disk); the old release keeps running.
+    /// Receiving or staging the update failed (e.g. a full disk); nothing changed.
     Failed,
     /// Another update is being installed or is on trial; try again once it has ended.
     Busy,

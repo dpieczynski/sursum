@@ -17,7 +17,7 @@ they cannot drift apart within one build.
 | Who | May |
 |---|---|
 | anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/licenses` |
-| paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
+| paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
 
 There is one level of rights (ADR 0024): a paired remote may do everything. Without a PIN nobody
 may control the screen: `/api/session` says `setup_needed`, and `POST /api/setup { pin, name, church }`
@@ -39,14 +39,6 @@ are; before one is chosen every set is listed), the library file and the backup 
 (restoring needs a service manager). The same mode is reachable as `sursum-server --library` for the
 browser tests.
 
-Application updates (ADR 0013, second amendment): `POST /api/update` takes a `.sursum-app` file
-(with the `X-Sursum-Upload` header like other uploads) and answers `InstallOutcome`:
-`installed { version }`, after which the server exits and its service manager starts the new
-release, or `refused { reason }` with `no_key`, `not_supervised`, `bad_bundle`,
-`already_current` or `failed` (nothing changed). `GET /api/update/status` answers
-`UpdateStatus { build, release, on_trial, last, can_install }`; `last` is `committed { version }`
-or `rolled_back { failed, restored, database_restored }`.
-
 Whole-device backups (ADR 0018): `GET /api/backup` streams a `.sursum-backup` file (ZIP:
 `manifest.json`, `sursum.db` without the PIN and paired devices, `assets/<id>`).
 `POST /api/backup/restore` (`X-Sursum-Upload`) answers `RestoreOutcome`:
@@ -54,12 +46,16 @@ Whole-device backups (ADR 0018): `GET /api/backup` streams a `.sursum-backup` fi
 the server restarts and the next start puts the backup in place, or `refused { reason }` with
 `not_supervised`, `not_a_backup`, `newer_version`, `older_version` (made before ADR 0025;
 not converted), `too_large` or `failed` (nothing changed).
-System updates (ADR 0019): `POST /api/system/update` (`X-Sursum-Upload`) takes a
-`.sursum-system` file and answers `InstallOutcome` like application updates (`refused` adds
-`busy` while another update is installed or on trial); afterwards the device writes the other
-slot and restarts into it on trial. `UpdateStatus.system` is `SystemStatus { version, on_trial,
-last, can_install }` on devices running the image (`last` is `committed { version }` or
-`rolled_back { failed }`), absent elsewhere.
+Updates (ADR 0019; the only kind since ADR 0022): `POST /api/system/update` (`X-Sursum-Upload`)
+takes a `.sursum-system` file and answers `InstallOutcome`: `installed { version }`, after which
+the device copies the database, writes the other slot and restarts into it on trial, or
+`refused { reason }` with `no_key`, `not_supervised` (not a device built from the image),
+`bad_bundle` (not a valid, signed update), `already_current`, `busy` (another update is installed
+or on trial) or `failed` (nothing changed). `GET /api/update/status` answers
+`UpdateStatus { build, system }`: `system` is `SystemStatus { version, on_trial, installing,
+target, last, can_install }` on devices running the image, absent elsewhere; `last` is
+`committed { version }` or `rolled_back { failed, database_restored }`. `build` differs from
+`system.version` only while a developer's build runs (`just try`).
 `POST /api/assets/cleanup` takes `PictureCleanupRequest { dry_run }` and answers
 `PictureCleanup { pictures, bytes }`: what is (or would be) removed.
 

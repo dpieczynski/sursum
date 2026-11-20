@@ -35,4 +35,4 @@ pub use state::{
     ChurchView, DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState,
     SetItemKind, SetItemView, SetSummary, SetView, SongSummary,
 };
-pub use update::{InstallOutcome, InstallRefusal, LastSystemUpdate, LastUpdate, SystemStatus, UpdateStatus};
+pub use update::{InstallOutcome, InstallRefusal, LastSystemUpdate, SystemStatus, UpdateStatus};

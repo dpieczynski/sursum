@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# At every boot, before the server starts: back in the old slot after a system update failed its
+# trial, put the database copy taken before the update back if the new server had raised its
+# schema (the old server cannot open it), and record the rollback (ADR 0022). Runs as the
+# server's user, so the files it writes stay the server's; reading the slots needs no privileges.
+[Unit]
+Description=Undo a failed system update's database changes
+Before=sursum.service
+
+[Service]
+Type=oneshot
+User=sursum
+Group=sursum
+ExecStart=/usr/lib/sursum/sursum-server --data-dir /var/lib/sursum system check-trial
+
+[Install]
+WantedBy=multi-user.target

@@ -150,22 +150,17 @@ number of times without duplicating a song.
 
 The Pi runs our own immutable image built with rpi-image-gen (`trixie-minbase-ab`, `image-rota`
 layout): read-only A/B system slots, all writable state on `/persistent`. `/var/lib/sursum` is
-slot-shared and holds the database, backups, assets, configuration and the application releases.
-Application updates are signed `.sursum-app` bundles (ZIP: binary, manifest with its hash,
-Ed25519 signature; `sursum-server bundle …`) installed into `releases/<version>/` and switched
-atomically with the `current`/`previous` symlinks; the server reports readiness and liveness to
-systemd (`Type=notify`, watchdog pinged only while the state actor answers). A new release runs
-on trial: the previous release counts the starts (`bundle guard`) and switches back, with the
-matching database copy, if the new one does not run healthily for 30 s within three starts.
+slot-shared and holds the database, backups, assets and configuration. The server is part of the
+read-only system (`/usr/lib/sursum/sursum-server`, ADR 0022), so a device has one version, and
+reports readiness and liveness to systemd (`Type=notify`, watchdog pinged only while the state
+actor answers).
 
-System updates (ADR 0019) are a second, separate path for everything outside the server binary
-(kiosk unit, browser, policies, kernel): a signed `.sursum-system` file with the raw boot and
-system images is uploaded from the remote, written to the other A/B slot by a root unit running
-the read-only system's own copy of the server, and started once through the firmware's tryboot;
-it is kept only if the server and the kiosk come up healthy. Both paths were run on the pilot Pi 5,
-including a deliberate rollback.
-
-Two update paths are one too many: ADR 0022 (2026-11-19, not built yet) moves the server into
-the read-only system and keeps only the system update.
+There is one update path (ADR 0019, ADR 0022): a signed `.sursum-system` file (Ed25519) with the
+raw boot and system images is uploaded from the remote; the server copies the database and notes
+its schema, a root unit running the read-only system's server writes the other A/B slot, and the
+firmware's tryboot starts it once. It is kept only if the server and the kiosk come up healthy;
+otherwise the old slot starts again, and before the old server starts, `sursum-system-check` puts
+the database copy back if the new server had raised the schema. Developers run another server
+build until the next reboot with `just try` (binary in `/run`, runtime drop-in).
 
 See also: [protocol.md](protocol.md), [roadmap.md](roadmap.md), [decisions/](decisions/).

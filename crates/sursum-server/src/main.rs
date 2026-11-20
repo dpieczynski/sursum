@@ -63,18 +63,18 @@ enum Task {
         #[arg(long, default_value = "OpenSong")]
         songbook: String,
     },
-    /// Signed application bundles (`.sursum-app`, ADR 0013).
-    #[command(subcommand)]
-    Bundle(BundleTask),
-    /// Signed system updates (`.sursum-system`, ADR 0019).
+    /// Signed system updates (`.sursum-system`, ADR 0019 and ADR 0022).
     #[command(subcommand)]
     System(SystemTask),
 }
 
-/// Making and installing system updates; `apply` and `finish-trial` run as root on the device,
-/// from the read-only system's copy of this binary.
+/// Making and installing system updates. On the device, `apply` and `finish-trial` run as root
+/// and `check-trial` as the server's user, all from the read-only system's server.
 #[derive(Debug, Subcommand)]
 enum SystemTask {
+    /// Create the update key: the secret goes to KEY_FILE (keep it out of the repository), the
+    /// public key is printed for `SURSUM_BUNDLE_KEY` at build time.
+    Keygen { key_file: PathBuf },
     /// Sign an image build's partition images into a `.sursum-system`.
     Create {
         #[arg(long)]
@@ -94,42 +94,16 @@ enum SystemTask {
     /// Write the update the server staged in DATA_DIR to the other slot and point tryboot at it
     /// (the caller then reboots with "0 tryboot").
     Apply,
-    /// At boot: end a system update's trial. Back in the old slot it is recorded as rolled back;
-    /// in the new one, wait until the server and the kiosk are healthy and make it the default,
-    /// or reboot into the old slot.
+    /// At boot, before the server starts: back in the old slot after a failed trial, put the
+    /// database copy back if the new system had raised its schema, and record the rollback.
+    CheckTrial,
+    /// At boot, after the server started: in the slot of a system on trial, wait until the
+    /// server and the kiosk are healthy and make it the default, or reboot into the old slot.
     FinishTrial {
         /// The server's address for /healthz.
         #[arg(long, default_value = "127.0.0.1:80")]
         server: String,
     },
-}
-
-/// Making, installing and rolling back application bundles.
-#[derive(Debug, Subcommand)]
-enum BundleTask {
-    /// Create a signing key: the secret goes to KEY_FILE (keep it out of the repository), the
-    /// public key is printed for `SURSUM_BUNDLE_KEY` at build time.
-    Keygen { key_file: PathBuf },
-    /// Sign a server binary into a bundle.
-    Create {
-        #[arg(long)]
-        key: PathBuf,
-        #[arg(long)]
-        version: String,
-        binary: PathBuf,
-        output: PathBuf,
-    },
-    /// Check a bundle against this build's key without installing it (e.g. that a release was
-    /// signed with the secret matching the public key devices trust).
-    Verify { bundle: PathBuf },
-    /// Verify a bundle against this build's key and make it the current release in DATA_DIR, on
-    /// trial until it has run healthily (restart the service afterwards).
-    Install { bundle: PathBuf },
-    /// Make the previous release current again.
-    Rollback,
-    /// Run by systemd before each start, with the previous release's binary: count the starts
-    /// of a release on trial and go back to the previous one when it keeps failing.
-    Guard,
 }
 
 #[tokio::main]
@@ -166,9 +140,6 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    if let Some(Task::Bundle(task)) = &args.command {
-        return run_bundle_task(task, &args.data_dir);
-    }
     if let Some(Task::System(task)) = &args.command {
         return run_system_task(task, &args.data_dir);
     }
@@ -194,61 +165,26 @@ async fn main() -> anyhow::Result<()> {
     println!("listening on http://{}", server.addr);
     tokio::select! {
         signal = tokio::signal::ctrl_c() => signal?,
-        () = server.restart_requested() => tracing::info!("exiting so the service starts the update"),
+        () = server.restart_requested() => tracing::info!("exiting so the service starts again and restores the backup"),
     }
     tracing::info!("shutting down");
     server.stop().await
 }
 
-fn run_bundle_task(task: &BundleTask, data_dir: &std::path::Path) -> anyhow::Result<()> {
-    use sursum_server::bundle;
-    match task {
-        BundleTask::Keygen { key_file } => {
-            let (secret, public) = bundle::new_key()?;
-            write_secret(key_file, &secret)?;
-            println!("SURSUM_BUNDLE_KEY={public}");
-        }
-        BundleTask::Create { key, version, binary, output } => {
-            let key = bundle::signing_key(&std::fs::read_to_string(key)?)?;
-            let bytes = bundle::create(&std::fs::read(binary)?, version, BUILD_ID, &key)?;
-            std::fs::write(output, bytes)?;
-            println!("wrote {}", output.display());
-        }
-        BundleTask::Verify { bundle: path } => {
-            let trusted = bundle::trusted_key().ok_or_else(|| {
-                anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no bundles")
-            })?;
-            let verified = bundle::verify(&std::fs::read(path)?, &trusted)?;
-            println!("{} is genuine: version {}", path.display(), verified.manifest.version);
-        }
-        BundleTask::Install { bundle: path } => {
-            let trusted = bundle::trusted_key().ok_or_else(|| {
-                anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no bundles")
-            })?;
-            // Backs up through a plain connection: the server may be running, and nothing must
-            // migrate or "repair" the database under it.
-            let version = sursum_server::update::install(data_dir, &std::fs::read(path)?, &trusted)?;
-            println!("installed {version} on trial; restart the service to run it");
-        }
-        BundleTask::Rollback => {
-            let schema = sursum_server::db::Database::schema_version(data_dir)?;
-            let previous = bundle::rollback(data_dir, schema)?;
-            println!("current is {} again; restart the service", previous.display());
-        }
-        BundleTask::Guard => guard(data_dir)?,
-    }
-    Ok(())
-}
-
 fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Result<()> {
     use sursum_server::system_update::{self, Slots, TrialState};
     let trusted = || {
-        sursum_server::bundle::trusted_key()
+        sursum_server::signing::trusted_key()
             .ok_or_else(|| anyhow::anyhow!("this build has no SURSUM_BUNDLE_KEY and accepts no updates"))
     };
     match task {
+        SystemTask::Keygen { key_file } => {
+            let (secret, public) = sursum_server::signing::new_key()?;
+            write_secret(key_file, &secret)?;
+            println!("SURSUM_BUNDLE_KEY={public}");
+        }
         SystemTask::Create { key, version, boot, system, output } => {
-            let key = sursum_server::bundle::signing_key(&std::fs::read_to_string(key)?)?;
+            let key = sursum_server::signing::signing_key(&std::fs::read_to_string(key)?)?;
             let manifest =
                 system_update::create(boot, system, version, &key, std::fs::File::create(output)?)?;
             println!(
@@ -266,11 +202,15 @@ fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Res
             let version = system_update::apply(data_dir, &trusted()?, &Slots::device())?;
             println!("system {version} written to the other slot; reboot with \"0 tryboot\"");
         }
-        SystemTask::FinishTrial { server } => match system_update::trial_state(data_dir, &Slots::device())? {
-            TrialState::None => {}
-            TrialState::RolledBack(version) => {
-                println!("system {version} did not come up; running the previous one");
+        SystemTask::CheckTrial => {
+            if let TrialState::BootedBack(version) = system_update::trial_state(data_dir, &Slots::device())? {
+                let outcome = system_update::end_failed_trial(data_dir)?;
+                println!("system {version} did not come up; running the previous one ({outcome:?})");
             }
+        }
+        SystemTask::FinishTrial { server } => match system_update::trial_state(data_dir, &Slots::device())? {
+            // A failed trial is check-trial's, before the server starts.
+            TrialState::None | TrialState::BootedBack(_) => {}
             TrialState::OnTrial(version) => {
                 if healthy_for_a_while(server) {
                     system_update::commit(data_dir, &Slots::device())?;
@@ -316,23 +256,6 @@ fn healthy_for_a_while(server: &str) -> bool {
         }
     }
     false
-}
-
-#[cfg(unix)]
-fn guard(data_dir: &std::path::Path) -> anyhow::Result<()> {
-    use sursum_server::update::{Guarded, MAX_STARTS};
-    match sursum_server::update::guard(data_dir)? {
-        Guarded::NoTrial => {}
-        Guarded::Start(start) => println!("release on trial: start {start} of {MAX_STARTS}"),
-        Guarded::RolledBack(outcome) => println!("the release on trial kept failing: {outcome:?}"),
-        Guarded::NothingToRestore => println!("the release on trial kept failing; no previous release"),
-    }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn guard(_: &std::path::Path) -> anyhow::Result<()> {
-    anyhow::bail!("releases are only supported on the Linux device")
 }
 
 /// Writes a secret readable only by its owner.

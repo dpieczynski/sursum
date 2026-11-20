@@ -234,34 +234,32 @@ fn pairing() {
     assert!(!old.setup_needed && old.installation == Installation::Screen);
 }
 
-/// Updates go over REST. The remote that uploads a bundle reloads into the new build, so these
+/// Updates go over REST. The remote that uploads an update reloads into the new build, so these
 /// only have to stay readable within one release.
 #[test]
 fn update() {
     let status = UpdateStatus {
-        build: "0.2.0".into(),
-        release: Some("0.2.0".into()),
-        on_trial: true,
-        last: Some(LastUpdate::RolledBack {
-            failed: "0.3.0".into(),
-            restored: "0.2.0".into(),
-            database_restored: true,
-        }),
-        can_install: true,
+        build: "v0.1.0-34-g980afa5".into(),
         system: Some(SystemStatus {
             version: "v0.1.0-34-g980afa5".into(),
             on_trial: false,
             installing: false,
             target: None,
-            last: Some(LastSystemUpdate::RolledBack { failed: "v0.1.0-40-g1a2b3c4".into() }),
+            last: Some(LastSystemUpdate::RolledBack {
+                failed: "v0.1.0-40-g1a2b3c4".into(),
+                database_restored: true,
+            }),
             can_install: true,
         }),
     };
     let outcomes = [
-        InstallOutcome::Installed { version: "0.3.0".into() },
+        InstallOutcome::Installed { version: "v0.2.0".into() },
         InstallOutcome::Refused { reason: InstallRefusal::BadBundle },
     ];
-    insta::assert_json_snapshot!((status, LastUpdate::Committed { version: "0.2.0".into() }, outcomes));
+    let committed = LastSystemUpdate::Committed { version: "v0.2.0".into() };
+    insta::assert_json_snapshot!((status, committed, outcomes));
+    let old: LastSystemUpdate = serde_json::from_str(r#"{"outcome":"rolled_back","failed":"v1"}"#).unwrap();
+    assert_eq!(old, LastSystemUpdate::RolledBack { failed: "v1".into(), database_restored: false });
 }
 
 #[test]

@@ -8,7 +8,7 @@ FROM docker.io/library/debian:trixie
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates git sudo binfmt-support \
-      qemu-user-static debian-archive-keyring unzip \
+      qemu-user-static debian-archive-keyring \
  && rm -rf /var/lib/apt/lists/*
 
 # The pinned rpi-image-gen (image/rpi-image-gen.ref: tag and commit).

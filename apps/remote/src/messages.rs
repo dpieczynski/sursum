@@ -258,29 +258,20 @@ pub enum Msg {
     InvalidPin,
     PinAlreadySet,
     UpdateInstall,
-    UpdateTitle,
-    UpdateWarning,
     UpdateConfirm,
     UpdateInstalling,
-    UpdateInstalled,
     UpdateSendFailed,
     UpdateNoKey,
     UpdateNotSupervised,
     UpdateBadBundle,
     UpdateAlreadyCurrent,
     UpdateFailed,
-    UpdateOnTrial,
     UpdateBusy,
-    SystemUpdateInstall,
     SystemUpdateTitle,
     SystemUpdateWarning,
     SystemUpdateInstalled,
     SystemUpdateOnTrial,
     SystemUpdateWriting,
-    ProgramUpdateRestarting,
-    ProgramUpdateChecking,
-    ProgramUpdateCommitted,
-    ProgramUpdateRolledBack,
     SystemUpdateRestarting,
     SystemUpdateChecking,
     SystemUpdateDontSwitchOff,
@@ -605,52 +596,38 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::HidePin => "Ukryj",
         Msg::NotSent => "Nie wysłano – brak połączenia z sursum",
         Msg::UpdateInstall => "Zainstaluj aktualizację",
-        Msg::UpdateTitle => "Aktualizacja programu",
-        Msg::UpdateWarning => {
-            "Nie aktualizuj w czasie mszy. Program uruchomi się ponownie, a ekran na kilka sekund \
-             zgaśnie. Jeśli nowa wersja nie zadziała, urządzenie samo wróci do obecnej."
-        }
         Msg::UpdateConfirm => "Zainstaluj",
         Msg::UpdateInstalling => "Instalowanie…",
-        Msg::UpdateInstalled => "Program uruchamia się ponownie. Pilot odświeży się sam.",
         Msg::UpdateSendFailed => "Nie udało się wysłać pliku.",
         Msg::UpdateNoKey => "Ta wersja programu nie przyjmuje aktualizacji.",
-        Msg::UpdateNotSupervised => "Na tym komputerze aktualizację instaluje się ręcznie.",
+        Msg::UpdateNotSupervised => "To urządzenie nie przyjmuje aktualizacji z pilota.",
         Msg::UpdateBadBundle => {
             "To nie jest aktualizacja dla tego urządzenia: plik jest uszkodzony albo nie ma \
              właściwego podpisu."
         }
         Msg::UpdateAlreadyCurrent => "Ta wersja już działa.",
         Msg::UpdateFailed => "Instalacja nie powiodła się (np. brak miejsca). Działa dotychczasowa wersja.",
-        Msg::UpdateOnTrial => {
-            "Nowa wersja jest sprawdzana. Jeśli nie zadziała, urządzenie samo wróci do poprzedniej."
-        }
         Msg::UpdateBusy => "Trwa już instalowanie aktualizacji. Spróbuj ponownie, gdy się zakończy.",
-        Msg::SystemUpdateInstall => "Zainstaluj aktualizację systemu",
-        Msg::SystemUpdateTitle => "Aktualizacja systemu",
+        Msg::SystemUpdateTitle => "Aktualizacja",
         Msg::SystemUpdateWarning => {
-            "Nie aktualizuj w czasie mszy. Urządzenie zapisze nowy system obok obecnego i uruchomi się \
-             ponownie; ekran zgaśnie na kilka minut. Jeśli nowy system nie zadziała, urządzenie samo \
-             wróci do obecnego. Pieśni, zestawy i ustawienia zostają."
+            "Nie aktualizuj w czasie mszy. Urządzenie zapisze nową wersję obok obecnej i uruchomi się \
+             ponownie; ekran zgaśnie na kilka minut. Jeśli nowa wersja nie zadziała, urządzenie samo \
+             wróci do obecnej. Pieśni, zestawy i ustawienia zostają."
         }
         Msg::SystemUpdateInstalled => {
-            "Urządzenie zapisuje nowy system i za chwilę uruchomi się ponownie. Pilot połączy się sam."
+            "Urządzenie zapisuje nową wersję i za chwilę uruchomi się ponownie. Pilot połączy się sam."
         }
         Msg::SystemUpdateOnTrial => {
-            "Nowy system jest sprawdzany. Jeśli nie zadziała, urządzenie samo wróci do poprzedniego."
+            "Nowa wersja jest sprawdzana. Jeśli nie zadziała, urządzenie samo wróci do poprzedniej."
         }
-        Msg::SystemUpdateWriting => "Zapisywanie nowego systemu…",
-        Msg::ProgramUpdateRestarting => "Program uruchamia się ponownie…",
-        Msg::ProgramUpdateChecking => "Nowa wersja programu jest sprawdzana (około pół minuty)…",
-        Msg::ProgramUpdateCommitted => "Nowa wersja programu działa.",
-        Msg::ProgramUpdateRolledBack => "Nowa wersja programu nie zadziałała – działa poprzednia.",
+        Msg::SystemUpdateWriting => "Zapisywanie nowej wersji…",
         Msg::SystemUpdateRestarting => "Urządzenie uruchamia się ponownie…",
-        Msg::SystemUpdateChecking => "Nowy system jest sprawdzany (do 3 minut)…",
+        Msg::SystemUpdateChecking => "Nowa wersja jest sprawdzana (do 3 minut)…",
         Msg::SystemUpdateDontSwitchOff => {
             "Nie wyłączaj urządzenia. To okno zamknie się, gdy aktualizacja się skończy."
         }
-        Msg::SystemUpdateCommitted => "Nowy system działa.",
-        Msg::SystemUpdateRolledBack => "Nowy system nie zadziałał – urządzenie wróciło do poprzedniego.",
+        Msg::SystemUpdateCommitted => "Nowa wersja działa.",
+        Msg::SystemUpdateRolledBack => "Nowa wersja nie zadziałała – urządzenie wróciło do poprzedniej.",
         Msg::SectionBackup => "Dane urządzenia",
         Msg::BackupHint => {
             "Pełna kopia: pieśni z historią zmian, zestawy, logo, obrazy, kalibracja i ustawienia \
@@ -755,41 +732,37 @@ pub fn installed_version(version: &str) -> String {
     format!("Zainstalowano wersję {version}.")
 }
 
-/// How the most recent update ended, for "O programie".
-pub fn last_update(last: &sursum_protocol::LastUpdate) -> String {
-    use sursum_protocol::LastUpdate;
-    match last {
-        LastUpdate::Committed { version } => {
-            format!("Ostatnia aktualizacja: wersja {version} działa poprawnie.")
-        }
-        LastUpdate::RolledBack { failed, restored, database_restored } => {
-            let database =
-                if *database_restored { " Baza pieśni wróciła do stanu sprzed aktualizacji." } else { "" };
-            format!(
-                "Aktualizacja do wersji {failed} nie zadziałała – przywrócono wersję {restored}.{database}"
-            )
-        }
-    }
-}
-
-/// The system's lines in "O programie": its version, a trial in progress, the last update.
-pub fn system_lines(system: &sursum_protocol::SystemStatus) -> Vec<String> {
+/// The update lines in "O programie": a developer's build running for a while, an update in
+/// progress or on trial, and how the last one ended.
+pub fn update_lines(status: &sursum_protocol::UpdateStatus) -> Vec<String> {
     use sursum_protocol::LastSystemUpdate;
-    let mut lines = vec![format!("System: {}", system.version)];
+    let Some(system) = &status.system else { return Vec::new() };
+    let mut lines = Vec::new();
+    if status.build != system.version {
+        lines.push(format!(
+            "Działa wersja testowa {} – po ponownym uruchomieniu urządzenia wróci wersja {}.",
+            status.build, system.version
+        ));
+    }
     if system.installing {
-        lines.push(
-            "Trwa instalowanie aktualizacji systemu – urządzenie za chwilę uruchomi się ponownie.".to_owned(),
-        );
+        lines.push("Trwa instalowanie aktualizacji – urządzenie za chwilę uruchomi się ponownie.".to_owned());
     }
     if system.on_trial {
         lines.push(pl(Msg::SystemUpdateOnTrial).to_owned());
     }
     match &system.last {
         Some(LastSystemUpdate::Committed { version }) => {
-            lines.push(format!("Ostatnia aktualizacja systemu: wersja {version} działa poprawnie."));
+            lines.push(format!("Ostatnia aktualizacja: wersja {version} działa poprawnie."));
         }
-        Some(LastSystemUpdate::RolledBack { failed }) => {
-            lines.push(format!("Aktualizacja systemu ({failed}) nie zadziałała – działa poprzedni system."));
+        Some(LastSystemUpdate::RolledBack { failed, database_restored }) => {
+            let database = if *database_restored {
+                " Pieśni i zestawy wróciły do stanu sprzed aktualizacji."
+            } else {
+                ""
+            };
+            lines.push(format!(
+                "Aktualizacja do wersji {failed} nie zadziałała – działa poprzednia wersja.{database}"
+            ));
         }
         None => {}
     }
@@ -951,5 +924,27 @@ mod tests {
         let cleanup = sursum_protocol::PictureCleanup { pictures: 12, bytes: 36_700_160 };
         assert_eq!(picture_cleanup_line(&cleanup, false), "Nieużywane obrazy: 12 (35,0 MB)");
         assert_eq!(picture_cleanup_line(&cleanup, true), "Usunięto obrazy: 12 (35,0 MB)");
+    }
+
+    #[test]
+    fn about_names_a_test_build_and_a_rollback_that_restored_the_songs() {
+        use sursum_protocol::{LastSystemUpdate, SystemStatus, UpdateStatus};
+        let system = SystemStatus {
+            version: "v0.2.0".into(),
+            on_trial: false,
+            installing: false,
+            target: None,
+            last: Some(LastSystemUpdate::RolledBack { failed: "v0.3.0".into(), database_restored: true }),
+            can_install: true,
+        };
+        let status = UpdateStatus { build: "v0.2.0".into(), system: Some(system) };
+        assert_eq!(
+            update_lines(&status),
+            ["Aktualizacja do wersji v0.3.0 nie zadziałała – działa poprzednia wersja. Pieśni i zestawy \
+              wróciły do stanu sprzed aktualizacji."]
+        );
+        let testing = UpdateStatus { build: "v0.2.0-1-gabc-dirty".into(), ..status };
+        assert!(update_lines(&testing)[0].starts_with("Działa wersja testowa v0.2.0-1-gabc-dirty"));
+        assert!(update_lines(&UpdateStatus { build: "dev".into(), system: None }).is_empty());
     }
 }

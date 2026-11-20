@@ -30,12 +30,17 @@ below comes before new features. Order: CI image build, one update path, engine 
   (`docs/protocol.md`)
 - [ ] Image and `.sursum-system` built by CI on an arm64 runner (the M4 and M7 items below);
   the release workflow attaches them
-- [ ] One update path (ADR 0022): `sursum.service` runs the system's `/usr/lib/sursum/sursum-server`;
-  the database copy and its restore move into the system trial (closes the M7 item about shared
-  state); remove `.sursum-app`, `bundle install|rollback|guard`, `releases/`, `POST /api/update`,
-  the program half of the remote's update views, `just app-bundle`, `just deploy`,
-  `deploy/pi-manual/`; decide how a developer tries a server build on a device ⚠; reflash the
-  pilot Pi with a device backup; rewrite `docs/releasing.md` and the guide's update section
+- [x] One update path (ADR 0022, built 2026-11-20): `sursum.service` runs the system's
+  `/usr/lib/sursum/sursum-server`; the server copies the database when it stages an update and
+  `sursum-system-check.service` (before the server, as its user) puts it back after a failed
+  trial if the schema rose (closes the M7 item about shared state); removed `.sursum-app`,
+  `bundle …`, `releases/`, `POST /api/update`, the program half of the remote's update views,
+  `just app-bundle`, `just deploy`, `deploy/pi-manual/`; developers use `just try <host>` (binary
+  in `/run`, runtime drop-in, ADR 0022 amendment); `docs/releasing.md` and the guide rewritten.
+  ⚠ Not yet on hardware: the image with the server in the system, `just try`, and a rollback
+  that restores the database
+- [ ] Reflash the pilot Pi with the new image and start clean (PIN, church, OpenSong import,
+  calibration, logo; ADR 0022 amendment)
 - [ ] WPE-on-DRM spike (ADR 0009 amendment of 2026-11-19): rebuild sid's `wpewebkit` 2.54 for
   trixie arm64 in CI; spike image with `WPE_PLATFORM=drm MiniBrowser --fullscreen
   --bg-color=black` and no cage, sent to the pilot Pi as a system update; check start without a
@@ -199,11 +204,10 @@ never run on Windows) is removed.
 - [x] Server side of the systemd watchdog: `Type=notify` readiness and `WATCHDOG=1` pings only while the state actor answers (checked under systemd on a desktop); `deploy/systemd/sursum.service` is the unit the image installs
 - [x] In the image (first item above, booted on the Pi 5): systemd units, silent black boot (no splash image, decided 2026-11-17), forced HDMI mode (instead of a fallback EDID file), nftables, Avahi, the screen guard as the kiosk watchdog, hardware and systemd watchdogs
 - [x] Screen resolution, decided 2026-11-17 (ADR 0013 amendment): HDMI0 forced to 1080p60 (`video=HDMI-A-1:1920x1080@60D` in the kernel command line keeps the connector on; cage ignores it for its mode, so `deploy/kiosk/kiosk-session` sets and keeps `SURSUM_SCREEN_MODE=1920x1080@60` with `wlr-randr`; checked on the Pi with an LG 4K TV: runtime switch from 3840×2160@30 to 1920×1080@60 works). Image v0.1.0-36: cage sets the TV's 4K30 at start and kiosk-session switches to 1080p60 before Chromium starts (the page only ever shows in 1080p) checked on the Pi with the LG TV (2026-11-17): 1920×1080@60 stays after the TV is switched off and on and after an HDMI replug (cage kept the mode; kiosk-session is the safety net), CEC comes back too
-- [x] Release workflow for `v*` tags (`.github/workflows/release.yml`, [releasing.md](releasing.md)): signed Pi bundle checked against the compiled-in key, Windows binary, GitHub release ⚠ not yet run (needs the first tag)
+- [x] Release workflow for `v*` tags (`.github/workflows/release.yml`, [releasing.md](releasing.md)): Windows binary, GitHub release (ran for v0.1.0); the Pi bundle is gone with ADR 0022, the image follows with the CI image build (S1)
 - [ ] Image build in CI on arm64 ⚠ (runner availability, privileged container); artifacts `.img` and `.sursum-system` (ADR 0019; rpi-image-gen's `.update.tar.zst` is not used)
-- [x] Signed application bundles, core (ADR 0013 amendment; to be removed, ADR 0022): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
-- [x] Bundles on the device, server side (ADR 0013 second amendment): trial with a start-counting guard run from the previous release (`ExecStartPre`), automatic rollback incl. the database copy when the schema changed, self-commit after 30 s healthy, upload from the remote (admin, "O programie") with restart into the new release, outcome shown in the remote, `just deploy <host> <version>`; checked with a systemd user unit (crash and hang both roll back)
-- Not pursued further (ADR 0022 removes application bundles): `just deploy` against a real Pi. The unit and paths are in the image and the first release ships with it
+- [x] ~~Signed application bundles~~ (removed 2026-11-20, ADR 0022), core (ADR 0013 amendment): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
+- [x] ~~Bundles on the device~~ (removed 2026-11-20, ADR 0022), server side (ADR 0013 second amendment): trial with a start-counting guard run from the previous release (`ExecStartPre`), automatic rollback incl. the database copy when the schema changed, self-commit after 30 s healthy, upload from the remote (admin, "O programie") with restart into the new release, outcome shown in the remote, `just deploy <host> <version>`; checked with a systemd user unit (crash and hang both roll back)
 - [x] Interim hand install for a pilot Pi 5 on Raspberry Pi OS Lite ([deploy/pi-manual](../deploy/pi-manual/README.md)): script, kiosk unit after the rpi-image-gen `webkiosk` example; run on the pilot Pi 5 (2026-11-17). Kiosk unit, policies and cursor generator are shared with the image in `deploy/kiosk/`
 - [x] Kiosk cursor: cage (0.3.1 on Raspberry Pi OS) draws its cursor in the middle of the screen even without a mouse and has no option to hide it; and Chromium sets its own cursor after every page reload (from the default/Adwaita theme, e.g. `progress`); the pilot gives the kiosk a private `XCURSOR_PATH` whose `sursum-blank`, `default` and `Adwaita` themes hold one transparent pixel under every cursor name; confirmed on the pilot Pi 5 (no cursor after kiosk start and after two page reloads, 2026-11-17). The `sursum-kiosk` image layer runs the same generator (`deploy/kiosk/blank-cursors.sh`). The black overlay is composited from page load (`will-change: opacity`); the one-frame flash of full-brightness text at the first black did not recur on the Pi afterwards
 - [x] `sursum-kiosk` layer (`image/layer/sursum-kiosk.yaml`): Chromium managed policies, short command line, transparent cursor theme, localhost-only network for the kiosk unit (as in `deploy/pi-manual/`; all confirmed on the pilot Pi 5, 2026-11-17: no push-messaging requests after the block, screen and remote work, no cursor or browser UI)
@@ -213,9 +217,9 @@ never run on Windows) is removed.
 - [x] Display power, CEC part (ADR 0012 amendment of 2026-11-17; both churches' own displays are the open M1 item): `CecDisplay` on `cec_linux` (Image View On + Active Source, Standby, Give Device Power Status), `backend = "cec"` on by default in the image's `/etc/sursum/config.toml`, `/dev/cec0` through `SupplementaryGroups=video` checked on an LG 4K TV (2026-11-17): power state read, on from standby with input switch, standby
 
 **Done when:** a device flashed from the CI image needs no manual steps beyond configuration (PIN,
-address, screen profile) and `apt install` on it fails (read-only root); app updates via the browser
-work, a deliberately broken bundle rolls back by itself with the matching database, and a
-bundle with a bad signature is rejected; power-on shows only black/logo then content (HDMI
+address, screen profile) and `apt install` on it fails (read-only root); updates via the browser
+work, a deliberately broken update rolls back by itself with the matching database, and an
+update with a bad signature is rejected; power-on shows only black/logo then content (HDMI
 capture); 100 power cuts without DB damage, logo + position after each boot; late projector power-on and HDMI replug pass; killed
 Chromium/server recovers in < 5 s; Tulce pillar zone calibrated on site and text readable from the
 last pew; in both churches the display turns on and to standby from the operator position and the
@@ -248,16 +252,15 @@ away everywhere, and plain-text song entry (ADR 0017).
 
 ## M7 — Offline system updates
 
-ADR 0022 (2026-11-19) makes this the only update path; until it is built the text below holds.
-Application bundles (`.sursum-app`) update only the server binary with its embedded pages; the
-kiosk unit, Chromium policies, cursors, `sursum.service`, Chromium, cage and the kernel are part of
-the read-only system. Until system updates exist, changing any of them on an imaged device means
-reflashing (with a device backup first). Priority right after the first image works on the Pi.
+Since ADR 0022 (built 2026-11-20) this is the only update path: the server, the kiosk unit,
+Chromium and its policies, cage and the kernel are all part of the read-only system and change
+together with one `.sursum-system` file.
 
 - [x] Mechanism decided and built (ADR 0019): own updater on the firmware's tryboot and rpi-image-gen's by-slot links; `.sursum-system` (signed ZIP of the raw boot and system images, `just image` writes it), upload from the remote (O programie, admin), root units with the read-only system's verifier write the other slot and reboot with `0 tryboot`, `finish-trial` commits after 30 s of healthy server and kiosk or reboots into the old slot; `panic=10`; unit and integration tests with fake slots; run on the Pi 5 (v0.1.0-36 → v0.1.0-37 committed; the tryboot restart needed `--reboot-argument`, fixed); the remote follows program and system updates in one locked sheet over every view; on the Pi 2026-11-18 a fully automatic update (v39 → v40) committed and a deliberately broken system (kiosk `/bin/false`) rolled back to v40 by itself
-- [ ] State shared by both slots (`/var/lib/sursum`) must stay readable by the older slot after a
-  rollback (rpi-image-gen warns about this); application releases already handle their own
-  database rollback, and ADR 0022 moves that rule into the system trial (S1)
+- [x] State shared by both slots (`/var/lib/sursum`) stays readable by the older slot after a
+  rollback (rpi-image-gen warns about this): the database copy taken when the update was staged
+  goes back if the failed system raised the schema (ADR 0022 amendment; unit test with fake
+  slots, ⚠ not yet on the Pi)
 - [x] `just image` also writes the matching `.sursum-system` (and verifies it)
 - [ ] The release workflow attaches it once images build in CI
 
