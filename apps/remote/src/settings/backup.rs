@@ -26,6 +26,9 @@ enum Step {
 
 #[component]
 pub fn BackupSection() -> impl IntoView {
+    // Restoring needs a service manager that starts the server again: not the desktop program.
+    let has_screen =
+        expect_context::<sursum_protocol::Installation>() == sursum_protocol::Installation::Screen;
     view! {
         <Section title=Msg::SectionBackup>
             <p class="hint">{pl(Msg::BackupHint)}</p>
@@ -34,9 +37,11 @@ pub fn BackupSection() -> impl IntoView {
                     {pl(Msg::BackupDownload)}
                 </a>
             </div>
-            <div class="setting-row">
-                <RestoreButton />
-            </div>
+            <Show when=move || has_screen>
+                <div class="setting-row">
+                    <RestoreButton />
+                </div>
+            </Show>
             <div class="setting-row">
                 <super::pictures::PictureCleanupButton />
             </div>

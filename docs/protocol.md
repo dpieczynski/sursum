@@ -33,8 +33,10 @@ pairing form when that says `paired: false` (a network error leaves it waiting t
 The desktop program (ADR 0020) runs the server in the *local owner* mode: it listens on loopback
 only (the server refuses to start otherwise), there is no PIN and no pairing, and every request is
 allowed. `/api/session` then says `"installation": "library"` (a device says `"screen"`; older
-servers send nothing, which reads as `"screen"`), and the remote offers only songs, the editor,
-the library file and the backup. The same mode is reachable as `sursum-server --library` for the
+servers send nothing, which reads as `"screen"`), and the remote offers songs, the editor, sets
+for any church (a church chosen with `UseChurch` decides which sets are listed and whose new sets
+are; before one is chosen every set is listed), the library file and the backup download
+(restoring needs a service manager). The same mode is reachable as `sursum-server --library` for the
 browser tests.
 
 Application updates (ADR 0013, second amendment): `POST /api/update` takes a `.sursum-app` file
@@ -156,9 +158,10 @@ restart after a server restart, so clients apply every snapshot instead of compa
   unchanged, failed, sets, to_review, problems }`; `to_review` names songs whose file text met a
   correction made in sursum since the last import (both versions stay, ADR 0025).
 - **Churches** (ADR 0025): `RemoteState.church` is the church this device serves (named at
-  setup, `None` in the desktop program), `RemoteState.churches` every church it knows; commands
-  `NameChurch { name }` (create or rename) and `UseChurch { church_id }` (join a church learned
-  from a file). Library files carry them in `churches.jsonl`.
+  setup; in the desktop program the church whose sets it lists, `None` until one is chosen),
+  `RemoteState.churches` every church it knows; commands `NameChurch { name }` (create or
+  rename) and `UseChurch { church_id }` (join a church learned from a file; in the desktop
+  program, choose whose sets to prepare). Library files carry them in `churches.jsonl`.
 - **Review** of songs changed in two places: `RemoteState.songs_to_review` counts them and
   `SongSummary.review` marks them in search results; `GET /api/songs/review` lists them,
   `GET /api/songs/{id}/versions` answers `SongVersions` (every live version in the editor's text

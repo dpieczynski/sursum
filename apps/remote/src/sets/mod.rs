@@ -5,6 +5,7 @@
 //! teraz", which says so).
 
 mod add;
+mod church_choice;
 mod items;
 mod picker;
 mod review;
@@ -29,6 +30,7 @@ pub fn SetsView(state: RwSignal<Option<RemoteState>>, commands: Commands) -> imp
         move || card.get().map(|song_id| view! { <SongCard song_id open=card state commands /> });
     view! {
         <div class="sets-view" data-testid="sets-view">
+            <church_choice::ChurchChoice state commands />
             <picker::SetHeader state commands />
             <review::SetReviewLine state commands />
             <crate::review::ReviewLine state />

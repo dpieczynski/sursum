@@ -98,8 +98,10 @@ packages: [plan-sync.md](plan-sync.md).
   above the Zestaw view's items; the comparison lists each version's items and keeps one
   ("Zostaw tę") with the items marked "Dodaj" from the other (`KeepSetVersion`,
   `GET /api/sets/{id}/versions`, `sursum-core::set_review`); server and e2e tests
-- [ ] Y1.7 Zestaw view in the desktop program with the church switcher; "Przywróć z kopii" hidden
-  there
+- [x] Y1.7 Zestaw view in the desktop program (2026-11-20): the tab Zestaw next to Pieśni;
+  "Zestawy kościoła" chooses the church (`UseChurch` there only changes which sets are listed and
+  whose new sets are); "Pokaż teraz" and "Przywróć z kopii" are not offered; server and e2e
+  tests (a set prepared at home reaches its church and stays hidden in the other)
 - [ ] Y1.8 Operator guide
 
 ## M0 — Skeleton
