@@ -9,7 +9,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 
 use crate::fit::{Fit, fit_deck};
-use crate::slide_view::{SlideView, background_style};
+use crate::slide_view::SlideView;
 use crate::stage::Stage;
 
 /// What a preview shows.
@@ -57,10 +57,9 @@ pub fn SlidePreview(
     let content = move || {
         fit.get().and_then(|(data, fit)| {
             let slide = crate::shown::shown_slide(&data.live)?;
-            let background = background_style(&data.live.deck.background);
             let masks = data.layout.masks.clone();
             Some(view! {
-                <div class="sursum-layer" style=background>
+                <div class="sursum-layer sursum-opaque">
                     <SlideView slide content=data.layout.content font_px=fit.font_px wrap=fit.wrap />
                 </div>
                 {masks

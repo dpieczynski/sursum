@@ -16,7 +16,6 @@ fn sample_deck() -> Deck {
             label: "v1".to_owned(),
             body: SlideBody::Lyrics { lines: vec!["Kiedy ranne wstają zorze,".to_owned()] },
         }],
-        background: Background::default(),
     }
 }
 

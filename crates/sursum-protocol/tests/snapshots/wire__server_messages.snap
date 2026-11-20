@@ -29,11 +29,7 @@ expression: messages
                 ]
               }
             }
-          ],
-          "background": {
-            "kind": "color",
-            "css": "#000000"
-          }
+          ]
         },
         "slide_index": 0,
         "gap": false

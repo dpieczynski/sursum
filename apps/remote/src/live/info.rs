@@ -231,7 +231,6 @@ mod tests {
             item_id: ItemId::from(item),
             title: title.into(),
             slides: vec![slide("v1#0@0", "v1", "a"), slide("c#0@0", "c", "b"), slide("c#1@0", "c", "c")],
-            background: Background::default(),
         }
     }
 

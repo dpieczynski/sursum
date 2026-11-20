@@ -23,8 +23,8 @@ pub struct Config {
     pub transition_ms: u32,
     /// Accept connections from any address, not only private networks (for special setups).
     pub allow_public_clients: bool,
-    /// Who may use the server (never from `config.toml`): the PIN on the device, the open
-    /// development mode, or the desktop program's local owner.
+    /// Who may use the server (never from `config.toml`): the PIN on the device, or no PIN on a
+    /// loopback address (the desktop program, development and tests).
     pub access: crate::auth::AccessMode,
     /// What kind of installation this is, so the remote offers only what makes sense: a device
     /// with a screen, or the desktop program's library without one (never from `config.toml`).

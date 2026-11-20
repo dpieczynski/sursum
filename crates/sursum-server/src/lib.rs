@@ -72,10 +72,10 @@ impl RunningServer {
 
 /// Starts the server in the background and returns once it listens.
 pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<RunningServer> {
-    // The local owner needs no PIN only because nothing outside this computer can connect.
+    // No PIN is needed only because nothing outside this computer can connect.
     anyhow::ensure!(
-        config.access != auth::AccessMode::LocalOwner || config.listen.ip().is_loopback(),
-        "the local owner mode needs a loopback address, not {}",
+        config.access != auth::AccessMode::Local || config.listen.ip().is_loopback(),
+        "running without a PIN needs a loopback address, not {}",
         config.listen
     );
     match device_backup::apply_staged(&config.data_dir) {
@@ -91,14 +91,13 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
     }
     let pin: Option<auth::PinHash> = database.setting(auth::PIN_SETTING).context("loading the PIN")?;
     match (&pin, config.access) {
-        (_, auth::AccessMode::LocalOwner) => tracing::info!("desktop program: no PIN, loopback only"),
-        (Some(_), _) => {}
+        (_, auth::AccessMode::Local) => {
+            tracing::info!("no PIN: loopback only, this computer may do everything");
+        }
+        (Some(_), auth::AccessMode::Pin) => {}
         (None, auth::AccessMode::Pin) => {
             tracing::warn!("no PIN is set: the first remote to open the page must set one");
         }
-        (None, auth::AccessMode::OpenForDevelopment) => tracing::warn!(
-            "no PIN is set and --open-without-pin is on: any device on the local network may control everything"
-        ),
     }
     let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?, config.access));
     let state = actor::spawn(&config, database, platform)?;

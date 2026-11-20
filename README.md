@@ -54,8 +54,8 @@ HDMI-CEC or PJLink) and the screen guard (`[screen_guard]`); see `crates/sursum-
 
 Until a PIN is set nobody can control the screen: the first remote that opens the page sets it
 (or run `sursum-server --data-dir … set-pin 123456`). A paired remote may do everything
-(ADR 0024). The screen's margins and exclusion zones are set in the remote's calibration panel. `just dev` passes `--open-without-pin`, which
-lets every device in while no PIN is set — for development only.
+(ADR 0024). The screen's margins and exclusion zones are set in the remote's calibration panel. `just dev` passes `--open-without-pin`: no PIN,
+and the server only listens on loopback (it refuses any other address) — for development only.
 
 ## Contributing
 

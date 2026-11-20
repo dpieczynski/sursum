@@ -55,3 +55,8 @@ separate admin PIN can be added later as a setting without changing the protocol
   never from `config.toml`), for `just dev` and the tests.
 - Remaining risk: whoever reaches a freshly installed device first can set its PIN; the installer
   sets it right after installation (or before, with `set-pin`).
+
+## Amendment (2026-11-20): `--open-without-pin` is loopback only
+
+The flag now selects the same mode as the desktop program (ADR 0020 amendment of 2026-11-20): the
+server refuses to start with it on anything but a loopback address, and a stored PIN is ignored.

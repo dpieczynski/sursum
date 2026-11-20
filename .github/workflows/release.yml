@@ -31,15 +31,8 @@ jobs:
       - run: rustup show
       - uses: taiki-e/install-action@v2
         with:
-          tool: trunk@0.22.1,wasm-bindgen-cli@0.2.130
-      - name: Build (web apps and program with one build id)
-        shell: bash
-        run: |
-          set -euo pipefail
-          export SURSUM_BUILD_ID="$(git describe --always --dirty)"
-          (cd apps/screen && trunk build --release)
-          (cd apps/remote && trunk build --release)
-          cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130
+      - run: just desktop-windows
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-windows

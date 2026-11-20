@@ -32,8 +32,8 @@ struct Args {
     /// Print the license notice and exit.
     #[arg(long)]
     license: bool,
-    /// Development only: while no PIN is set, let every device on the local network in (without
-    /// it, the first remote must set the PIN).
+    /// Development only: no PIN, everyone who reaches the server may do everything. Refused
+    /// unless `--listen` is a loopback address (without the flag, the first remote sets the PIN).
     #[arg(long)]
     open_without_pin: bool,
     /// Run as the desktop program's library (ADR 0020): no screen, no PIN, loopback only. The
@@ -183,10 +183,10 @@ async fn main() -> anyhow::Result<()> {
     config.allowed_origins.extend(args.allow_origins);
     config.wasm_delay_ms = args.wasm_delay_ms;
     if args.open_without_pin {
-        config.access = sursum_server::auth::AccessMode::OpenForDevelopment;
+        config.access = sursum_server::auth::AccessMode::Local;
     }
     if args.library {
-        config.access = sursum_server::auth::AccessMode::LocalOwner;
+        config.access = sursum_server::auth::AccessMode::Local;
         config.installation = sursum_server::Installation::Library;
     }
 

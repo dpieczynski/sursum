@@ -94,7 +94,7 @@ fn start(
     // Loopback only, on a free port: nothing outside this computer can reach the server, so its
     // user is the owner and needs no PIN (ADR 0020). There is no screen at home.
     config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
-    config.access = AccessMode::LocalOwner;
+    config.access = AccessMode::Local;
     config.installation = Installation::Library;
     let server = runtime.block_on(sursum_server::start(config, &SystemPlatform))?;
     Ok(Started { server, _instance: instance })

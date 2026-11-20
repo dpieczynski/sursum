@@ -8,9 +8,7 @@
 //!   equally long chunks (never a lonely last line).
 
 use sha2::{Digest, Sha256};
-use sursum_protocol::{
-    AssetId, Background, Deck, DeckId, ImageFit, ItemId, Slide, SlideBody, SlideKey, SongId,
-};
+use sursum_protocol::{AssetId, Deck, DeckId, ItemId, Slide, SlideBody, SlideKey, SongId};
 
 #[cfg(test)]
 use crate::model::Line;
@@ -75,17 +73,17 @@ pub fn compile_item<'a>(
             compile_song(song(song_id)?, &item.id, order_override.as_deref(), rules)
         }
         ItemKind::Text { title, slides } => compile_text(&item.id, title, slides),
-        ItemKind::Image { title, asset_id, fit } => compile_image(&item.id, title, asset_id, *fit),
+        ItemKind::Image { title, asset_id } => compile_image(&item.id, title, asset_id),
         ItemKind::Blank { title } => compile_blank(&item.id, title),
     })
 }
 
 /// Compiles an image item: one slide showing the picture.
-pub fn compile_image(item_id: &ItemId, title: &str, asset_id: &AssetId, fit: ImageFit) -> Deck {
+pub fn compile_image(item_id: &ItemId, title: &str, asset_id: &AssetId) -> Deck {
     let slide = Slide {
         key: SlideKey("img#0".to_owned()),
         label: "1".to_owned(),
-        body: SlideBody::Image { asset_id: asset_id.clone(), fit },
+        body: SlideBody::Image { asset_id: asset_id.clone() },
     };
     build_deck(item_id, title, vec![slide])
 }
@@ -194,20 +192,12 @@ fn split_evenly(lines: &[String], max_lines: usize) -> Vec<Vec<String>> {
 
 /// Wraps slides into a deck with a content-derived id.
 fn build_deck(item_id: &ItemId, title: &str, slides: Vec<Slide>) -> Deck {
-    let background = Background::default();
-    let deck_id = content_id(title, &slides, &background);
-    Deck {
-        fit_group: deck_id.0.clone(),
-        deck_id,
-        item_id: item_id.clone(),
-        title: title.to_owned(),
-        slides,
-        background,
-    }
+    let deck_id = content_id(title, &slides);
+    Deck { fit_group: deck_id.0.clone(), deck_id, item_id: item_id.clone(), title: title.to_owned(), slides }
 }
 
 /// A short, stable hash of everything that affects how the deck looks.
-fn content_id(title: &str, slides: &[Slide], background: &Background) -> DeckId {
+fn content_id(title: &str, slides: &[Slide]) -> DeckId {
     let mut hasher = Sha256::new();
     hasher.update(title.as_bytes());
     hasher.update([0]);
@@ -216,13 +206,11 @@ fn content_id(title: &str, slides: &[Slide], background: &Background) -> DeckId 
         hasher.update([0]);
         let body = match &slide.body {
             SlideBody::Lyrics { lines } | SlideBody::Text { lines, .. } => lines.join("\n"),
-            SlideBody::Image { asset_id, fit } => format!("{}#{fit:?}", asset_id.0),
+            SlideBody::Image { asset_id } => asset_id.0.clone(),
         };
         hasher.update(body.as_bytes());
         hasher.update([0]);
     }
-    let Background::Color { css } = background;
-    hasher.update(css.as_bytes());
     let digest = hasher.finalize();
     let hex: String = digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect();
     DeckId(hex)
@@ -362,14 +350,14 @@ mod tests {
     }
 
     #[test]
-    fn image_and_blank_items_are_one_slide_each_and_fit_changes_the_deck() {
+    fn image_and_blank_items_are_one_slide_each_and_the_picture_names_the_deck() {
         let item = ItemId::from("i");
         let asset = AssetId::from("abc.png");
-        let contain = compile_image(&item, "Plakat", &asset, ImageFit::Contain);
-        assert_eq!(contain.slides.len(), 1);
-        assert!(matches!(&contain.slides[0].body, SlideBody::Image { asset_id, .. } if asset_id == &asset));
-        let cover = compile_image(&item, "Plakat", &asset, ImageFit::Cover);
-        assert_ne!(contain.deck_id, cover.deck_id, "the screen must redraw when the fit changes");
+        let poster = compile_image(&item, "Plakat", &asset);
+        assert_eq!(poster.slides.len(), 1);
+        assert!(matches!(&poster.slides[0].body, SlideBody::Image { asset_id } if asset_id == &asset));
+        let other = compile_image(&item, "Plakat", &AssetId::from("def.png"));
+        assert_ne!(poster.deck_id, other.deck_id, "the screen must redraw when the picture changes");
         let blank = compile_blank(&item, "Homilia");
         assert!(matches!(&blank.slides[0].body, SlideBody::Text { lines, .. } if lines.is_empty()));
     }

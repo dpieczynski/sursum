@@ -6,7 +6,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use sursum_protocol::{Background, Deck, DeckId, ItemId, Rect, Slide, SlideBody, SlideKey};
+use sursum_protocol::{Deck, DeckId, ItemId, Rect, Slide, SlideBody, SlideKey};
 use sursum_slide::fit::fit_deck;
 use sursum_slide::slide_view::{lines_class, text_box_style};
 use sursum_slide::theme::THEME;
@@ -57,7 +57,6 @@ fn deck(group: &str, slides: &[&[&str]]) -> Deck {
                 body: SlideBody::Lyrics { lines: lines.iter().map(|line| (*line).to_owned()).collect() },
             })
             .collect(),
-        background: Background::default(),
     }
 }
 

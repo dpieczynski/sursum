@@ -58,10 +58,15 @@
   background: #000;
 }
 
-/* Layers fill the stage. Content layers have opaque backgrounds (see slide.rs). */
+/* Layers fill the stage. */
 .sursum-layer {
   position: absolute;
   inset: 0;
+}
+/* Content layers are opaque black, so a crossfade never dims the screen or shows two slides at
+   once. */
+.sursum-opaque {
+  background: #000;
 }
 /* The two content layers stay invisible until the transition loop sets their opacity, and are
    composited from page load, so a first crossfade cannot flash or promote them mid-animation. */

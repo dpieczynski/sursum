@@ -10,16 +10,13 @@
 use futures_util::StreamExt;
 use leptos::html::Div;
 use leptos::prelude::*;
-use sursum_protocol::{
-    Background, DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideBody, SlideKey,
-};
+use sursum_protocol::{DeckId, Overlay, Rect, ScreenLayout, ScreenState, Slide, SlideBody, SlideKey};
 use wasm_bindgen::JsCast;
 
 use crate::calibration::{CalibrationPattern, rect_style};
 use crate::dom;
 use crate::fit::{Fit, fit_deck};
-use crate::slide_view::asset_url;
-use crate::slide_view::{SlideView, background_value};
+use crate::slide_view::{SlideView, asset_url};
 use crate::stage::Stage;
 
 /// What one content layer shows.
@@ -27,7 +24,6 @@ use crate::stage::Stage;
 struct Shown {
     deck_id: DeckId,
     slide: Slide,
-    background: Background,
     layout: ScreenLayout,
     fit: Fit,
 }
@@ -164,14 +160,13 @@ impl Parts {
         let measurer: web_sys::HtmlElement = measurer.unchecked_into();
         let fit = fit_deck(&live.deck, target.layout.content, &measurer).await;
         if let SlideBody::Image { asset_id, .. } = &slide.body {
-            dom::decode_image(&crate::slide_view::asset_url(asset_id)).await;
+            dom::decode_image(&asset_url(asset_id)).await;
         }
 
         let incoming = 1 - current;
         self.layers[incoming].set(Some(Shown {
             deck_id: live.deck.deck_id.clone(),
             slide,
-            background: live.deck.background.clone(),
             layout: target.layout.clone(),
             fit,
         }));
@@ -203,16 +198,12 @@ impl Parts {
 }
 
 /// One content layer; its opacity and stacking are set by the transition loop, not by Leptos.
-/// Leptos sets only the `background` property: replacing the whole `style` attribute wiped the
-/// loop's opacity, so a new slide showed at full brightness for a frame before its fade
-/// (seen on the Pi at the first song after boot). Hidden until the loop shows it (CSS).
+/// Leptos must never set its `style` attribute: replacing it wiped the loop's opacity, so a new
+/// slide showed at full brightness for a frame before its fade (seen on the Pi at the first song
+/// after boot). Opaque black and hidden until the loop shows it (CSS).
 fn layer_view(shown: RwSignal<Option<Shown>>, node_ref: NodeRef<Div>) -> impl IntoView {
-    let background = move || {
-        shown
-            .with(|shown| shown.as_ref().map(|shown| background_value(&shown.background)).unwrap_or_default())
-    };
     view! {
-        <div class="sursum-layer sursum-content" node_ref=node_ref style:background=background>
+        <div class="sursum-layer sursum-opaque sursum-content" node_ref=node_ref>
             {move || {
                 shown
                     .get()
