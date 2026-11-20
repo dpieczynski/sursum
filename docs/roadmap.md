@@ -44,8 +44,9 @@ below comes before new features. Order: CI image build, one update path, engine 
   seatd, `wlr-randr`, `kiosk-session`, the cursor theme, the policies; move the WPE tests to
   2.54 with MiniBrowser) or stay on Chromium for good (and delete the WPE tests and cog)
 - [ ] Smaller findings of the audit, not decided, cheapest first: `ImageFit::Cover` is never
-  chosen and `Background` has one variant (both in stored set items and decks); the demo set
-  comes back whenever no set exists (fixed in Y1.6); the "build the web apps with one build id"
+  chosen and `Background` has one variant (both in stored set items and decks); ~~the demo set
+  comes back whenever no set exists~~ (fixed in Y1.6a: made once, on the first start); the "build
+  the web apps with one build id"
   block is copied into each workflow; `OpenForDevelopment` and `LocalOwner` are both "no PIN,
   everything allowed"; `.sursum` and `.sursum-backup` overlap (and the backup restore swaps the
   database file, which ties it to systemd)
