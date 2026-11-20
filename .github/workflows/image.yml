@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# A trial build of the device image (ADR 0013, ADR 0022) in pull requests that change it, and by
+# hand: the same `just image` as a release, natively on an arm64 runner, signed with a throwaway
+# key made for this run (so it needs no secret and the result is never installable on a parish
+# device). The signed image of a release is built by release.yml.
+name: Device image (trial)
+
+on:
+  pull_request:
+    paths:
+      - "image/**"
+      - "deploy/**"
+      - "justfile"
+      - "crates/sursum-server/src/system_update.rs"
+      - ".github/workflows/image.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  image:
+    name: Device image (arm64, unsigned trial)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Free disk space (preinstalled SDKs this project does not use)
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: actions/checkout@v7
+        with:
+          # `git describe` names the version.
+          fetch-depth: 0
+      - run: rustup show
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
+      - name: Podman
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      - name: A throwaway update key
+        run: |
+          cargo run -q -p sursum-server -- system keygen "$RUNNER_TEMP/trial.key" | tee -a "$GITHUB_ENV"
+          echo "SURSUM_BUNDLE_SIGNING_KEY=$RUNNER_TEMP/trial.key" >> "$GITHUB_ENV"
+      - name: Build the image and the system update
+        env:
+          SURSUM_SSH_PUBKEY: ${{ vars.SURSUM_SSH_PUBKEY }}
+          SURSUM_PODMAN: sudo podman
+        run: just image
+      - name: Sizes
+        run: |
+          ls -lh target/image/work/image-sursum/sursum.img target/sursum-system-*.sursum-system
+          df -h /
