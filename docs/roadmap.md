@@ -102,7 +102,10 @@ packages: [plan-sync.md](plan-sync.md).
   "Zestawy kościoła" chooses the church (`UseChurch` there only changes which sets are listed and
   whose new sets are); "Pokaż teraz" and "Przywróć z kopii" are not offered; server and e2e
   tests (a set prepared at home reaches its church and stays hidden in the other)
-- [ ] Y1.8 Operator guide
+- [x] Y1.8 Operator guide (2026-11-20): the section Synchronizacja (one file, any direction;
+  what travels; more changes win; review; deletions; dates), preparing sets at home, the
+  Kościół setting; Ustawienia → Baza pieśni renamed Synchronizacja with "Zapisz plik" and
+  "Wczytaj plik" (the plan's section 8); new remote screenshots
 
 ## M0 — Skeleton
 
@@ -265,12 +268,12 @@ itself. (All three met on the pilot Pi 5, 2026-11-18; CI-built images remain.)
 ## D1 — Desktop program (ADR 0020)
 
 One program, `sursum`, with the server inside and the remote in its own window: for preparing
-songs at home (export, then "Scal bazę z pliku" in the church) and later for the parish PC.
+songs at home ("Zapisz plik", then "Wczytaj plik" in the church) and later for the parish PC.
 Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md).
 
 - [x] Spike (branch `spike/desktop-shell`, 2026-11-18; merged into `main` as pull request #1 on 2026-11-19): crate `sursum-desktop`; Linux window on GTK 4 + WebKitGTK 6.0 built and run on Fedora 45 (the remote connects and stays connected); Windows window on `tao` + `wry` cross-compiles with `cargo zigbuild` (9.9 MB, GUI subsystem); clippy clean for both targets; `cargo deny` passes with one exception
 - [ ] ⚠ Windows Defender flags the downloaded CI artifact (the ZIP with the unsigned `sursum.exe`) as a virus and deletes it right after the download (2026-11-19). Blocks the guide's download step. To find out: the detection name in Defender's protection history; whether the release's bare `.exe` is flagged too. Ways out: report a false positive to Microsoft (file submission), signing (the ADR 0020 amendment chose unsigned; revisit with an ADR if reporting is not enough)
-- [ ] ⚠ First run on Windows (the program starts, 2026-11-19; the rest not yet reported): the window opens, "Eksport bazy" saves a file, "Scal bazę z pliku" opens the file picker, closing the window ends the process; WebView2 present on the parish PC's Windows 10
+- [ ] ⚠ First run on Windows (the program starts, 2026-11-19; the rest not yet reported): the window opens, "Zapisz plik" saves a file, "Wczytaj plik" opens the file picker, closing the window ends the process; WebView2 present on the parish PC's Windows 10
 - [ ] ⚠ Linux by hand: the "save as" dialog of the export, the file picker of the merge, a second start only raises the first window
 - [x] The window behaves like a program: the web view's data in `webview/` beside the database, `sursum.log` (previous run kept as `sursum.previous.log`), a Polish message page instead of a silent exit (server failed, another copy running), one copy at a time through `sursum.lock` (Linux also hands a second start to the first window over D-Bus), links outside the server open in the system browser; checked on Fedora 45 (first start, second start, lock held by another process)
 - [x] MSVC target on a Windows runner, one `sursum.exe` (ADR 0020 amendment; the WebView2 SDK is BSD-3-Clause, its license is on `/licenses`, which also lists the desktop program's crates and links back to the remote): CI job `desktop-windows` with a non-blocking smoke test (the remote connects, read from `sursum.log`), artifact per commit (4.8 MB zipped), attached to releases; first run on GitHub 2026-11-18 (PR #1): built with MSVC on `windows-2025`, and the smoke test passed there, the remote in the WebView2 window connected to the server; first try on a real Windows (2026-11-19): "VCRUNTIME140_1.dll not found", because MSVC links the C runtime dynamically and the runner has the Visual C++ Redistributable; now linked statically (`.cargo/config.toml`, `+crt-static`) and CI fails if `sursum.exe` imports `vcruntime`/`msvcp`/`WebView2Loader` DLLs; with that it starts on a real Windows without errors (2026-11-19)
