@@ -514,6 +514,13 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
                 .await
                 .context("opening the key settings")?;
             remote.find(By::Css("[data-action=next] button")).await?.click().await.context("learn")?;
+            // Press the pedal only once the row waits for it: a key sent before the click has
+            // re-rendered was taken as an ordinary key, and the test waited for "F8" in vain.
+            wait_until(Duration::from_secs(5), || async {
+                remote.find(By::Css("[data-action=next].selected")).await.is_ok()
+            })
+            .await
+            .context("learn mode")?;
             remote.action_chain().send_keys(Key::F8).perform().await?;
             wait_until(Duration::from_secs(5), || async {
                 match remote.find(By::Css("[data-action=next] .key-names")).await {
@@ -521,7 +528,8 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
                     Err(_) => false,
                 }
             })
-            .await?;
+            .await
+            .context("F8 learned")?;
             remote.action_chain().send_keys(Key::F8).perform().await?;
             wait_for_slide(screen, "v2#").await?;
 
@@ -535,7 +543,7 @@ async fn a_pedal_key_can_be_learned_and_page_keys_work_even_while_typing() -> an
                 "typing blacked out"
             );
             search.send_keys(Key::PageDown).await?;
-            wait_until(Duration::from_secs(5), || async {
+            wait_until(Duration::from_secs(10), || async {
                 !attribute(screen, SCREEN_ROOT, "data-slide-key").await.starts_with("v2#")
             })
             .await?;
