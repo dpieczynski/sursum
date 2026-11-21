@@ -83,6 +83,10 @@ kernel for it).
 - **Read the journal from the card**: the journal is persistent, so it holds every boot that
   reached systemd. Put the card into a Linux laptop, mount the `persistent` partition read-only
   and run `journalctl -D <mount>/log/journal --list-boots`, then `-b -1` and so on.
+- **The WPE spike image**: `just image n wpe` replaces the Chromium kiosk with WebKit's
+  MiniBrowser on the DRM platform, without cage (layer `sursum-kiosk-wpe`, packages from
+  `.github/workflows/wpewebkit.yml` in `target/wpe-debs`, version suffix `+wpe`; ADR 0009
+  amendment of 2026-11-19). For the spike only; installing the normal update brings Chromium back.
 - **A diagnostic image**: `just image y` builds an image that shows the firmware's rainbow
   screen and the kernel's and systemd's messages on the screen (until the kiosk takes it) instead
   of a black boot (layer variable `sursum.diagnostic_boot`). It is otherwise identical; never ship

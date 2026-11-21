@@ -52,6 +52,11 @@ below comes before new features. Order: CI image build, one update path, engine 
   first frame, RAM after 8 h, crossfade, system size. Then an ADR: switch (and delete cage,
   seatd, `wlr-randr`, `kiosk-session`, the cursor theme, the policies; move the WPE tests to
   2.54 with MiniBrowser) or stay on Chromium for good (and delete the WPE tests and cog)
+  Built so far (2026-11-20): `wpewebkit.yml` rebuilds sid's source package for trixie arm64
+  (artifact `wpewebkit-debs`); `just image n wpe` swaps the kiosk layer for
+  `sursum-kiosk-wpe` (MiniBrowser, `WPE_PLATFORM=drm`, no cage, version suffix `+wpe`);
+  `spike-wpe.yml` (by hand on main) builds it signed as a system update for the pilot Pi. The
+  checks on the Pi are still to do
 - [x] Smaller findings of the audit (2026-11-20): `ImageFit` and `Deck.background` removed
   (pictures always whole, layers black in `slide.css`); the Windows build is `just desktop-windows`
   in both workflows (one build id from the justfile); `OpenForDevelopment` and `LocalOwner` are
