@@ -59,6 +59,11 @@ impl ScreenPresence {
     fn subscribe(&self) -> watch::Receiver<usize> {
         self.count.subscribe()
     }
+
+    /// True while a screen on this machine (the kiosk) is connected.
+    pub fn any(&self) -> bool {
+        *self.count.borrow() > 0
+    }
 }
 
 /// One connected screen session; dropping it counts the screen as gone.

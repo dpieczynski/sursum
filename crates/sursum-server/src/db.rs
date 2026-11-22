@@ -170,6 +170,26 @@ impl Database {
         i64::try_from(SCHEMA_BASE + MIGRATIONS.len()).unwrap_or(i64::MAX)
     }
 
+    /// A consistent copy of the database in `data_dir` at `target`, outside the rotating
+    /// `backups/` (e.g. the copy a system update's rollback depends on, which no number of
+    /// restarts may push out). Through a plain connection: no migration, no repair, safe while
+    /// the server runs. Written under a temporary name and renamed when complete. False if
+    /// there is no database yet.
+    pub fn copy_to(data_dir: &Path, target: &Path) -> anyhow::Result<bool> {
+        let path = data_dir.join(DATABASE_FILE);
+        if !path.exists() {
+            return Ok(false);
+        }
+        let connection = Connection::open(&path)?;
+        connection.busy_timeout(std::time::Duration::from_secs(5))?;
+        let part = target.with_extension("db.part");
+        let _ = std::fs::remove_file(&part);
+        connection.execute("VACUUM INTO ?1", [part.to_string_lossy()])?;
+        std::fs::File::open(&part)?.sync_all()?;
+        std::fs::rename(&part, target)?;
+        Ok(true)
+    }
+
     /// A backup of the database in `data_dir` through a plain connection: no migration and no
     /// repair, so it is safe while the server is running (e.g. before installing an update).
     pub fn backup_file(data_dir: &Path, label: &str) -> anyhow::Result<Option<PathBuf>> {

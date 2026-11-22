@@ -191,6 +191,12 @@ async fn healthz_answers() {
     stream.read_to_string(&mut response).await.unwrap();
     assert!(response.starts_with("HTTP/1.1 200"));
     assert!(response.ends_with("ok"));
+    // A system on trial is healthy only with its screen connected (and the state answering).
+    assert_eq!(http_get(&server, "/healthz/trial").await, "no screen connected");
+    let mut screen = connect(&server, Role::Screen, "kiosk").await;
+    next_screen_state(&mut screen).await;
+    assert_eq!(http_get(&server, "/healthz/trial").await, "ok");
+    drop(screen);
     server.stop().await.unwrap();
 }
 

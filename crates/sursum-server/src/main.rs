@@ -100,7 +100,7 @@ enum SystemTask {
     /// At boot, after the server started: in the slot of a system on trial, wait until the
     /// server and the kiosk are healthy and make it the default, or reboot into the old slot.
     FinishTrial {
-        /// The server's address for /healthz.
+        /// The server's address for /healthz/trial.
         #[arg(long, default_value = "127.0.0.1:80")]
         server: String,
     },
@@ -225,8 +225,9 @@ fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Res
     Ok(())
 }
 
-/// Up to three minutes for the server to answer /healthz and the kiosk to run, then both must
-/// stay so for 30 s (six checks 5 s apart).
+/// Up to three minutes for the server to answer /healthz/trial (its state actor answers and the
+/// kiosk's screen page is connected) and the kiosk unit to run, then both must stay so for 30 s
+/// (six checks 5 s apart).
 fn healthy_for_a_while(server: &str) -> bool {
     let healthy = || {
         let answers = (|| -> std::io::Result<bool> {
@@ -235,7 +236,7 @@ fn healthy_for_a_while(server: &str) -> bool {
             let mut stream =
                 std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_secs(3))?;
             stream.set_read_timeout(Some(std::time::Duration::from_secs(3)))?;
-            stream.write_all(b"GET /healthz HTTP/1.0\r\nHost: localhost\r\n\r\n")?;
+            stream.write_all(b"GET /healthz/trial HTTP/1.0\r\nHost: localhost\r\n\r\n")?;
             let mut answer = String::new();
             stream.read_to_string(&mut answer)?;
             Ok(answer.starts_with("HTTP/1.0 200") || answer.starts_with("HTTP/1.1 200"))

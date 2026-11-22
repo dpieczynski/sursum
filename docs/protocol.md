@@ -16,7 +16,7 @@ they cannot drift apart within one build.
 
 | Who | May |
 |---|---|
-| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/licenses` |
+| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/healthz/trial` (503 unless the state actor answers and the kiosk's screen is connected; the system update's trial checks it), `/licenses` |
 | paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
 
 There is one level of rights (ADR 0024): a paired remote may do everything. Without a PIN nobody

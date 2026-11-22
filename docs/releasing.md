@@ -47,12 +47,14 @@ device refuses. Details of the image: [image/README.md](../image/README.md).
 Never during a service. In the remote: Ustawienia → O programie → **Zainstaluj aktualizację**,
 choose the `.sursum-system` file. Then:
 
-1. The server checks the signature, copies the database (`backups/*-before-<version>.db`) and
-   notes its schema, and asks the root unit to install.
+1. The server checks the signature, copies the database (`system-update/before-<version>.db`,
+   outside the rotating backups, removed after the update) and notes its schema, and asks the
+   root unit to install.
 2. The root unit writes the update to the other A/B slot with the running system's server and
    restarts into it once (tryboot). The remote shows the steps and reconnects by itself.
-3. The new system is on trial: if the server and the kiosk are healthy for 30 s within three
-   minutes, it becomes the default. Otherwise the device restarts and the firmware starts the old
+3. The new system is on trial: if the server answers `/healthz/trial` (its state works and the
+   kiosk's screen page is connected) and the kiosk unit runs, for 30 s within three minutes, it
+   becomes the default. Otherwise the device restarts and the firmware starts the old
    slot again.
 4. Back in the old slot, before the old server starts, `sursum-system-check` puts the database
    copy back if the new server had already raised the schema (the old one could not open it);

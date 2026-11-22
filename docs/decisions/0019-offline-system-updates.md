@@ -74,3 +74,18 @@ Our own small updater on the Raspberry Pi firmware's **tryboot** (`autoboot.txt`
   system whose kiosk unit runs `/bin/false`: it booted, was found unhealthy after three minutes,
   the device restarted into v0.1.0-40 by itself and recorded `rolled_back`; data and pairing
   untouched).
+
+## Amendment (2026-11-22): a stricter trial and a protected database copy
+- The trial waits for `/healthz/trial` instead of `/healthz`: it answers only while the server's
+  state actor responds and the kiosk's screen page is connected, so a release whose server hangs
+  or whose screen app does not load is rolled back, not committed. The kiosk unit must still be
+  active too.
+- The database copy a rollback depends on is `system-update/before-<version>.db`, outside the
+  rotating `backups/`: a new server that migrates the schema and then crash-loops writes a startup
+  backup on every start and could push a copy in `backups/` out within the three minutes, leaving
+  the old system unable to open the database. The copy is removed once the update is committed or
+  rolled back.
+- A failed stage removes what it staged (a ready file without its request blocked every later
+  update), a failed install removes its trial record, and the notes in `system-update/` are written
+  under unique temporary names and synced with their directory.
+- ⚠ Not yet run on the Pi: the update and rollback with these changes.

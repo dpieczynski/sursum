@@ -51,6 +51,20 @@ struct App {
     installation: sursum_protocol::Installation,
 }
 
+/// `GET /healthz/trial`: whether a system on trial works (ADR 0019): the state actor answers
+/// and the kiosk's screen page is connected, so a release whose server hangs or whose screen app
+/// does not load is rolled back instead of committed. 503 otherwise.
+async fn trial_health(State(app): State<App>) -> Response {
+    let actor = app.state.alive().await;
+    let screen = app.presence.any();
+    if actor && screen {
+        "ok".into_response()
+    } else {
+        let why = if actor { "no screen connected" } else { "the state actor does not answer" };
+        (StatusCode::SERVICE_UNAVAILABLE, why).into_response()
+    }
+}
+
 /// What the server needs for work that ends in a restart: a system update (ADR 0019, ADR 0022)
 /// or restoring a device backup (ADR 0018).
 #[derive(Clone)]
@@ -139,6 +153,7 @@ pub fn router(
     Router::new()
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
         .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz/trial", get(trial_health))
         .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
         .route("/api/session", get(session))
         .route("/api/pair", axum::routing::post(pair))
