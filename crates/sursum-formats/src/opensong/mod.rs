@@ -11,7 +11,7 @@ mod set;
 mod song;
 mod warning;
 
-pub use decode::decode_text;
+pub use decode::{Decoding, decode_text};
 pub use editor_text::{EditorMarkup, editor_markup, markup_for_editor};
 pub use library::{LibraryImport, add_file, add_set_file, is_skipped, read_library, read_sets};
 pub use lyrics::{ParsedLyrics, parse_lyrics, parse_presentation};
