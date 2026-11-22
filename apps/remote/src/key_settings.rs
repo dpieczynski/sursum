@@ -5,7 +5,7 @@ use leptos::ev;
 use leptos::prelude::*;
 
 use crate::Commands;
-use crate::keys::{Action, KeyMap, key_label};
+use crate::keys::{Action, Focus, KeyMap, key_label};
 use crate::messages::{Msg, pl};
 
 /// The key mapping and the action waiting for a key in learn mode (shared through the context).
@@ -15,23 +15,29 @@ pub struct Keys {
     pub learning: RwSignal<Option<Action>>,
 }
 
-/// Listens to every key press on the page: in learn mode the key is assigned, otherwise its
-/// action is sent. Held keys (auto-repeat) are ignored, so a pedal held down moves one slide.
-pub fn listen(keys: Keys, commands: Commands) {
+/// Listens to every key press on the page: in learn mode the key is assigned (Escape cancels),
+/// otherwise its action is sent, if this installation has a screen. Held keys (auto-repeat) and
+/// shortcuts with Ctrl, Alt or Meta (the browser's and the editor's) are left alone, so a pedal
+/// held down moves one slide and Alt+← still goes back.
+pub fn listen(keys: Keys, commands: Commands, installation: sursum_protocol::Installation) {
     let handle = window_event_listener(ev::keydown, move |event| {
-        if event.repeat() {
+        if event.repeat() || event.ctrl_key() || event.alt_key() || event.meta_key() {
             return;
         }
         let key = event.key();
         if let Some(action) = keys.learning.get_untracked() {
             event.prevent_default();
-            keys.map.update(|map| map.bind(&key, action));
-            keys.map.with_untracked(KeyMap::save);
+            if key != "Escape" {
+                keys.map.update(|map| map.bind(&key, action));
+                keys.map.with_untracked(KeyMap::save);
+            }
             keys.learning.set(None);
             return;
         }
-        let Some(action) = keys.map.with_untracked(|map| map.action_for(&key, typing_in_a_field(&event)))
-        else {
+        if installation == sursum_protocol::Installation::Library {
+            return;
+        }
+        let Some(action) = keys.map.with_untracked(|map| map.action_for(&key, focus_of(&event))) else {
             return;
         };
         event.prevent_default();
@@ -41,12 +47,18 @@ pub fn listen(keys: Keys, commands: Commands) {
     std::mem::forget(handle);
 }
 
-fn typing_in_a_field(event: &web_sys::KeyboardEvent) -> bool {
+fn focus_of(event: &web_sys::KeyboardEvent) -> Focus {
     use wasm_bindgen::JsCast;
-    event
-        .target()
-        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
-        .is_some_and(|element| matches!(element.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"))
+    let Some(element) = event.target().and_then(|target| target.dyn_into::<web_sys::HtmlElement>().ok())
+    else {
+        return Focus::Page;
+    };
+    match element.tag_name().as_str() {
+        "INPUT" | "TEXTAREA" | "SELECT" => Focus::Field,
+        _ if element.is_content_editable() => Focus::Field,
+        "BUTTON" | "A" | "SUMMARY" => Focus::Control,
+        _ => Focus::Page,
+    }
 }
 
 /// The button that opens the key settings, and the settings while open.
@@ -76,10 +88,10 @@ pub fn KeySettings(open: RwSignal<bool>) -> impl IntoView {
         keys.map.set(KeyMap::default());
         keys.map.with_untracked(KeyMap::save);
     };
-    let close = move |_| {
-        keys.learning.set(None);
-        open.set(false);
-    };
+    // However the panel closes (also through the button that opened it), learn mode ends with
+    // it: a pending learn would otherwise swallow the next pedal press during the service.
+    on_cleanup(move || keys.learning.set(None));
+    let close = move |_| open.set(false);
     // The panel opens below the button, often below the fold: bring it into view, or the
     // button seems to do nothing (and a second tap closes it again).
     let panel = NodeRef::<leptos::html::Div>::new();

@@ -98,7 +98,8 @@ lewą stronę.
 
 Pedał (Bluetooth) albo pilot do prezentacji działa od razu: zwykle wysyła klawisze „Page Down /
 Page Up”, które znaczą **Dalej** i **Wstecz**. Jeśli Twój pedał wysyła coś innego, otwórz
-**Ustawienia → Pedał i klawisze**, dotknij **Naucz** przy wybranej akcji i naciśnij pedał.
+**Ustawienia → Pedał i klawisze**, dotknij **Naucz** przy wybranej akcji i naciśnij pedał
+(klawisz Esc przerywa naukę).
 Ustawienie zapamiętuje to jedno urządzenie. Przytrzymanie pedału nie przewija wielu slajdów naraz.
 
 Na tablecie z Androidem po sparowaniu pedału może zniknąć klawiatura ekranowa; włącz ją w

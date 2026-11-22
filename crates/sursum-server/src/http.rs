@@ -730,7 +730,14 @@ fn socket(
         presence: app.presence.clone(),
         local_peer,
     };
-    upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
+    let limit = match role {
+        Role::Screen => ws::MAX_SCREEN_MESSAGE,
+        Role::Remote => ws::MAX_REMOTE_MESSAGE,
+    };
+    upgrade
+        .max_message_size(limit)
+        .max_frame_size(limit)
+        .on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
 }
 
 async fn screen_index(State(app): State<App>) -> Response {

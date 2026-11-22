@@ -134,7 +134,7 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     provide_context(prefs);
     let keys = key_settings::Keys { map: RwSignal::new(keys::KeyMap::load()), learning: RwSignal::new(None) };
     provide_context(keys);
-    key_settings::listen(keys, commands);
+    key_settings::listen(keys, commands, info.installation);
     let editing = RwSignal::new(None::<editor::EditorTarget>);
     provide_context(editing);
     let calibrating = calibration::Calibrating(RwSignal::new(false));

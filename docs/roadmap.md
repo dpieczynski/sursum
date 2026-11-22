@@ -64,6 +64,30 @@ below comes before new features. Order: CI image build, one update path, engine 
   was fixed in Y1.6a. Kept on purpose: `.sursum` and `.sursum-backup` (sharing between places
   by merging versus restoring one device exactly, with its calibration and settings)
 
+## R1 — Fixes from the external review (2026-11-22)
+
+An external review of main was checked claim by claim; what held up is fixed in these steps.
+- [x] Sunday safety: black never shows the logo; a rejected command leaves the program as it
+  was; steps skip a song deleted from the library; the ghost position is kept by neighbour ids;
+  calibration ends when its remote disconnects (ADR 0008 amendment); Space/Enter press a
+  focused button, Ctrl/Alt/Meta shortcuts are left to the browser, Esc cancels learn mode and
+  closing the key settings ends it; a WebSocket client counts as gone after 30 s of its own
+  silence (snapshots no longer keep it alive) and messages are size-limited; the screen drops a
+  transition overtaken by a newer snapshot; the screen guard stops at shutdown
+- [ ] Remote reactivity and live UX (memos and keyed lists, editor double save, left-hand phone
+  strip, WebSocket client reconnect on silence)
+- [ ] Editor and import data integrity (editor round trip keeps leading-space lines, blank
+  lines with spaces, zero-area zones and a zone cap, tolerant OpenSong parsing)
+- [ ] Server robustness and Windows (directory sync on Windows, Windows tests in CI, picture
+  cleanup across all sets, storage errors reported, uploads off the async workers, atomic
+  backups)
+- [ ] System update safety (pre-update database copy outside the backup rotation, cleanup of a
+  failed stage, a trial health check that needs the screen)
+- [ ] Release and licence (actions pinned by SHA, no SSH key in public images, package manifest
+  and written offer for GPL sources)
+- [ ] Protocol cleanup (slide part info, version views with number and order, import problem
+  codes) and docs/CI hygiene
+
 ## Y1 — Synchronizing songs and sets (ADR 0025)
 
 A song or a set keeps its identity and gets versions; when it was changed in two places the

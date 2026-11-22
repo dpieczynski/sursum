@@ -44,15 +44,27 @@ pub struct Program {
     pub updated_rev: Rev,
     /// Client that made the last change; may keep pressing "next" without being stale.
     pub last_actor: Option<ClientId>,
-    /// Where the live item was when someone removed it from the set (the "ghost position"):
-    /// the screen keeps showing it, and "next" continues with the item that followed it.
-    pub removed_at: Option<usize>,
+    /// The neighbours the live item had when someone removed it from the set (the "ghost
+    /// position"): the screen keeps showing it, and "next" continues with the item that followed
+    /// it.
+    pub ghost: Option<Ghost>,
+}
+
+/// The neighbours of a removed live item. Kept by id, not by index, so later removals, moves
+/// and insertions in the set (or switching to another set) never send "next" somewhere random.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Ghost {
+    /// The item before it ("previous" goes there); none if it was the first.
+    pub preceding: Option<ItemId>,
+    /// The item after it ("next" goes there); none if it was the last.
+    pub following: Option<ItemId>,
 }
 
 /// Where the live item is in the set, for next/previous item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Anchor {
     At(usize),
+    /// The live item is gone; this is where the item that followed it is (or would be).
     RemovedAt(usize),
 }
 
@@ -107,9 +119,14 @@ impl Program {
         if !self.accepts(command, base_rev, actor) {
             return Err(Rejection::Stale);
         }
-        let before = (self.live.clone(), self.overlay);
-        self.apply(command, context)?;
-        if (self.live.clone(), self.overlay) == before {
+        // All or nothing: a rejected command leaves the program exactly as it was (a step may
+        // already have switched to an edited deck before finding nothing to show).
+        let before = self.clone();
+        if let Err(rejection) = self.apply(command, context) {
+            *self = before;
+            return Err(rejection);
+        }
+        if self.live == before.live && self.overlay == before.overlay {
             return Ok(Outcome::Unchanged);
         }
         self.updated_rev = new_rev;
@@ -196,17 +213,20 @@ impl Program {
         }
     }
 
-    /// Tells the program that an item was removed from the set at `index`. If it was the live
-    /// item, the screen keeps it (frozen) and navigation continues from that position.
-    pub fn item_removed(&mut self, item_id: &ItemId, index: usize) {
+    /// Tells the program that an item was removed from `set` (already without it) at `index`.
+    /// If it was the live item, the screen keeps it (frozen) and navigation continues between
+    /// its former neighbours.
+    pub fn item_removed(&mut self, item_id: &ItemId, index: usize, set: &ServiceSet) {
         if self.live.as_ref().is_some_and(|live| &live.item_id == item_id) {
-            self.removed_at = Some(index);
+            let id_at = |index: usize| set.items.get(index).map(|item| item.id.clone());
+            self.ghost =
+                Some(Ghost { preceding: index.checked_sub(1).and_then(id_at), following: id_at(index) });
         }
     }
 
     fn next(&mut self, context: &Context<'_>) -> Result<(), Rejection> {
         let Some(live) = self.refreshed_live(context) else {
-            return self.show_item_at(context, 0, SlidePick::First);
+            return self.show_playable(context, 0, 1, SlidePick::First);
         };
         if live.gap {
             self.live = Some(live);
@@ -247,7 +267,7 @@ impl Program {
         };
         self.live = Some(live);
         match previous {
-            Some(previous) => self.show_item_at(context, previous, SlidePick::Last),
+            Some(previous) => self.show_playable(context, previous, -1, SlidePick::Last),
             None => Ok(()),
         }
     }
@@ -263,9 +283,32 @@ impl Program {
             None => None,
         };
         match target {
-            Some(index) if index < set.items.len() => self.show_item_at(context, index, SlidePick::First),
+            Some(index) if index < set.items.len() => {
+                self.show_playable(context, index, delta.signum(), SlidePick::First)
+            }
             _ => Ok(()),
         }
+    }
+
+    /// Shows the first item from `start`, moving by `step`, that has something to show. A
+    /// missing song (deleted from the library) or an empty item is stepped over, so one broken
+    /// item never stops "next" during a service. Nothing to show in that direction: no change.
+    fn show_playable(
+        &mut self,
+        context: &Context<'_>,
+        start: usize,
+        step: isize,
+        pick: SlidePick,
+    ) -> Result<(), Rejection> {
+        let set = context.set.ok_or(Rejection::NoActiveSet)?;
+        let mut index = Some(start);
+        while let Some(current) = index.filter(|index| *index < set.items.len()) {
+            if self.show_item_at(context, current, pick).is_ok() {
+                return Ok(());
+            }
+            index = current.checked_add_signed(step);
+        }
+        Ok(())
     }
 
     fn go_to(
@@ -318,17 +361,29 @@ impl Program {
             SlidePick::Index(index) => index.min(last),
         };
         self.live = Some(Live::at(item.id.clone(), deck, slide_index));
-        self.removed_at = None;
+        self.ghost = None;
         Ok(())
     }
 
-    /// Position of the live item in the active set.
+    /// Position of the live item in the active set. For a removed live item: where the item
+    /// that followed it is now, found through whichever former neighbour is still in the set.
+    /// None if the live item and both neighbours are gone (e.g. another set became active), so
+    /// "next" starts that set from the top.
     fn anchor(&self, context: &Context<'_>) -> Option<Anchor> {
         let live = self.live.as_ref()?;
-        match context.set?.position(&live.item_id) {
-            Some(position) => Some(Anchor::At(position)),
-            None => self.removed_at.map(Anchor::RemovedAt),
+        let set = context.set?;
+        if let Some(position) = set.position(&live.item_id) {
+            return Some(Anchor::At(position));
         }
+        let ghost = self.ghost.as_ref()?;
+        let after_preceding =
+            || ghost.preceding.as_ref().and_then(|id| set.position(id)).map(|index| index + 1);
+        ghost
+            .following
+            .as_ref()
+            .and_then(|id| set.position(id))
+            .or_else(after_preceding)
+            .map(Anchor::RemovedAt)
     }
 
     /// The live slide, switched to a freshly compiled deck if the item's content changed.
@@ -665,7 +720,7 @@ mod tests {
         run(&mut program, &set, Command::GoToItemNumber { number: 2 }).unwrap();
         let index = set.position(&ItemId::from("i2")).unwrap();
         set.items.remove(index);
-        program.item_removed(&ItemId::from("i2"), index);
+        program.item_removed(&ItemId::from("i2"), index, &set);
         assert_eq!(position(&program), ("i2".into(), 0), "the screen keeps the removed item");
         run(&mut program, &set, Command::NextItem).unwrap();
         assert_eq!(position(&program), ("i3".into(), 0));
@@ -677,9 +732,95 @@ mod tests {
         let mut program = Program::default();
         run(&mut program, &set, Command::GoToItemNumber { number: 2 }).unwrap();
         set.items.remove(1);
-        program.item_removed(&ItemId::from("i2"), 1);
+        program.item_removed(&ItemId::from("i2"), 1, &set);
         run(&mut program, &set, Command::Prev).unwrap();
         assert_eq!(position(&program), ("i1".into(), 2));
+    }
+
+    /// Like [`deck_for`], but the song `missing` is not in the library (deleted after it was
+    /// added to the set).
+    fn deck_without_missing(item: &SetItem) -> Option<Deck> {
+        match &item.kind {
+            ItemKind::Song { song_id, .. } if song_id.as_str() == "missing" => None,
+            _ => deck_for(item),
+        }
+    }
+
+    fn song_item(id: &str, song_id: &str) -> SetItem {
+        SetItem {
+            id: ItemId::from(id),
+            kind: ItemKind::Song { song_id: SongId::from(song_id), order_override: None },
+        }
+    }
+
+    #[test]
+    fn a_missing_song_is_stepped_over_in_both_directions() {
+        let mut set = set();
+        set.items.insert(1, song_item("gone", "missing"));
+        let context =
+            Context { set: Some(&set), deck_for: &deck_without_missing, end_of_item: EndOfItem::Continue };
+        let mut program = Program::default();
+        program.apply(&Command::GoToItemNumber { number: 1 }, &context).unwrap();
+        program.apply(&Command::GoToSlide { slide_index: 2 }, &context).unwrap();
+        assert_eq!(program.next_step(&context), NextStep::Item, "the item after the missing one comes next");
+        program.apply(&Command::Next, &context).unwrap();
+        assert_eq!(position(&program), ("i2".into(), 0));
+        program.apply(&Command::Prev, &context).unwrap();
+        assert_eq!(position(&program), ("i1".into(), 2));
+        program.apply(&Command::NextItem, &context).unwrap();
+        assert_eq!(position(&program), ("i2".into(), 0));
+        program.apply(&Command::PrevItem, &context).unwrap();
+        assert_eq!(position(&program), ("i1".into(), 0));
+        // Naming the missing item itself is still refused.
+        assert_eq!(program.apply(&Command::GoToItemNumber { number: 2 }, &context), Err(Rejection::NotFound));
+    }
+
+    #[test]
+    fn a_step_that_picks_up_an_edit_is_reported_even_when_nothing_follows() {
+        // The live song was edited, and only a missing song follows: "next" has nowhere to go,
+        // but the screen switches to the edited deck, and that must be a reported change (so it
+        // is broadcast), never a silent one.
+        let set = ServiceSet { items: vec![song_item("i1", "s1"), song_item("gone", "missing")], ..set() };
+        let mut old = song("s1");
+        old.verses[2] = Verse::simple("v2", &["stary"]);
+        let old_deck = compile_song(&old, &ItemId::from("i1"), None, SlideRules::default());
+        let mut program =
+            Program { live: Some(Live::at(ItemId::from("i1"), old_deck, 2)), ..Program::default() };
+        let context =
+            Context { set: Some(&set), deck_for: &deck_without_missing, end_of_item: EndOfItem::Continue };
+        let outcome = program.execute(&Command::Next, Rev(0), &ClientId::from("c"), Rev(1), &context);
+        assert_eq!(outcome, Ok(Outcome::Changed));
+        assert_eq!(program.updated_rev, Rev(1));
+    }
+
+    #[test]
+    fn the_ghost_position_survives_later_set_edits() {
+        let mut set = set();
+        set.items.push(song_item("i4", "s4"));
+        let mut program = Program::default();
+        run(&mut program, &set, Command::GoToItemNumber { number: 3 }).unwrap();
+        // Remove the live i3, then the earlier i1, then move i4 to the top.
+        set.items.remove(2);
+        program.item_removed(&ItemId::from("i3"), 2, &set);
+        set.items.remove(0);
+        program.item_removed(&ItemId::from("i1"), 0, &set);
+        assert_eq!(position(&program), ("i3".into(), 0), "the screen keeps the removed item");
+        let i4 = set.items.remove(1);
+        set.items.insert(0, i4);
+        run(&mut program, &set, Command::NextItem).unwrap();
+        assert_eq!(position(&program), ("i4".into(), 0), "next goes to the item that followed i3");
+    }
+
+    #[test]
+    fn after_switching_sets_a_removed_live_item_continues_from_the_top() {
+        let mut set = set();
+        let mut program = Program::default();
+        run(&mut program, &set, Command::GoToItemNumber { number: 2 }).unwrap();
+        set.items.remove(1);
+        program.item_removed(&ItemId::from("i2"), 1, &set);
+        let other = ServiceSet { items: vec![song_item("x1", "s1"), song_item("x2", "s2")], ..set.clone() };
+        run(&mut program, &other, Command::NextItem).unwrap();
+        assert_eq!(position(&program), ("x1".into(), 0));
     }
 
     #[test]
