@@ -52,8 +52,11 @@ A local OpenSong 3.4.8 installation (2026-11-16, structure only): the set root `
   adds nothing).
 - Numbered lines (`1 …`, `2 …`) inside a section become verses `<kind>1`, `<kind>2`, sharing the
   chord line above them. ⚠ Inferred from OpenSong usage; not seen in the sample library.
-- Duplicate section headers are merged with a slide break and a warning.
+- Duplicate section headers are merged with a slide break and a warning (custom ones too).
+- An element that should appear once but appears twice with different text: the first is
+  used, with a warning.
 - Encoding: BOM, then the declared encoding, then UTF-8, then windows-1250 (with a warning).
+  Bytes invalid in the file's encoding become U+FFFD, with a warning.
 - Song ids derive from the path inside `Songs/`, so re-importing updates instead of duplicating.
 - **Sets** (`Sets/<file>`, read from the folder next to `Songs/` or from the uploaded ZIP): the set
   name is the `name` attribute, else the file name. Song groups are found in the library by
@@ -78,7 +81,7 @@ A local OpenSong 3.4.8 installation (2026-11-16, structure only): the set root `
 | `[V1]`, `[C]`, `[B]`, `[P]` | verse names `v1`, `c`, `b`, `p` |
 | `[T]` | `e` (ending/tag) |
 | `[R]`, `[R1]` | `c`, `c1` (Polish *refren*) |
-| custom `[Name]` | `o<n>` with `label = "Name"` |
+| custom `[Name]` | `o<n>` with `label = "Name"` (numbers taken by `[O<n>]` are skipped) |
 | `||` | new `LinesBlock` with `Forced` break (export: separate `<lines>`) |
 | chord line `.` | chords attached to the next lyric line (stored, not displayed in MVP) |
 | `presentation` | `verse_order` |

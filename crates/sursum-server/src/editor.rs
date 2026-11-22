@@ -55,9 +55,14 @@ pub fn song_from_draft(draft: &SongDraft, id: SongId, existing: Option<&Song>) -
     let other_titles = song.titles.iter().skip(1).cloned();
     song.titles = std::iter::once(draft.title.trim().to_owned()).chain(other_titles).collect();
     let number = draft.number.as_deref().map(str::trim).filter(|number| !number.is_empty());
+    // The editor shows only the first songbook's number; the others stay as they were.
     let songbook = song.songbooks.first().map_or(DEFAULT_SONGBOOK.to_owned(), |entry| entry.songbook.clone());
-    song.songbooks =
-        number.map(|entry| SongbookEntry { songbook, entry: entry.to_owned() }).into_iter().collect();
+    let other_songbooks = song.songbooks.iter().skip(1).cloned();
+    song.songbooks = number
+        .map(|entry| SongbookEntry { songbook, entry: entry.to_owned() })
+        .into_iter()
+        .chain(other_songbooks)
+        .collect();
     song.verse_order = verse_order;
     song.verses = parsed.verses;
     (song, warnings)
@@ -134,6 +139,7 @@ mod tests {
         let mut original = original;
         original.authors = vec!["Autor".into()];
         original.titles.push("Inny tytuł".into());
+        original.songbooks.push(SongbookEntry { songbook: "Śpiewnik drugi".into(), entry: "7".into() });
         let mut edited = draft_of(&original, &any_version());
         edited.lyrics = "[V1]\n b".into();
         let (song, _) = song_from_draft(&edited, SongId::from("s"), Some(&original));
@@ -141,6 +147,7 @@ mod tests {
         assert_eq!(song.titles, ["Nowa pieśń", "Inny tytuł"]);
         assert_eq!(song.verses[0].blocks[0].lines[0].text, "b");
         assert_eq!(song.songbooks[0].entry, "42");
+        assert_eq!(song.songbooks[1].entry, "7", "a second songbook is kept");
     }
 
     #[test]

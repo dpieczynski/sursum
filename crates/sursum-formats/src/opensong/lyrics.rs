@@ -12,7 +12,7 @@
 //! 2 verse two line
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use sursum_core::model::{BreakKind, ChordAt, Line, LinesBlock, Verse, VerseName};
 
@@ -61,7 +61,7 @@ fn resolve(token: &str, names: &BTreeMap<String, VerseName>) -> Option<VerseName
     if let Some(name) = names.get(&token.to_uppercase()) {
         return Some(name.clone());
     }
-    let (name, label) = section_name(token, 0);
+    let (name, label) = section_name(token);
     if label.is_some() {
         return None;
     }
@@ -81,8 +81,9 @@ fn resolve(token: &str, names: &BTreeMap<String, VerseName>) -> Option<VerseName
 }
 
 /// Maps a section header to a verse name: `V1`→`v1`, `C`→`c`, `T`→`e` (tag), `3`→`v3`,
-/// `V1A`→`v1a`. Anything else becomes `o<n>` with the header kept as the label.
-fn section_name(header: &str, custom_index: usize) -> (VerseName, Option<String>) {
+/// `V1A`→`v1a`. Anything else is a custom section: the header is kept as the label and the name
+/// is a placeholder `o`, numbered once all sections are known (see [`Parser::finish`]).
+fn section_name(header: &str) -> (VerseName, Option<String>) {
     let header = header.trim();
     let upper = header.to_uppercase();
     if !upper.is_empty() && upper.chars().all(|c| c.is_ascii_digit()) {
@@ -107,7 +108,7 @@ fn section_name(header: &str, custom_index: usize) -> (VerseName, Option<String>
     if standard {
         (VerseName::new(&format!("{kind}{digits}{suffix}")), None)
     } else {
-        (VerseName::new(&format!("o{}", custom_index + 1)), Some(header.to_owned()))
+        (VerseName::new("o"), Some(header.to_owned()))
     }
 }
 
@@ -123,8 +124,8 @@ struct Section {
 }
 
 impl Section {
-    fn new(header: &str, custom_index: usize) -> Self {
-        let (name, label) = section_name(header, custom_index);
+    fn new(header: &str) -> Self {
+        let (name, label) = section_name(header);
         Section {
             key: header.trim().to_uppercase(),
             name,
@@ -144,7 +145,6 @@ impl Section {
 struct Parser {
     sections: Vec<Section>,
     pending_chords: Option<Vec<ChordAt>>,
-    custom_sections: usize,
     warnings: Vec<Warning>,
 }
 
@@ -189,10 +189,7 @@ impl Parser {
 
     fn start_section(&mut self, line: &str, number: usize) {
         let header = line.trim_start_matches('[').split(']').next().unwrap_or_default();
-        let section = Section::new(header, self.custom_sections);
-        if section.label.is_some() {
-            self.custom_sections += 1;
-        }
+        let section = Section::new(header);
         if self.sections.iter().any(|existing| existing.key == section.key) {
             self.warnings.push(Warning {
                 line: Some(number),
@@ -208,7 +205,7 @@ impl Parser {
     fn lyric(&mut self, text: &str, number: usize, numbered: Option<u32>) {
         if self.sections.is_empty() {
             self.warnings.push(Warning { line: Some(number), kind: WarningKind::LinesBeforeFirstSection });
-            self.sections.push(Section::new("V1", 0));
+            self.sections.push(Section::new("V1"));
         }
         let leading = text.chars().take_while(|c| c.is_whitespace()).count();
         let text = text.trim();
@@ -236,6 +233,7 @@ impl Parser {
     }
 
     fn finish(mut self) -> ParsedLyrics {
+        self.number_custom_sections();
         let mut verses: Vec<Verse> = Vec::new();
         let mut names = BTreeMap::new();
         for section in std::mem::take(&mut self.sections) {
@@ -256,6 +254,28 @@ impl Parser {
         }
         verses.retain(|verse| !verse.blocks.is_empty());
         ParsedLyrics { verses, names, warnings: self.warnings }
+    }
+}
+
+impl Parser {
+    /// Names custom sections `o1`, `o2`… in order of appearance: the same header twice is one
+    /// section (merged like any repeated section), and a number an `[O1]` header already took
+    /// is skipped, so `[Intro]` and `[O1]` stay two sections.
+    fn number_custom_sections(&mut self) {
+        let taken: BTreeSet<String> = self
+            .sections
+            .iter()
+            .filter(|section| section.label.is_none())
+            .map(|section| section.name.0.clone())
+            .collect();
+        let mut custom: BTreeMap<String, VerseName> = BTreeMap::new();
+        let mut free = (1..).map(|number| format!("o{number}")).filter(|name| !taken.contains(name));
+        for section in self.sections.iter_mut().filter(|section| section.label.is_some()) {
+            let name = custom
+                .entry(section.key.clone())
+                .or_insert_with(|| VerseName::new(&free.next().expect("numbers never run out")));
+            section.name = name.clone();
+        }
     }
 }
 
@@ -391,6 +411,19 @@ mod tests {
         assert_eq!(names(&parsed), ["c"]);
         assert_eq!(texts(&parsed.verses[0]), [["one"], ["two"]]);
         assert!(matches!(parsed.warnings[0].kind, WarningKind::DuplicateSection(_)));
+    }
+
+    #[test]
+    fn a_repeated_custom_section_is_one_section_and_never_collides_with_o1() {
+        let parsed = parse_lyrics("[Intro]\n a\n[V1]\n b\n[Intro]\n c\n[O1]\n d\n");
+        assert_eq!(names(&parsed), ["o2", "v1", "o1"]);
+        assert_eq!(texts(&parsed.verses[0]), [["a"], ["c"]]);
+        assert_eq!(parsed.verses[0].label.as_deref(), Some("Intro"));
+        assert!(matches!(&parsed.warnings[0].kind, WarningKind::DuplicateSection(name) if name == "Intro"));
+        let (order, warnings) = parse_presentation("Intro V1 Intro O1", &parsed.names);
+        let order: Vec<&str> = order.iter().map(|name| name.0.as_str()).collect();
+        assert_eq!(order, ["o2", "v1", "o2", "o1"]);
+        assert!(warnings.is_empty());
     }
 
     #[test]

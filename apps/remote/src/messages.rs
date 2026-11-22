@@ -556,7 +556,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::MarginBottom => "dół",
         Msg::MarginLeft => "lewo",
         Msg::MarginRight => "prawo",
-        Msg::InvalidProfile => "Ta strefa zasłoniłaby cały ekran – zmiana nie została zapisana",
+        Msg::InvalidProfile => {
+            "Strefy zasłoniłyby cały ekran albo jest ich za dużo (najwyżej 16) – zmiana nie została zapisana"
+        }
         Msg::Devices => "Urządzenia",
         Msg::ThisDevice => "to urządzenie",
         Msg::Revoke => "Odłącz",

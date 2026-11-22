@@ -13,7 +13,14 @@ pub enum LayoutError {
     SafeAreaEmpty,
     #[error("the exclusion zones cover the whole safe area")]
     NoFreeSpace,
+    #[error("more than {MAX_ZONES} exclusion zones")]
+    TooManyZones,
 }
+
+/// The most exclusion zones a profile may have. A real screen needs a handful (a pillar, a
+/// lectern); the limit keeps the candidate search below a millisecond on the state actor, since
+/// its cost grows with the fifth power of the number of zones.
+pub const MAX_ZONES: usize = 16;
 
 /// The profile with every zone and margin inside the stage: a zone never starts outside the stage
 /// or reaches past its edge (it keeps its position and loses what sticks out), and each margin is
@@ -47,11 +54,19 @@ pub fn safe_area(profile: &ScreenProfile) -> Result<Rect, LayoutError> {
 }
 
 /// The largest rectangle inside the safe area that touches no exclusion zone.
-/// Ties are broken by closeness to the centre of the stage.
+/// Ties are broken by closeness to the centre of the stage. A zone without width or height
+/// (a 0 typed into the calibration form) covers nothing, so it neither masks nor moves the text.
 pub fn content_region(profile: &ScreenProfile) -> Result<Rect, LayoutError> {
+    if profile.exclusions.len() > MAX_ZONES {
+        return Err(LayoutError::TooManyZones);
+    }
     let safe = safe_area(profile)?;
-    let zones: Vec<Rect> =
-        profile.exclusions.iter().map(|zone| zone.rect).filter(|rect| rect.intersects(&safe)).collect();
+    let zones: Vec<Rect> = profile
+        .exclusions
+        .iter()
+        .map(|zone| zone.rect)
+        .filter(|rect| rect.width > 0 && rect.height > 0 && rect.intersects(&safe))
+        .collect();
     let xs = edges(safe.x, safe.right(), zones.iter().flat_map(|zone| [zone.x, zone.right()]));
     let ys = edges(safe.y, safe.bottom(), zones.iter().flat_map(|zone| [zone.y, zone.bottom()]));
 
@@ -193,6 +208,21 @@ mod tests {
         let layout = screen_layout(&profile(40, &[outside])).unwrap();
         assert_eq!(layout.content, Rect::new(40, 40, 1840, 1000));
         assert_eq!(layout.masks, vec![outside]);
+    }
+
+    #[test]
+    fn a_zone_without_width_or_height_changes_nothing() {
+        let flat = [Rect::new(960, 0, 0, 1080), Rect::new(0, 540, 1920, 0)];
+        let layout = screen_layout(&profile(0, &flat)).unwrap();
+        assert_eq!(layout.content, Rect::SCENE);
+        assert!(layout.masks.is_empty());
+    }
+
+    #[test]
+    fn too_many_zones_are_refused() {
+        let zones: Vec<Rect> = (0..=MAX_ZONES as u32).map(|i| Rect::new(i * 10, 0, 5, 5)).collect();
+        assert_eq!(content_region(&profile(0, &zones[..MAX_ZONES])).map(|_| ()), Ok(()));
+        assert_eq!(content_region(&profile(0, &zones)), Err(LayoutError::TooManyZones));
     }
 
     #[test]

@@ -21,8 +21,12 @@ pub enum WarningKind {
     DuplicateSection(String),
     /// The presentation order names a section that does not exist; it was skipped.
     UnknownSectionInPresentation(String),
-    /// The file did not declare an encoding and is not valid UTF-8; decoded as windows-1250.
+    /// The file is not valid UTF-8 and declares no other encoding; decoded as windows-1250.
     AssumedWindows1250,
+    /// Bytes invalid in the file's encoding were replaced with U+FFFD.
+    InvalidBytes,
+    /// An element that should appear once appears again with other text; the first was used.
+    RepeatedElement(String),
     /// The song has no title element; the file name was used.
     TitleFromFileName,
     /// The song contains no lyrics.
@@ -45,7 +49,13 @@ impl fmt::Display for WarningKind {
                 write!(f, "presentation names unknown section {name:?}")
             }
             WarningKind::AssumedWindows1250 => {
-                write!(f, "no encoding declared and not UTF-8; read as windows-1250")
+                write!(f, "not valid UTF-8 and no other encoding declared; read as windows-1250")
+            }
+            WarningKind::InvalidBytes => {
+                write!(f, "bytes invalid in the file's encoding; replaced with \u{fffd}")
+            }
+            WarningKind::RepeatedElement(name) => {
+                write!(f, "<{name}> appears more than once; used the first")
             }
             WarningKind::TitleFromFileName => write!(f, "no <title>; used the file name"),
             WarningKind::NoLyrics => write!(f, "no lyrics"),

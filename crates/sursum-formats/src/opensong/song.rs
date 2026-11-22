@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use sursum_core::model::{Song, SongbookEntry};
 use sursum_protocol::SongId;
 
-use super::decode::decode_text;
+use super::decode::{Decoding, decode_text};
 use super::lyrics::{parse_lyrics, parse_presentation};
 use super::warning::{Warning, WarningKind};
 
@@ -26,29 +26,70 @@ pub enum SongError {
     InvalidXml(String),
 }
 
-/// The plain-text elements of an OpenSong song. Elements with attributes or children
-/// (`capo`, `backgrounds`, `style`, …) are not needed and are skipped by the deserializer.
+/// The text elements of an OpenSong song. Each is a list, so a hand-edited file with an element
+/// twice still imports (the first text wins, with a warning). Elements with children
+/// (`backgrounds`, `style`, …) are not needed and are skipped by the deserializer.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct SongXml {
-    title: Option<String>,
-    author: Option<String>,
-    copyright: Option<String>,
-    presentation: Option<String>,
-    hymn_number: Option<String>,
-    ccli: Option<String>,
-    theme: Option<String>,
-    alttheme: Option<String>,
-    aka: Option<String>,
-    key: Option<String>,
-    key_line: Option<String>,
-    tempo: Option<String>,
-    time_sig: Option<String>,
-    timesig: Option<String>,
-    user1: Option<String>,
-    user2: Option<String>,
-    user3: Option<String>,
-    lyrics: Option<String>,
+    title: Vec<Text>,
+    author: Vec<Text>,
+    copyright: Vec<Text>,
+    presentation: Vec<Text>,
+    hymn_number: Vec<Text>,
+    ccli: Vec<Text>,
+    theme: Vec<Text>,
+    alttheme: Vec<Text>,
+    aka: Vec<Text>,
+    capo: Vec<Text>,
+    key: Vec<Text>,
+    key_line: Vec<Text>,
+    tempo: Vec<Text>,
+    time_sig: Vec<Text>,
+    timesig: Vec<Text>,
+    user1: Vec<Text>,
+    user2: Vec<Text>,
+    user3: Vec<Text>,
+    lyrics: Vec<Text>,
+}
+
+/// The text of one element; its attributes (e.g. `<capo print="false">`) are ignored.
+#[derive(Debug, Default, Deserialize)]
+struct Text {
+    #[serde(rename = "$text", default)]
+    text: String,
+}
+
+impl SongXml {
+    /// Every element by name, for the repeated-element check.
+    fn elements(&self) -> [(&'static str, &[Text]); 19] {
+        [
+            ("title", &self.title),
+            ("author", &self.author),
+            ("copyright", &self.copyright),
+            ("presentation", &self.presentation),
+            ("hymn_number", &self.hymn_number),
+            ("ccli", &self.ccli),
+            ("theme", &self.theme),
+            ("alttheme", &self.alttheme),
+            ("aka", &self.aka),
+            ("capo", &self.capo),
+            ("key", &self.key),
+            ("key_line", &self.key_line),
+            ("tempo", &self.tempo),
+            ("time_sig", &self.time_sig),
+            ("timesig", &self.timesig),
+            ("user1", &self.user1),
+            ("user2", &self.user2),
+            ("user3", &self.user3),
+            ("lyrics", &self.lyrics),
+        ]
+    }
+}
+
+/// The first element's text (untrimmed: lyrics keep their spaces), if there is one.
+fn first(elements: &[Text]) -> Option<&str> {
+    elements.first().map(|element| element.text.as_str())
 }
 
 /// A stable song id derived from the file's path inside `Songs/`, so importing the same library
@@ -62,19 +103,30 @@ pub fn song_id_for_path(relative_path: &str) -> SongId {
 /// Parses one song file. `relative_path` is the path inside `Songs/` (e.g. `Kolędy/Bóg się
 /// rodzi`); `songbook` names the songbook that `hymn_number` refers to.
 pub fn parse_song(bytes: &[u8], relative_path: &str, songbook: &str) -> Result<ImportedSong, SongError> {
-    let (text, assumed_1250) = decode_text(bytes);
+    let (text, decoding) = decode_text(bytes);
     if root_element(&text) != Some("song") {
         return Err(SongError::NotASong);
     }
     let xml: SongXml =
         quick_xml::de::from_str(&text).map_err(|error| SongError::InvalidXml(error.to_string()))?;
-    let mut warnings = Vec::new();
-    if assumed_1250 {
-        warnings.push(Warning { line: None, kind: WarningKind::AssumedWindows1250 });
+    let decoding_warning = match decoding {
+        Decoding::Clean => None,
+        Decoding::AssumedWindows1250 => Some(WarningKind::AssumedWindows1250),
+        Decoding::Damaged => Some(WarningKind::InvalidBytes),
+    };
+    let mut warnings: Vec<Warning> =
+        decoding_warning.into_iter().map(|kind| Warning { line: None, kind }).collect();
+    for (name, elements) in xml.elements() {
+        let mut texts = elements.iter().map(|element| element.text.trim()).filter(|text| !text.is_empty());
+        if let Some(first) = texts.next()
+            && texts.any(|other| other != first)
+        {
+            warnings.push(Warning { line: None, kind: WarningKind::RepeatedElement(name.to_owned()) });
+        }
     }
 
     let file_name = relative_path.rsplit('/').next().unwrap_or(relative_path);
-    let title = match non_empty(xml.title.as_deref()) {
+    let title = match non_empty(first(&xml.title)) {
         Some(title) => title.to_owned(),
         None => {
             warnings.push(Warning { line: None, kind: WarningKind::TitleFromFileName });
@@ -82,19 +134,20 @@ pub fn parse_song(bytes: &[u8], relative_path: &str, songbook: &str) -> Result<I
         }
     };
     let mut titles = vec![title];
-    titles.extend(non_empty(xml.aka.as_deref()).filter(|aka| *aka != titles[0]).map(str::to_owned));
+    titles.extend(non_empty(first(&xml.aka)).filter(|aka| *aka != titles[0]).map(str::to_owned));
 
-    let lyrics = parse_lyrics(xml.lyrics.as_deref().unwrap_or_default());
+    let lyrics = parse_lyrics(first(&xml.lyrics).unwrap_or_default());
     warnings.extend(lyrics.warnings.iter().cloned());
     if lyrics.verses.is_empty() {
         warnings.push(Warning { line: None, kind: WarningKind::NoLyrics });
     }
     let (verse_order, order_warnings) =
-        parse_presentation(xml.presentation.as_deref().unwrap_or_default(), &lyrics.names);
+        parse_presentation(first(&xml.presentation).unwrap_or_default(), &lyrics.names);
     warnings.extend(order_warnings);
 
     let mut extra = std::collections::BTreeMap::new();
     let optional_fields = [
+        ("capo", &xml.capo),
         ("key", &xml.key),
         ("key_line", &xml.key_line),
         ("tempo", &xml.tempo),
@@ -105,7 +158,7 @@ pub fn parse_song(bytes: &[u8], relative_path: &str, songbook: &str) -> Result<I
         ("user3", &xml.user3),
     ];
     for (name, value) in optional_fields {
-        if let Some(value) = non_empty(value.as_deref()) {
+        if let Some(value) = non_empty(first(value)) {
             extra.insert(name.to_owned(), value.to_owned());
         }
     }
@@ -114,7 +167,7 @@ pub fn parse_song(bytes: &[u8], relative_path: &str, songbook: &str) -> Result<I
     }
     extra.insert("opensong_path".to_owned(), relative_path.to_owned());
 
-    let themes = [xml.theme.as_deref(), xml.alttheme.as_deref()]
+    let themes = [first(&xml.theme), first(&xml.alttheme)]
         .into_iter()
         .flatten()
         .flat_map(|themes| themes.split(';'))
@@ -124,13 +177,13 @@ pub fn parse_song(bytes: &[u8], relative_path: &str, songbook: &str) -> Result<I
     let song = Song {
         id: song_id_for_path(relative_path),
         titles,
-        authors: non_empty(xml.author.as_deref()).map(str::to_owned).into_iter().collect(),
-        songbooks: non_empty(xml.hymn_number.as_deref())
+        authors: non_empty(first(&xml.author)).map(str::to_owned).into_iter().collect(),
+        songbooks: non_empty(first(&xml.hymn_number))
             .map(|entry| SongbookEntry { songbook: songbook.to_owned(), entry: entry.to_owned() })
             .into_iter()
             .collect(),
-        copyright: non_empty(xml.copyright.as_deref()).map(str::to_owned),
-        ccli: non_empty(xml.ccli.as_deref()).map(str::to_owned),
+        copyright: non_empty(first(&xml.copyright)).map(str::to_owned),
+        ccli: non_empty(first(&xml.ccli)).map(str::to_owned),
         themes,
         verse_order,
         verses: lyrics.verses,
@@ -153,7 +206,12 @@ pub(super) fn root_element(text: &str) -> Option<&str> {
         } else if let Some(after) = rest.strip_prefix("<!--") {
             rest = after.split_once("-->")?.1;
         } else if let Some(after) = rest.strip_prefix("<!") {
-            rest = after.split_once('>')?.1;
+            // A doctype may carry an internal subset in brackets, with `>` inside it.
+            let head = after.split_once('>')?.0;
+            rest = match head.split_once('[') {
+                Some(_) => after.split_once(']')?.1.split_once('>')?.1,
+                None => after.split_once('>')?.1,
+            };
         } else {
             let name = rest.strip_prefix('<')?;
             let end = name.find(|c: char| c.is_whitespace() || c == '>' || c == '/').unwrap_or(name.len());
@@ -204,6 +262,25 @@ mod tests {
         assert_eq!(song.extra.get("time_sig").map(String::as_str), Some("3/4"));
         assert_eq!(song.extra.get("opensong_folder").map(String::as_str), Some("Poranne"));
         assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    }
+
+    #[test]
+    fn a_repeated_element_imports_with_the_first_text_and_a_warning() {
+        let file = b"<song><title>Pierwszy</title><title>Drugi</title><theme>A</theme><theme>A</theme>\
+            <capo print=\"false\">3</capo><lyrics>[V1]\n x</lyrics></song>";
+        let imported = parse_song(file, "t", "S").unwrap();
+        assert_eq!(imported.song.titles, ["Pierwszy"]);
+        assert_eq!(imported.song.themes, ["A"]);
+        assert_eq!(imported.song.extra.get("capo").map(String::as_str), Some("3"), "capo is kept");
+        let repeated: Vec<&WarningKind> = imported.warnings.iter().map(|warning| &warning.kind).collect();
+        assert_eq!(repeated, [&WarningKind::RepeatedElement("title".into())], "the same text twice is fine");
+    }
+
+    #[test]
+    fn a_doctype_with_an_internal_subset_is_skipped() {
+        let file =
+            b"<?xml version=\"1.0\"?><!DOCTYPE song [ <!ELEMENT song ANY> ]><song><title>t</title></song>";
+        assert_eq!(parse_song(file, "t", "S").unwrap().song.titles, ["t"]);
     }
 
     #[test]
