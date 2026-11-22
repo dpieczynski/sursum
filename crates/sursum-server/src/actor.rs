@@ -392,13 +392,15 @@ pub fn spawn(
                         let _ = reply.send(export.ok());
                     }
                     Request::CleanUpPictures { dry_run, reply } => {
-                        let in_use = state.pictures_in_use();
-                        let cleanup = crate::assets::remove_unused(
-                            &state.data_dir,
-                            &in_use,
-                            crate::assets::FRESH_UPLOAD,
-                            dry_run,
-                        );
+                        // Without the full list of what is in use, nothing is removed.
+                        let cleanup = state.pictures_in_use().and_then(|in_use| {
+                            Ok(crate::assets::remove_unused(
+                                &state.data_dir,
+                                &in_use,
+                                crate::assets::FRESH_UPLOAD,
+                                dry_run,
+                            )?)
+                        });
                         if let Err(error) = &cleanup {
                             tracing::error!(?error, "could not clean up pictures");
                         }
@@ -544,15 +546,18 @@ struct AppState {
 }
 
 impl AppState {
-    /// Pictures that must stay: the logo, every picture in a set (also one whose deletion can
-    /// still be undone) and what is on screen (a frozen copy may outlive its item).
-    fn pictures_in_use(&self) -> std::collections::HashSet<sursum_protocol::AssetId> {
+    /// Pictures that must stay: the logo, every picture in any version of any set in the
+    /// database (other churches' and those in review too), what can still be undone, and what is
+    /// on screen (a frozen copy may outlive its item).
+    fn pictures_in_use(&self) -> anyhow::Result<std::collections::HashSet<sursum_protocol::AssetId>> {
         let live = self.program.live.iter().flat_map(|live| &live.deck.slides);
         let on_screen = live.filter_map(|slide| match &slide.body {
             sursum_protocol::SlideBody::Image { asset_id, .. } => Some(asset_id),
             _ => None,
         });
-        self.logo.iter().chain(self.sets.pictures()).chain(on_screen).cloned().collect()
+        let mut in_use = self.database.pictures_in_sets()?;
+        in_use.extend(self.logo.iter().chain(self.sets.pictures()).chain(on_screen).cloned());
+        Ok(in_use)
     }
 
     /// Applies one command; returns its outcome and whether the state changed.
@@ -599,11 +604,12 @@ impl AppState {
             Command::KeepSetVersion { set_id, version, add } => self.keep_set_version(set_id, version, add),
             Command::UndoDeleteSet => self.undo_delete_set(),
             Command::SetEndOfItem { mode } => {
-                if let Err(error) = self.database.set_setting(END_OF_ITEM_KEY, mode) {
-                    tracing::error!(?error, "could not store the end-of-item setting");
-                }
-                self.end_of_item = *mode;
-                Ok(None)
+                stored(self.database.set_setting(END_OF_ITEM_KEY, mode), "the end-of-item setting").map(
+                    |()| {
+                        self.end_of_item = *mode;
+                        None
+                    },
+                )
             }
             Command::SetScreenProfile { profile } => self.set_screen_profile(profile),
             Command::DeleteSong { song_id } => match self.database.delete_song(song_id.as_str()) {
@@ -613,20 +619,16 @@ impl AppState {
                     Ok(None)
                 }
                 Ok(false) => Err(ErrorCode::NotFound),
-                Err(error) => {
-                    tracing::error!(?error, "could not delete a song");
-                    Err(ErrorCode::NotFound)
-                }
+                Err(error) => stored(Err(error), "a song's deletion").map(|()| None),
             },
             Command::SetLogo { asset_id } => {
                 if asset_id.as_ref().is_some_and(|id| !crate::assets::exists(&self.data_dir, id)) {
                     return (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false);
                 }
-                if let Err(error) = self.database.set_setting(LOGO_KEY, asset_id) {
-                    tracing::error!(?error, "could not store the logo");
-                }
-                self.logo.clone_from(asset_id);
-                Ok(None)
+                stored(self.database.set_setting(LOGO_KEY, asset_id), "the logo").map(|()| {
+                    self.logo.clone_from(asset_id);
+                    None
+                })
             }
             Command::Calibrate { on } => {
                 self.calibrating_by = on.then(|| actor.clone());
@@ -639,10 +641,7 @@ impl AppState {
                     Ok(None)
                 }
                 Ok(None) => Err(ErrorCode::Unsupported),
-                Err(error) => {
-                    tracing::error!(?error, "could not name the church");
-                    Err(ErrorCode::NotFound)
-                }
+                Err(error) => stored(Err(error), "the church's name").map(|()| None),
             },
             Command::UseChurch { church_id } => match self.database.use_church(church_id) {
                 Ok(true) => {
@@ -657,10 +656,7 @@ impl AppState {
                     Ok(None)
                 }
                 Ok(false) => Err(ErrorCode::NotFound),
-                Err(error) => {
-                    tracing::error!(?error, "could not change the church");
-                    Err(ErrorCode::NotFound)
-                }
+                Err(error) => stored(Err(error), "this device's church").map(|()| None),
             },
             _ => return self.run_program_command(actor, base_rev, command),
         };
@@ -681,9 +677,7 @@ impl AppState {
     fn set_screen_profile(&mut self, profile: &ScreenProfile) -> Result<Option<ServiceSet>, ErrorCode> {
         let profile = layout::fit_to_scene(profile);
         let layout = layout::screen_layout(&profile).map_err(|_| ErrorCode::InvalidProfile)?;
-        if let Err(error) = self.database.set_setting(SCREEN_PROFILE_KEY, &profile) {
-            tracing::error!(?error, "could not store the screen profile");
-        }
+        stored(self.database.set_setting(SCREEN_PROFILE_KEY, &profile), "the screen profile")?;
         self.layout = layout;
         self.profile = profile;
         Ok(None)
@@ -1302,6 +1296,15 @@ fn shown_here(
 ) -> bool {
     let nothing_chosen = installation == sursum_protocol::Installation::Library && church.is_none();
     nothing_chosen || set.church.is_none() || set.church.as_ref() == church
+}
+
+/// A storage result as a command outcome: a failed write is logged and refused, so the change
+/// is neither applied in memory nor reported as done (it would vanish at the next start).
+fn stored(result: anyhow::Result<()>, what: &str) -> Result<(), ErrorCode> {
+    result.map_err(|error| {
+        tracing::error!(?error, "could not store {what}");
+        ErrorCode::StorageFailed
+    })
 }
 
 /// A new, globally unique set id (sets travel between devices).

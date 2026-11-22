@@ -198,40 +198,51 @@ impl Access {
         {
             return PinCheck::Locked(GLOBAL_WINDOW.saturating_sub(now.saturating_duration_since(*oldest)));
         }
-        let check = self.check(address, pin, now);
-        if check != PinCheck::Correct {
+        let (check, tried) = self.check(address, pin, now);
+        // Only PINs actually tried count: an address retrying while locked out must not lock out
+        // everyone else's pairing.
+        if tried == Tried::Wrong {
             recent.push_back(now);
         }
         check
     }
 
     /// One attempt with the per-address lockout (doubling after [`FREE_ATTEMPTS`]).
-    fn check(&self, address: IpAddr, pin: &str, now: Instant) -> PinCheck {
+    fn check(&self, address: IpAddr, pin: &str, now: Instant) -> (PinCheck, Tried) {
         let mut attempts = self.attempts.lock().expect("not poisoned");
         let entry = attempts.entry(address).or_insert(Attempts { failures: 0, locked_until: None });
         if let Some(until) = entry.locked_until.filter(|until| *until > now) {
-            return PinCheck::Locked(until - now);
+            return (PinCheck::Locked(until - now), Tried::LockedOut);
         }
         let correct =
             self.pin.read().expect("not poisoned").as_ref().is_some_and(|stored| stored.matches(pin));
         if correct {
             attempts.remove(&address);
-            return PinCheck::Correct;
+            return (PinCheck::Correct, Tried::Correct);
         }
         entry.failures += 1;
         if entry.failures >= FREE_ATTEMPTS {
             let doublings = (entry.failures - FREE_ATTEMPTS).min(10);
             let lockout = (FIRST_LOCKOUT * 2_u32.pow(doublings)).min(MAX_LOCKOUT);
             entry.locked_until = Some(now + lockout);
-            return PinCheck::Locked(lockout);
+            return (PinCheck::Locked(lockout), Tried::Wrong);
         }
-        PinCheck::Wrong
+        (PinCheck::Wrong, Tried::Wrong)
     }
 
     /// Accepts a newly paired device's token hash.
     pub fn add_token(&self, hash: String) {
         self.tokens.write().expect("not poisoned").insert(hash);
     }
+}
+
+/// Whether an attempt compared a PIN, for the global failure count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Tried {
+    Correct,
+    Wrong,
+    /// Refused before comparing: the address is locked out.
+    LockedOut,
 }
 
 /// The device token from the `Cookie` header, if any.
@@ -298,6 +309,19 @@ mod tests {
         access.add_token(hash);
         assert!(access.allows(&headers(&format!("other=1; {COOKIE}={token}"))));
         assert!(!access.allows(&headers(&format!("{COOKIE}=forged"))));
+    }
+
+    #[test]
+    fn one_locked_out_address_retrying_does_not_lock_out_everyone() {
+        let access = Access::new(Some(PinHash::new("246813").unwrap()), vec![], AccessMode::Pin);
+        let now = Instant::now();
+        let noisy: IpAddr = "192.168.1.66".parse().unwrap();
+        for _ in 0..GLOBAL_FAILURES * 2 {
+            let _ = access.check_pin(noisy, "000000", now);
+        }
+        assert!(matches!(access.check_pin(noisy, "246813", now), PinCheck::Locked(_)));
+        let tablet: IpAddr = "192.168.1.20".parse().unwrap();
+        assert_eq!(access.check_pin(tablet, "246813", now), PinCheck::Correct);
     }
 
     #[test]

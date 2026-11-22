@@ -14,6 +14,7 @@ pub mod db;
 pub mod demo;
 pub mod device_backup;
 pub mod display_power;
+pub mod durable;
 pub mod editor;
 pub mod http;
 pub mod import;

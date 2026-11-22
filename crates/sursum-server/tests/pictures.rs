@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Removing unused pictures on request: pictures in a set and the logo stay, the rest goes.
+//! Removing unused pictures on request: pictures in any set (also another church's, which this
+//! device keeps and passes on) and the logo stay, the rest goes.
 
 use sursum_core::model::{ItemKind, ServiceSet, SetItem};
-use sursum_protocol::{AssetId, ItemId, PictureCleanup, PictureCleanupRequest, SetId};
+use sursum_protocol::{AssetId, ChurchId, ItemId, PictureCleanup, PictureCleanupRequest, SetId};
 use sursum_server::db::Database;
 use sursum_server::{Config, RunningServer};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -39,6 +40,7 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
     let poster = old_picture(dir.path(), "poster");
     let logo = old_picture(dir.path(), "logo");
     let forgotten = old_picture(dir.path(), "forgotten");
+    let elsewhere = old_picture(dir.path(), "another church's poster");
     let fresh = sursum_server::assets::store(dir.path(), b"\x89PNG\r\n\x1a\njust uploaded").unwrap();
     {
         let mut database = Database::open(dir.path()).unwrap();
@@ -55,6 +57,20 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
                 church: None,
             })
             .unwrap();
+        // A set of another church: not shown here, but kept and passed on in library files.
+        let item = SetItem {
+            id: ItemId::from("i2"),
+            kind: ItemKind::Image { title: "Plakat".into(), asset_id: elsewhere.clone() },
+        };
+        database
+            .save_set(&ServiceSet {
+                id: SetId::from("s2"),
+                name: "Gdzie indziej".into(),
+                items: vec![item],
+                date: None,
+                church: Some(ChurchId::from("inny-kosciol")),
+            })
+            .unwrap();
         database.set_setting("logo", &Some(logo.clone())).unwrap();
     }
     let mut config = Config::with_data_dir(dir.path());
@@ -67,7 +83,7 @@ async fn pictures_in_a_set_and_the_logo_stay_and_the_rest_is_removed_on_request(
     assert!(sursum_server::assets::exists(dir.path(), &forgotten), "counting removes nothing");
     assert_eq!(clean_up(&server, false).await, counted);
     assert!(!sursum_server::assets::exists(dir.path(), &forgotten));
-    for kept in [&poster, &logo, &fresh] {
+    for kept in [&poster, &logo, &fresh, &elsewhere] {
         assert!(sursum_server::assets::exists(dir.path(), kept));
     }
     assert_eq!(clean_up(&server, true).await.pictures, 0);

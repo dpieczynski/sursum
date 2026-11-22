@@ -361,7 +361,7 @@ fn restore_database_if_migrated(data_dir: &Path, trial: &Trial) -> anyhow::Resul
     std::fs::copy(&backup, &staged)?;
     std::fs::File::open(&staged)?.sync_all()?;
     std::fs::rename(&staged, data_dir.join(crate::db::DATABASE_FILE))?;
-    std::fs::File::open(data_dir)?.sync_all()?;
+    crate::durable::sync_dir(data_dir)?;
     Ok(true)
 }
 

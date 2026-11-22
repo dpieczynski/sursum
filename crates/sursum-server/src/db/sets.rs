@@ -79,6 +79,22 @@ impl Database {
         Ok(self.all_heads(Kind::Set)?.into_iter().map(|(id, heads)| (SetId(id), heads)).collect())
     }
 
+    /// Every picture a live version of any set uses: of every church (this device keeps and
+    /// passes on other churches' sets) and of every head, also one waiting for review.
+    pub fn pictures_in_sets(&self) -> anyhow::Result<std::collections::HashSet<sursum_protocol::AssetId>> {
+        let mut pictures = std::collections::HashSet::new();
+        for (id, heads) in self.set_documents()? {
+            for body in heads.versions().iter().filter_map(Version::live_body) {
+                let set = set_from_body(&id, body)?;
+                pictures.extend(set.items.into_iter().filter_map(|item| match item.kind {
+                    sursum_core::model::ItemKind::Image { asset_id, .. } => Some(asset_id),
+                    _ => None,
+                }));
+            }
+        }
+        Ok(pictures)
+    }
+
     /// The heads of one set (empty if unknown).
     pub fn set_heads(&self, id: &SetId) -> anyhow::Result<Heads> {
         self.heads(Kind::Set, id.as_str())

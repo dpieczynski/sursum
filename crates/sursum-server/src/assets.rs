@@ -113,7 +113,7 @@ fn store_within(data_dir: &Path, bytes: &[u8], quota: u64) -> Result<AssetId, As
         file.write_all(bytes)?;
         file.sync_all()?;
         std::fs::rename(&temporary, &path)?;
-        std::fs::File::open(&folder)?.sync_all()
+        crate::durable::sync_dir(&folder)
     })();
     if written.is_err() {
         let _ = std::fs::remove_file(&temporary);
