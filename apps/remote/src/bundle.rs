@@ -78,7 +78,12 @@ pub fn MergeButton() -> impl IntoView {
     let sheet = move || {
         (step.get() != Step::Idle).then(|| {
             view! {
-                <Sheet title=pl(Msg::MergeLibrary).to_owned() on_close=close testid="merge">
+                <Sheet
+                    title=pl(Msg::MergeLibrary).to_owned()
+                    on_close=close
+                    locked=Signal::derive(move || matches!(step.get(), Step::Checking | Step::Merging))
+                    testid="merge"
+                >
                     <p class="sheet-status" data-testid="merge-status">
                         {move || heading(&step.get())}
                     </p>

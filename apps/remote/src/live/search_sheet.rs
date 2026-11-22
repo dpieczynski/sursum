@@ -8,6 +8,7 @@ use sursum_protocol::{Command, SongSummary};
 
 use crate::Commands;
 use crate::messages::{Msg, pl};
+use crate::search::Search;
 use crate::ui::{Sheet, Toasts};
 
 /// Wait after the last keystroke before asking the server.
@@ -20,10 +21,13 @@ pub fn SearchSheet(commands: Commands, open: RwSignal<bool>) -> impl IntoView {
     let results = search_results(query);
     let toasts = expect_context::<Toasts>();
     let rows = move || {
-        let songs = results.get();
+        let search = results.get();
+        if let Some(notice) = search.notice() {
+            return view! { <li class="search-empty">{pl(notice)}</li> }.into_any();
+        }
+        let Search::Found(songs) = search else { return ().into_any() };
         if songs.is_empty() {
-            let typed = query.with(|query| !query.trim().is_empty());
-            return typed.then(|| view! { <li class="search-empty">{pl(Msg::NoResults)}</li> }).into_any();
+            return view! { <li class="search-empty">{pl(Msg::NoResults)}</li> }.into_any();
         }
         songs
             .into_iter()
@@ -61,23 +65,30 @@ pub fn SearchSheet(commands: Commands, open: RwSignal<bool>) -> impl IntoView {
     }
 }
 
-/// Results for `query`, fetched with a short debounce; only the latest answer counts.
-pub fn search_results(query: RwSignal<String>) -> RwSignal<Vec<SongSummary>> {
-    let results = RwSignal::new(Vec::<SongSummary>::new());
+/// Results for `query`, fetched with a short debounce; only the latest answer counts. While a
+/// newer answer is on its way the previous results stay, so the list does not flicker.
+pub fn search_results(query: RwSignal<String>) -> RwSignal<Search> {
+    let results = RwSignal::new(Search::Idle);
     let generation = StoredValue::new(0_u32);
     Effect::new(move |_| {
         let text = query.get();
         generation.update_value(|value| *value += 1);
         let this_request = generation.get_value();
+        if text.trim().is_empty() {
+            results.set(Search::Idle);
+            return;
+        }
+        if !matches!(results.get_untracked(), Search::Found(_)) {
+            results.set(Search::Waiting);
+        }
         leptos::task::spawn_local(async move {
             gloo_timers::future::TimeoutFuture::new(DEBOUNCE_MS).await;
             if generation.get_value() != this_request {
                 return;
             }
-            let songs =
-                if text.trim().is_empty() { Vec::new() } else { crate::search::fetch_songs(&text).await };
+            let answer = crate::search::fetch_songs(&text).await;
             if generation.get_value() == this_request {
-                results.set(songs);
+                results.set(answer.map_or(Search::Failed, Search::Found));
             }
         });
     });

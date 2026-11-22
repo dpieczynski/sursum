@@ -34,6 +34,9 @@ pub fn ScreenSheet(
     let cooling = move || power() == DisplayPowerState::CoolingDown;
     let shows_content =
         move || state.with(|state| state.as_ref().is_some_and(|state| screen_shows(state).is_content()));
+    // Without an uploaded logo the logo cover would be plain black (the pad says so too).
+    let no_logo =
+        move || state.with(|state| state.as_ref().is_some_and(|state| state.program.logo.is_none()));
     let turn_on = move |_| commands.send(Command::DisplayPower { action: PowerAction::On });
     let standby = move || commands.send(Command::DisplayPower { action: PowerAction::Standby });
     view! {
@@ -43,7 +46,7 @@ pub fn ScreenSheet(
                 <button class="btn btn--lg cover" on:click=overlay(Overlay::Black)>
                     {pl(Msg::BlackOut)}
                 </button>
-                <button class="btn btn--lg" on:click=overlay(Overlay::Logo)>
+                <button class="btn btn--lg" prop:disabled=no_logo on:click=overlay(Overlay::Logo)>
                     {pl(Msg::ShowLogo)}
                 </button>
                 <button class="btn btn--lg btn--live" on:click=overlay(Overlay::None)>

@@ -14,18 +14,20 @@ use crate::shell::{CurrentView, View};
 #[component]
 pub fn LiveSet(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
     let container = NodeRef::<leptos::html::Ol>::new();
-    let live_item = Signal::derive(move || {
+    // Memos, not derived signals: every snapshot (any tap on any remote) notifies `state`, and
+    // only a real change may rebuild the rows or scroll the list, or an operator looking ahead
+    // is pulled back to the live item on every "Dalej".
+    let live_item = Memo::new(move |_| {
         state.with(|state| state.as_ref()?.program.live.as_ref().map(|live| live.deck.item_id.clone()))
     });
-    let next_item = Signal::derive(move || {
+    let next_item = Memo::new(move |_| {
         state.with(|state| {
             let state = state.as_ref()?;
             (state.next_step == NextStep::Item)
                 .then(|| state.next.as_ref().map(|next| next.deck.item_id.clone()))?
         })
     });
-    let shows =
-        Signal::derive(move || state.with(|state| state.as_ref().map_or(Shows::Nothing, screen_shows)));
+    let shows = Memo::new(move |_| state.with(|state| state.as_ref().map_or(Shows::Nothing, screen_shows)));
     let header = move || {
         state.with(|state| {
             state
@@ -34,17 +36,17 @@ pub fn LiveSet(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl
                 .map(|set| format!("{} · {} {}", set.name, set.items.len(), pl(Msg::Items)))
         })
     };
-    let items = move || {
+    let items = Memo::new(move |_| {
         state.with(|state| {
             state.as_ref().and_then(|state| state.active_set.as_ref().map(|set| set.items.clone()))
         })
-    };
-    let rows = move || match items() {
+    });
+    let rows = move || match items.get() {
         None => empty(Msg::NoSet, Msg::ChooseSet).into_any(),
         Some(items) if items.is_empty() => empty(Msg::SetEmpty, Msg::AddSongs).into_any(),
         Some(items) => items
             .into_iter()
-            .map(|item| row(item, live_item, next_item, shows, commands))
+            .map(|item| row(item, live_item.into(), next_item.into(), shows.into(), commands))
             .collect_view()
             .into_any(),
     };

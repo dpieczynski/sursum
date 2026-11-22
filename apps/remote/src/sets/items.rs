@@ -15,22 +15,24 @@ pub fn Items(
     commands: Commands,
     card: RwSignal<Option<SongId>>,
 ) -> impl IntoView {
-    let live_item = Signal::derive(move || {
+    // Memos: a snapshot that leaves the items alone (e.g. someone pressing "Dalej") must not
+    // rebuild the rows, or a hold on "Usuń" in progress is silently cancelled.
+    let live_item = Memo::new(move |_| {
         state.with(|state| state.as_ref()?.program.live.as_ref().map(|live| live.deck.item_id.clone()))
     });
-    let items = move || {
+    let items = Memo::new(move |_| {
         state.with(|state| {
             state.as_ref().and_then(|state| state.active_set.as_ref().map(|set| set.items.clone()))
         })
-    };
-    let rows = move || match items() {
+    });
+    let rows = move || match items.get() {
         None => super::no_set().into_any(),
         Some(items) if items.is_empty() => view! { <p class="hint">{pl(Msg::SetEmptyHint)}</p> }.into_any(),
         Some(items) => {
             let count = items.len() as u32;
             items
                 .into_iter()
-                .map(|item| row(item, count, live_item, commands, card))
+                .map(|item| row(item, count, live_item.into(), commands, card))
                 .collect_view()
                 .into_any()
         }

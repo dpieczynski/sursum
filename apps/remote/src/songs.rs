@@ -21,11 +21,11 @@ pub fn SongsView(state: RwSignal<Option<RemoteState>>) -> impl IntoView {
         if typed.is_empty() {
             return view! { <p class="hint">{pl(Msg::LibraryHint)}</p> }.into_any();
         }
-        let songs = results.get();
-        if songs.is_empty() {
-            return no_results(typed, editing).into_any();
+        match results.get() {
+            crate::search::Search::Found(songs) if songs.is_empty() => no_results(typed, editing).into_any(),
+            crate::search::Search::Found(songs) => song_list(songs, editing).into_any(),
+            other => other.notice().map(|notice| view! { <p class="hint">{pl(notice)}</p> }).into_any(),
         }
-        song_list(songs, editing).into_any()
     };
     view! {
         <div class="songs-view" data-testid="songs-view">

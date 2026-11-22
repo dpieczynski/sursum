@@ -99,7 +99,12 @@ fn RestoreButton() -> impl IntoView {
                 sheet_lines(&step.get()).into_iter().map(|line| view! { <p>{line}</p> }).collect_view()
             };
             view! {
-                <Sheet title=pl(Msg::BackupRestoreTitle).to_owned() on_close=close testid="restore">
+                <Sheet
+                    title=pl(Msg::BackupRestoreTitle).to_owned()
+                    on_close=close
+                    locked=Signal::derive(move || step.get() == Step::Restoring)
+                    testid="restore"
+                >
                     <div class="sheet-status" data-testid="restore-answer">
                         {lines}
                     </div>

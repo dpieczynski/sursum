@@ -85,7 +85,15 @@ pub fn Results(
     });
     let editing = expect_context::<RwSignal<Option<EditorTarget>>>();
     let rows = move || {
-        let songs = results.get();
+        let songs = match results.get() {
+            crate::search::Search::Found(songs) => songs,
+            other => {
+                return other
+                    .notice()
+                    .map(|notice| view! { <li class="search-empty">{pl(notice)}</li> })
+                    .into_any();
+            }
+        };
         if songs.is_empty() {
             let title = query.get().trim().to_owned();
             let create = move |_| editing.set(Some(EditorTarget::New { title: title.clone() }));
