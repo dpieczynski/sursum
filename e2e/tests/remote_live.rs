@@ -112,6 +112,33 @@ async fn the_msza_view_fits_phones_and_tablets() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn looking_ahead_in_the_running_order_is_not_undone_by_other_changes() -> anyhow::Result<()> {
+    with_remote(360, 800, async |server, _, remote| {
+        // Scroll the running order to its end, as an organist looking ahead would.
+        let scrolled = number(
+            remote,
+            "let el = document.querySelector('[data-testid=live-set]');
+             while (el && el.scrollHeight <= el.clientHeight) el = el.parentElement;
+             window.lookingAhead = el;
+             el.scrollTop = el.scrollHeight;
+             return el.scrollTop;",
+        )
+        .await?;
+        anyhow::ensure!(scrolled > 0.0, "the running order does not scroll at this size");
+        // Another remote changes what the screen shows; the live item stays the same.
+        let mut other = server.remote("second organist").await?;
+        other.command(Command::SetOverlay { overlay: sursum_protocol::Overlay::Black }).await?;
+        other.command(Command::SetOverlay { overlay: sursum_protocol::Overlay::None }).await?;
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        let now = number(remote, "return window.lookingAhead.scrollTop;").await?;
+        anyhow::ensure!((now - scrolled).abs() < 2.0, "the list jumped from {scrolled} to {now}");
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn the_controls_never_move_and_stop_without_a_connection() -> anyhow::Result<()> {
     with_remote(360, 800, async |server, _, remote| {
         let before =

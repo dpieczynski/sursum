@@ -41,10 +41,12 @@ pub fn Pairing() -> impl IntoView {
                 {pl(Msg::DeviceName)}
                 <input prop:value=name on:input=move |event| name.set(event_target_value(&event)) />
             </label>
-            <button class="primary" type="submit">
+            <button class="btn btn--primary" type="submit">
                 {pl(Msg::Pair)}
             </button>
-            <p class="editor-status">{move || status.get()}</p>
+            <p class="hint warn" role="status">
+                {move || status.get()}
+            </p>
         </form>
     }
 }
@@ -102,10 +104,12 @@ pub fn Setup() -> impl IntoView {
                 {pl(Msg::DeviceName)}
                 <input prop:value=name on:input=move |event| name.set(event_target_value(&event)) />
             </label>
-            <button class="primary" type="submit">
+            <button class="btn btn--primary" type="submit">
                 {pl(Msg::SetPin)}
             </button>
-            <p class="editor-status">{move || status.get()}</p>
+            <p class="hint warn" role="status">
+                {move || status.get()}
+            </p>
         </form>
     }
 }

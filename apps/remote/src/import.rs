@@ -49,7 +49,12 @@ pub fn ImportButton() -> impl IntoView {
                 Step::Failed | Step::Idle => (pl(Msg::ImportFailed), Vec::new()),
             };
             view! {
-                <Sheet title=pl(Msg::ImportOpenSong).to_owned() on_close=close testid="import">
+                <Sheet
+                    title=pl(Msg::ImportOpenSong).to_owned()
+                    on_close=close
+                    locked=Signal::derive(move || step.get() == Step::Importing)
+                    testid="import"
+                >
                     <p class="sheet-status" data-testid="import-status">
                         {heading}
                     </p>

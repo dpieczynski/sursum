@@ -495,9 +495,12 @@
 /* After the rules above, so `display: none` wins: on a phone the three buttons take the row
    (the status chip in the top bar already says what is on screen). */
 @media (max-width: 599px) {
-  .strip,
-  .remote[data-hand="left"] .strip {
+  .strip {
     grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  /* Mirrored: "Dalej" comes first and keeps the wide column. */
+  .remote[data-hand="left"] .strip {
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
   .strip-summary {
     display: none;

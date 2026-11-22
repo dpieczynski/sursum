@@ -12,14 +12,19 @@ use crate::messages::{Msg, pl};
 
 #[component]
 pub fn ChurchSection(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
-    let church = move || state.with(|state| state.as_ref().and_then(|state| state.church.clone()));
-    let others = move || {
+    // Memos: the field is refilled only when the church really changes on the server, not on
+    // every snapshot (which would wipe a half-typed name).
+    let church_memo =
+        Memo::new(move |_| state.with(|state| state.as_ref().and_then(|state| state.church.clone())));
+    let church = move || church_memo.get();
+    let others_memo = Memo::new(move |_| {
         state.with(|state| {
             let Some(state) = state.as_ref() else { return Vec::new() };
             let own = state.church.as_ref().map(|church| &church.church_id);
             state.churches.iter().filter(|church| Some(&church.church_id) != own).cloned().collect::<Vec<_>>()
         })
-    };
+    });
+    let others = move || others_memo.get();
     let name = RwSignal::new(String::new());
     // Show the current name in the field whenever it changes on the server.
     Effect::new(move |_| name.set(church().map(|church| church.name).unwrap_or_default()));

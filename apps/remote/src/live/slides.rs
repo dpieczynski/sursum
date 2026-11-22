@@ -14,24 +14,29 @@ use crate::messages::{Msg, pl};
 #[component]
 pub fn Slides(state: RwSignal<Option<RemoteState>>, commands: Commands) -> impl IntoView {
     let container = NodeRef::<leptos::html::Div>::new();
-    let current = Signal::derive(move || {
+    // Memos: only a new deck rebuilds the tiles and only a new slide scrolls the row, not every
+    // snapshot (an operator scrolling ahead would be pulled back by any tap on any remote).
+    let current = Memo::new(move |_| {
         state.with(|state| {
             let live = state.as_ref()?.program.live.as_ref()?;
             (!live.gap).then_some(live.slide_index)
         })
     });
-    let on_air = Signal::derive(move || {
+    let on_air = Memo::new(move |_| {
         state.with(|state| state.as_ref().is_some_and(|state| screen_shows(state).is_content()))
     });
-    let tiles = move || {
-        let slides = state.with(|state| {
+    let slides = Memo::new(move |_| {
+        state.with(|state| {
             state.as_ref().and_then(|state| state.program.live.as_ref().map(|live| live.deck.slides.clone()))
-        });
+        })
+    });
+    let tiles = move || {
         slides
+            .get()
             .unwrap_or_default()
             .into_iter()
             .enumerate()
-            .map(|(index, slide)| tile(index as u32, slide, current, on_air, commands))
+            .map(|(index, slide)| tile(index as u32, slide, current.into(), on_air.into(), commands))
             .collect_view()
     };
     Effect::new(move |_| {

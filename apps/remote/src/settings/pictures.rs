@@ -49,7 +49,12 @@ pub fn PictureCleanupButton() -> impl IntoView {
                 sheet_lines(step.get()).into_iter().map(|line| view! { <p>{line}</p> }).collect_view()
             };
             view! {
-                <Sheet title=pl(Msg::PictureCleanupTitle).to_owned() on_close=close testid="picture-cleanup">
+                <Sheet
+                    title=pl(Msg::PictureCleanupTitle).to_owned()
+                    on_close=close
+                    locked=Signal::derive(move || matches!(step.get(), Step::Checking | Step::Removing))
+                    testid="picture-cleanup"
+                >
                     <div class="sheet-status" data-testid="picture-cleanup-answer">
                         {lines}
                     </div>
