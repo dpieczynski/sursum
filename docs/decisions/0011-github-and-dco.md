@@ -29,3 +29,8 @@ make it public now.
   ADR 0022), the WPE package rebuild (ADR 0009 amendment), and an application for free signing
   of the Windows program (SignPath Foundation: its terms ask for an OSI license, no proprietary
   parts, builds from the repository by CI, and a published release) ⚠ not yet applied for.
+
+## Amendment (2026-11-22): no SignPath signing
+The SignPath Foundation declined the application for free signing of the Windows program. The
+program stays unsigned (ADR 0020); the README's code signing policy section, which their terms
+required, became a short note on signing and privacy.
