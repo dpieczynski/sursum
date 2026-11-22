@@ -166,6 +166,9 @@ pub enum ErrorCode {
     SetOnScreen,
     /// A set's date is not `YYYY-MM-DD` (optionally with `THH:MM`).
     InvalidDate,
+    /// The device could not write the change to its storage (full or failing card); nothing
+    /// changed.
+    StorageFailed,
 }
 
 /// Result of one command.

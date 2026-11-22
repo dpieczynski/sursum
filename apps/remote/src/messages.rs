@@ -147,6 +147,7 @@ pub enum Msg {
     CopySetShort,
     SetDate,
     InvalidDate,
+    StorageFailed,
     ChurchName,
     ChurchNameExample,
     ChurchMissing,
@@ -460,6 +461,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::CopySetShort => "Nowy z tego",
         Msg::SetDate => "Data (niekoniecznie)",
         Msg::InvalidDate => "Niepoprawna data zestawu",
+        Msg::StorageFailed => {
+            "Urządzenie nie mogło zapisać zmiany (karta pełna lub uszkodzona) – nic się nie zmieniło"
+        }
         Msg::ChurchName => "Nazwa kościoła",
         Msg::ChurchNameExample => "np. Tulce",
         Msg::ChurchMissing => "Wpisz nazwę kościoła, w którym stoi to urządzenie",
@@ -776,6 +780,7 @@ pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
         ErrorCode::InvalidProfile => Msg::InvalidProfile,
         ErrorCode::SetOnScreen => Msg::SetOnScreen,
         ErrorCode::InvalidDate => Msg::InvalidDate,
+        ErrorCode::StorageFailed => Msg::StorageFailed,
         ErrorCode::Forbidden => Msg::NotPaired,
         ErrorCode::DisplayBusy => Msg::DisplayBusy,
         ErrorCode::DisplayAuthFailed => Msg::DisplayAuthFailed,

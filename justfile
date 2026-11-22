@@ -26,6 +26,11 @@ desktop: build-web
 desktop-windows: build-web
     cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
 
+# The server's tests on Windows, where the desktop program runs it (after `desktop-windows`,
+# which builds the embedded apps). Catches what only Windows does, e.g. with directories.
+test-windows:
+    cargo test -p sursum-core -p sursum-formats -p sursum-server --target x86_64-pc-windows-msvc
+
 # Install the desktop program for this Linux user: the binary in ~/.local/bin, the menu entry and
 # its icon (GTK finds the window's icon by the application id).
 desktop-install: desktop

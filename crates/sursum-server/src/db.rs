@@ -136,9 +136,22 @@ impl Database {
         match Self::open_checked(&path) {
             Ok(database) => Ok(database),
             Err(error) if path.exists() && is_damage(&error) => {
-                tracing::error!(?error, "the database is damaged; restoring the newest backup");
-                restore_newest_backup(data_dir)?;
-                Self::open_checked(&path).context("opening the restored backup")
+                tracing::error!(?error, "the database is damaged; restoring the newest good backup");
+                let backups = backups(&data_dir.join(BACKUP_DIR))?;
+                anyhow::ensure!(!backups.is_empty(), "the database is damaged and there is no backup");
+                // Newest first; a backup written during the failure that damaged the database
+                // may be damaged too, so older ones are tried in turn.
+                for backup in backups.iter().rev() {
+                    restore_backup(data_dir, backup)?;
+                    match Self::open_checked(&path) {
+                        Ok(database) => return Ok(database),
+                        Err(error) if is_damage(&error) => {
+                            tracing::error!(?error, backup = %backup.display(), "this backup is damaged too");
+                        }
+                        Err(error) => return Err(error.context("opening the restored backup")),
+                    }
+                }
+                anyhow::bail!("the database and every backup are damaged")
             }
             Err(error) => Err(error),
         }
@@ -179,30 +192,13 @@ impl Database {
         }
         let connection = Connection::open(&path)?;
         connection.busy_timeout(std::time::Duration::from_secs(5))?;
-        let dir = data_dir.join(BACKUP_DIR);
-        std::fs::create_dir_all(&dir)?;
-        let seconds =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let target = dir.join(format!("sursum-{seconds:012}-{label}.db"));
-        connection.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
-        prune_backups(&dir)?;
-        Ok(Some(target))
+        write_backup(&connection, data_dir, label).map(Some)
     }
 
     /// Writes a consistent copy of the database into `data_dir/backups` and keeps the newest
     /// [`BACKUPS_KEPT`] copies. Called at startup and before imports.
     pub fn backup(&self, data_dir: &Path, label: &str) -> anyhow::Result<PathBuf> {
-        let dir = data_dir.join(BACKUP_DIR);
-        std::fs::create_dir_all(&dir)?;
-        let seconds =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let target = dir.join(format!("sursum-{seconds:012}-{label}.db"));
-        if target.exists() {
-            std::fs::remove_file(&target)?;
-        }
-        self.connection.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
-        prune_backups(&dir)?;
-        Ok(target)
+        write_backup(&self.connection, data_dir, label)
     }
 
     /// Writes a consistent copy of the database in `data_dir` to `target` for a device backup,
@@ -486,7 +482,7 @@ fn backups(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
 struct Damaged(String);
 
 /// True for errors that mean the file itself is damaged (and a backup should replace it).
-fn is_damage(error: &anyhow::Error) -> bool {
+pub(crate) fn is_damage(error: &anyhow::Error) -> bool {
     use rusqlite::ErrorCode;
     error.chain().any(|cause| {
         cause.is::<Damaged>()
@@ -498,31 +494,72 @@ fn is_damage(error: &anyhow::Error) -> bool {
     })
 }
 
+/// Writes a consistent copy of the database behind `connection` into `data_dir/backups` and keeps
+/// the newest [`BACKUPS_KEPT`]. The copy is written under a temporary name and renamed when
+/// complete, so a power cut never leaves a half backup that looks like the newest one.
+fn write_backup(connection: &Connection, data_dir: &Path, label: &str) -> anyhow::Result<PathBuf> {
+    let dir = data_dir.join(BACKUP_DIR);
+    std::fs::create_dir_all(&dir)?;
+    let seconds =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let target = dir.join(format!("sursum-{seconds:012}-{label}.db"));
+    let part = dir.join(format!(".{}{PART_SUFFIX}", uuid::Uuid::new_v4()));
+    let written = connection
+        .execute("VACUUM INTO ?1", [part.to_string_lossy()])
+        .map_err(anyhow::Error::from)
+        .and_then(|_| Ok(std::fs::rename(&part, &target)?));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    written?;
+    crate::durable::sync_dir(&dir)?;
+    prune_backups(&dir)?;
+    Ok(target)
+}
+
+/// Ending of a backup still being written.
+const PART_SUFFIX: &str = ".part";
+
+/// Keeps the newest [`BACKUPS_KEPT`] backups, and removes what an interrupted backup left (only
+/// old leftovers: another backup may be writing its own right now).
 fn prune_backups(dir: &Path) -> anyhow::Result<()> {
     let files = backups(dir)?;
     for old in files.iter().take(files.len().saturating_sub(BACKUPS_KEPT)) {
         std::fs::remove_file(old)?;
     }
+    let hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let leftover = entry.file_name().to_string_lossy().ends_with(PART_SUFFIX)
+            && entry.metadata().and_then(|meta| meta.modified()).is_ok_and(|modified| modified < hour_ago);
+        if leftover {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
     Ok(())
 }
 
-/// Moves the damaged database (with its WAL files) aside and copies the newest backup in place.
-fn restore_newest_backup(data_dir: &Path) -> anyhow::Result<()> {
-    let newest = backups(&data_dir.join(BACKUP_DIR))?
-        .pop()
-        .context("the database is damaged and there is no backup")?;
+/// Moves the damaged database (with its WAL files) aside and puts a copy of `backup` in place,
+/// atomically: a power cut leaves either the old file or the whole copy.
+fn restore_backup(data_dir: &Path, backup: &Path) -> anyhow::Result<()> {
     let quarantine = data_dir.join("corrupt");
     std::fs::create_dir_all(&quarantine)?;
-    let seconds =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let stamp = format!(
+        "{}-{}",
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
+        &uuid::Uuid::new_v4().simple().to_string()[..8]
+    );
     for suffix in ["", "-wal", "-shm"] {
         let file = data_dir.join(format!("{DATABASE_FILE}{suffix}"));
         if file.exists() {
-            std::fs::rename(&file, quarantine.join(format!("{seconds}-{DATABASE_FILE}{suffix}")))?;
+            std::fs::rename(&file, quarantine.join(format!("{stamp}-{DATABASE_FILE}{suffix}")))?;
         }
     }
-    std::fs::copy(&newest, data_dir.join(DATABASE_FILE))?;
-    tracing::warn!(backup = %newest.display(), "restored the database from a backup");
+    let staged = data_dir.join(format!(".{DATABASE_FILE}.restoring"));
+    std::fs::copy(backup, &staged)?;
+    std::fs::File::open(&staged)?.sync_all()?;
+    std::fs::rename(&staged, data_dir.join(DATABASE_FILE))?;
+    crate::durable::sync_dir(data_dir)?;
+    tracing::warn!(backup = %backup.display(), "restored the database from a backup");
     Ok(())
 }
 
@@ -564,6 +601,37 @@ mod tests {
         let database = Database::open(dir.path()).unwrap();
         assert_eq!(database.load_songs().unwrap()[0].verses[0].blocks[0].lines[0].text, "zapisana");
         assert!(dir.path().join("corrupt").read_dir().unwrap().next().is_some());
+    }
+
+    #[test]
+    fn a_damaged_newest_backup_falls_back_to_an_older_one() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut database = Database::open(dir.path()).unwrap();
+            database.save_song(&song("starsza"), Base::Current).unwrap();
+            database.backup(dir.path(), "a").unwrap();
+            let newest = database.backup(dir.path(), "b").unwrap();
+            std::fs::write(newest, vec![0x5a; 8192]).unwrap();
+        }
+        std::fs::write(dir.path().join(DATABASE_FILE), vec![0x5a; 8192]).unwrap();
+        let _ = std::fs::remove_file(dir.path().join("sursum.db-wal"));
+        let database = Database::open(dir.path()).unwrap();
+        assert_eq!(database.load_songs().unwrap()[0].verses[0].blocks[0].lines[0].text, "starsza");
+    }
+
+    #[test]
+    fn two_backups_in_one_second_both_succeed_and_leave_no_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let database = Database::open(dir.path()).unwrap();
+        database.backup(dir.path(), "same").unwrap();
+        database.backup(dir.path(), "same").unwrap();
+        Database::backup_file(dir.path(), "same").unwrap();
+        let names: Vec<String> = std::fs::read_dir(dir.path().join(BACKUP_DIR))
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(names.iter().all(|name| !name.ends_with(PART_SUFFIX)), "{names:?}");
     }
 
     #[test]
