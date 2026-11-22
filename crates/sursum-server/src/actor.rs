@@ -101,6 +101,11 @@ impl StateHandle {
         let _ = self.requests.send(Request::ScreenConnected { connected }).await;
     }
 
+    /// Records that a remote's session ended (ends its calibration, if it was calibrating).
+    pub async fn remote_gone(&self, client_id: ClientId) {
+        let _ = self.requests.send(Request::RemoteGone { client_id }).await;
+    }
+
     /// True if the state actor answers (for the systemd watchdog).
     pub async fn alive(&self) -> bool {
         let (reply, answer) = oneshot::channel();
@@ -263,6 +268,9 @@ enum Request {
     ScreenConnected {
         connected: bool,
     },
+    RemoteGone {
+        client_id: ClientId,
+    },
     Devices {
         reply: oneshot::Sender<Vec<(String, String, String, String)>>,
     },
@@ -322,7 +330,7 @@ pub fn spawn(
         rev: Rev(1),
         layout: layout_or_fallback(&profile),
         profile,
-        calibrating: false,
+        calibrating_by: None,
         display_power: DisplayPowerState::Unknown,
         logo,
         screen_connected: false,
@@ -403,6 +411,16 @@ pub fn spawn(
                             remote_tx.send_replace(Arc::new(state.remote_state()));
                         }
                         let _ = reply.send(report);
+                    }
+                    Request::RemoteGone { client_id } => {
+                        // A remote that turned calibration on and went away (closed, reloaded,
+                        // battery dead) must not leave the test card on the church screen.
+                        if state.calibrating_by.as_ref() == Some(&client_id) {
+                            state.calibrating_by = None;
+                            state.rev = state.rev.next();
+                            screen_tx.send_replace(Arc::new(state.screen_state()));
+                            remote_tx.send_replace(Arc::new(state.remote_state()));
+                        }
                     }
                     Request::ScreenConnected { connected } => {
                         state.screen_connected = connected;
@@ -508,8 +526,9 @@ struct AppState {
     layout: ScreenLayout,
     /// The profile `layout` was computed from (shown in the calibration panel).
     profile: ScreenProfile,
-    /// True while the screen shows the calibration pattern; never persisted.
-    calibrating: bool,
+    /// The remote calibrating, while the screen shows the calibration pattern; never persisted.
+    /// Calibration ends when that remote turns it off or disconnects.
+    calibrating_by: Option<ClientId>,
     /// Last state reported by the display power task.
     display_power: DisplayPowerState,
     /// The parish logo for the logo overlay.
@@ -610,7 +629,7 @@ impl AppState {
                 Ok(None)
             }
             Command::Calibrate { on } => {
-                self.calibrating = *on;
+                self.calibrating_by = on.then(|| actor.clone());
                 Ok(None)
             }
             Command::NameChurch { name } => match self.database.name_church(name) {
@@ -877,7 +896,7 @@ impl AppState {
     fn remove_item(&mut self, item_id: &ItemId) -> Result<Option<ServiceSet>, ErrorCode> {
         let (index, set) = self.sets.remove(item_id).ok_or(ErrorCode::NotFound)?;
         let set = set.clone();
-        self.program.item_removed(item_id, index);
+        self.program.item_removed(item_id, index, &set);
         Ok(Some(set))
     }
 
@@ -1151,7 +1170,7 @@ impl AppState {
             overlay: self.program.overlay,
             transition_ms: self.transition_ms,
             layout: self.layout.clone(),
-            calibration: self.calibrating.then(|| self.profile.clone()),
+            calibration: self.calibrating_by.as_ref().map(|_| self.profile.clone()),
             logo: self.logo.clone(),
         }
     }

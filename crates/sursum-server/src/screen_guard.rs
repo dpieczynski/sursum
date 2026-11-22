@@ -95,14 +95,17 @@ pub fn spawn(presence: &ScreenPresence, config: Option<ScreenGuardConfig>, state
             let Some(config) = &config else { continue };
             let grace = Duration::from_secs(config.grace_s);
             let grace = if ever_connected { grace } else { grace.max(STARTUP_GRACE) };
-            // Wait for the screen to come back within the grace period.
-            let back =
-                matches!(tokio::time::timeout(grace, count.wait_for(|count| *count > 0)).await, Ok(Ok(_)));
-            if back {
-                continue;
+            // Wait for the screen to come back within the grace period. A closed channel means
+            // the server is shutting down: nothing to guard any more.
+            match tokio::time::timeout(grace, count.wait_for(|count| *count > 0)).await {
+                Ok(Ok(_)) => continue,
+                Ok(Err(_)) => return,
+                Err(_) => {}
             }
             restart_kiosk(&config.restart_command).await;
-            let _back = tokio::time::timeout(RETRY, count.wait_for(|count| *count > 0)).await.is_ok();
+            if let Ok(Err(_)) = tokio::time::timeout(RETRY, count.wait_for(|count| *count > 0)).await {
+                return;
+            }
         }
     });
 }

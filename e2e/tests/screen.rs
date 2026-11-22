@@ -255,6 +255,12 @@ async fn the_logo_button_shows_the_parish_logo() -> anyhow::Result<()> {
         let shot = screenshot(driver).await?;
         let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
         anyhow::ensure!(centre[2] > 150 && centre[0] < 100, "the logo is not visible: {centre:?}");
+        // Black stays plain black even though a logo is configured.
+        remote.command(Command::SetOverlay { overlay: Overlay::Black }).await?;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let shot = screenshot(driver).await?;
+        let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
+        anyhow::ensure!(centre[..3].iter().all(|channel| *channel < 10), "black shows the logo: {centre:?}");
         Ok(())
     })
     .await

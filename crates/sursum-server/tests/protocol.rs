@@ -751,6 +751,49 @@ async fn a_song_changed_in_two_places_waits_for_review_until_one_version_is_kept
 }
 
 #[tokio::test]
+async fn an_oversized_message_closes_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    next_screen_state(&mut screen).await;
+    let huge = format!("{{\"type\":\"ping\",\"pad\":\"{}\"}}", "x".repeat(64 * 1024));
+    let _ = screen.send(Message::Text(huge.into())).await;
+    let closed = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match screen.next().await {
+                None | Some(Err(_) | Ok(Message::Close(_))) => return,
+                Some(Ok(_)) => {}
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "the server closes a screen that sends a 64 KiB message");
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn calibration_ends_when_the_calibrating_remote_goes_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut calibrating = connect(&server, Role::Remote, "calibrating").await;
+    let mut other = connect(&server, Role::Remote, "other").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    next_screen_state(&mut screen).await;
+
+    command(&mut calibrating, 1, Rev(u32::MAX), Command::Calibrate { on: true }).await;
+    assert!(next_screen_state(&mut screen).await.calibration.is_some());
+    // Another remote leaving changes nothing; the calibrating one leaving (a reload, a closed
+    // browser, a flat battery) takes the test card off the church screen.
+    drop(other.close(None).await);
+    drop(calibrating);
+    let state = tokio::time::timeout(std::time::Duration::from_secs(5), next_screen_state(&mut screen))
+        .await
+        .expect("the screen hears about it");
+    assert_eq!(state.calibration, None);
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn calibration_changes_the_layout_at_once_and_survives_a_restart() {
     use sursum_protocol::{ErrorCode, ExclusionZone, Insets, MaskMode, Rect, ScreenProfile};
     let dir = tempfile::tempdir().unwrap();

@@ -27,7 +27,16 @@ pub fn CalibrationPanel(
     state: RwSignal<Option<RemoteState>>,
     commands: Commands,
 ) -> impl IntoView {
-    commands.send(Command::Calibrate { on: true });
+    // The test card is on while this panel is open and connected: sent again after a reconnect
+    // (the server ends calibration when the remote that started it disconnects), and turned off
+    // however the panel closes.
+    let connection = expect_context::<crate::Connection>();
+    Effect::new(move |_| {
+        if connection.up() {
+            commands.send(Command::Calibrate { on: true });
+        }
+    });
+    on_cleanup(move || commands.send(Command::Calibrate { on: false }));
     let profile = Signal::derive(move || {
         state.with(|state| state.as_ref().map(|state| state.screen_profile.clone()).unwrap_or_default())
     });
@@ -36,10 +45,7 @@ pub fn CalibrationPanel(
     });
     let selected = RwSignal::new(0_usize);
     let editor = ProfileEditor { profile, commands };
-    let close = move |_| {
-        commands.send(Command::Calibrate { on: false });
-        open.set(false);
-    };
+    let close = move |_| open.set(false);
     let draw = move |rect: Rect| {
         let index = selected.get_untracked();
         editor.change(|profile| match profile.exclusions.get_mut(index) {

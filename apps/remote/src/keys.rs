@@ -38,6 +38,17 @@ impl Action {
     }
 }
 
+/// What has the keyboard focus when a key is pressed; decides which keys may act.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    /// A text field: typing must not move the screen.
+    Field,
+    /// A button, link or similar: Space and Enter press it.
+    Control,
+    /// Nothing that takes keys.
+    Page,
+}
+
 /// Keys (as `KeyboardEvent.key` names them) and their actions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyMap {
@@ -66,9 +77,15 @@ impl Default for KeyMap {
 
 impl KeyMap {
     /// The action for a key. While typing in a field only PageUp/PageDown act (a pedal must work
-    /// even with the search field focused; letters and arrows must not).
-    pub fn action_for(&self, key: &str, typing: bool) -> Option<Action> {
-        if typing && !matches!(key, "PageDown" | "PageUp") {
+    /// even with the search field focused; letters and arrows must not). On a focused button,
+    /// Space and Enter press the button, as everywhere else, instead of moving the screen.
+    pub fn action_for(&self, key: &str, focus: Focus) -> Option<Action> {
+        let reserved = match focus {
+            Focus::Field => !matches!(key, "PageDown" | "PageUp"),
+            Focus::Control => matches!(key, " " | "Enter"),
+            Focus::Page => false,
+        };
+        if reserved {
             return None;
         }
         self.bindings.iter().find(|(bound, _)| bound == key).map(|(_, action)| *action)
@@ -124,18 +141,27 @@ mod tests {
     #[test]
     fn default_keys_turn_pages_and_black_out() {
         let map = KeyMap::default();
-        assert_eq!(map.action_for("PageDown", false), Some(Action::Next));
-        assert_eq!(map.action_for("ArrowLeft", false), Some(Action::Prev));
-        assert_eq!(map.action_for("b", false), Some(Action::ToggleBlack));
-        assert_eq!(map.action_for("x", false), None);
+        assert_eq!(map.action_for("PageDown", Focus::Page), Some(Action::Next));
+        assert_eq!(map.action_for("ArrowLeft", Focus::Page), Some(Action::Prev));
+        assert_eq!(map.action_for("b", Focus::Page), Some(Action::ToggleBlack));
+        assert_eq!(map.action_for("x", Focus::Page), None);
     }
 
     #[test]
     fn while_typing_only_page_keys_act() {
         let map = KeyMap::default();
-        assert_eq!(map.action_for("PageDown", true), Some(Action::Next));
-        assert_eq!(map.action_for("b", true), None, "typing a B must not black the screen");
-        assert_eq!(map.action_for("ArrowRight", true), None);
+        assert_eq!(map.action_for("PageDown", Focus::Field), Some(Action::Next));
+        assert_eq!(map.action_for("b", Focus::Field), None, "typing a B must not black the screen");
+        assert_eq!(map.action_for("ArrowRight", Focus::Field), None);
+    }
+
+    #[test]
+    fn space_and_enter_press_a_focused_button_instead_of_moving_the_screen() {
+        let map = KeyMap::default();
+        assert_eq!(map.action_for(" ", Focus::Control), None);
+        assert_eq!(map.action_for("Enter", Focus::Control), None);
+        assert_eq!(map.action_for("PageDown", Focus::Control), Some(Action::Next));
+        assert_eq!(map.action_for(" ", Focus::Page), Some(Action::Next));
     }
 
     #[test]
@@ -143,8 +169,8 @@ mod tests {
         let mut map = KeyMap::default();
         map.bind("PageDown", Action::ToggleBlack);
         map.bind("F13", Action::Next);
-        assert_eq!(map.action_for("PageDown", false), Some(Action::ToggleBlack));
-        assert_eq!(map.action_for("F13", false), Some(Action::Next));
+        assert_eq!(map.action_for("PageDown", Focus::Page), Some(Action::ToggleBlack));
+        assert_eq!(map.action_for("F13", Focus::Page), Some(Action::Next));
         assert!(map.keys_of(Action::Next).contains(&"F13".to_owned()));
         assert!(!map.keys_of(Action::Next).contains(&"PageDown".to_owned()));
         let json = serde_json::to_string(&map).unwrap();
