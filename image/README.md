@@ -23,8 +23,9 @@ just image
 
 This builds the server for the Pi with the public update key compiled in (needs the update keys,
 see [docs/releasing.md](../docs/releasing.md)), takes the administrator's SSH public key from
-`SURSUM_SSH_PUBKEY` (a file, default `~/.ssh/id_ed25519.pub`, or the key itself; it is written to
-`target/image/`, never into the repository) and runs rpi-image-gen in a privileged podman
+`SURSUM_SSH_PUBKEY` (a file, default `~/.ssh/id_ed25519.pub`, the key itself, or `none` for an
+image nobody can log in to, as releases are; it is written to `target/image/`, never into the
+repository) and runs rpi-image-gen in a privileged podman
 container. The version is `git describe` of the checkout. CI builds the same on a tag (roadmap
 S1). On an x86_64 machine the
 arm64 root filesystem is built through QEMU (`qemu-user-static` with binfmt_misc on the host),
@@ -70,8 +71,9 @@ kernel for it).
   come up healthy; otherwise the next restart brings the old system back by itself, and
   `sursum-system-check` puts the database copy back before the old server starts if the new one
   had raised its schema.
-- **Administration**: `ssh admin@sursum.local` with the key given at build time; no password
-  login. A developer runs another server build until the next reboot with `just try <host>`.
+- **Administration**: `ssh admin@sursum.local` with the key given at build time (release images
+  have none: add one to `/home/admin/.ssh/authorized_keys` on the `persistent` partition; `/home`
+  lives there, so updates keep it, ADR 0026); no password login. A developer runs another server build until the next reboot with `just try <host>`.
 - **Logs**: `journalctl` is persistent across reboots (64M).
 
 ## Diagnosing a device

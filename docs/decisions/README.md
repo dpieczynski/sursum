@@ -31,3 +31,4 @@ supersedes the old one instead of editing it.
 | [0023](0023-platform-scope.md) | Platform scope: no iPad, no macOS program, no Windows parish PC; remote in Blink browsers, desktop program on Windows and Linux, screen on the Pi image only |
 | [0024](0024-one-level-of-rights.md) | One level of rights: a paired remote may do everything; no admin mode, pairing stays |
 | [0025](0025-versioned-songs-and-sets.md) | Songs and sets keep their identity and get versions; more changes win, the other version waits for review; sets per church with a date; one `.sursum` file with sets and pictures; no migration (not built yet) |
+| [0026](0026-public-release-images.md) | Public release images: no administrator SSH key (owners add one on the persistent partition), a package list and a GPL sources offer with every release, pinned release actions |

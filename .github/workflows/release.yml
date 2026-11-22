@@ -6,8 +6,11 @@
 # The signing secret is `SURSUM_BUNDLE_SIGNING_KEY` in the `release` environment, which only
 # `main` and `v*` tags may use; it is written to a file readable by the runner user only. The
 # public key is the repository variable `SURSUM_BUNDLE_KEY`, compiled into the server, which is
-# how devices decide which updates to trust; `just image` checks the update against it. The
-# administrator's SSH public key is the repository variable `SURSUM_SSH_PUBKEY`.
+# how devices decide which updates to trust; `just image` checks the update against it.
+#
+# Public images carry no SSH key (ADR 0026): nobody can log in to a device flashed from them
+# until its owner adds a key on the persistent partition. Every action is pinned to a commit,
+# since the release job holds the key every device trusts.
 name: Release
 
 on:
@@ -15,7 +18,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,15 +30,15 @@ jobs:
     name: Desktop program for Windows
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - run: rustup show
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
-          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130
+          tool: just@1.59.0,trunk@0.22.1,wasm-bindgen-cli@0.2.130
       - run: just desktop-windows
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-windows
           path: target/x86_64-pc-windows-msvc/release/sursum.exe
@@ -45,38 +48,40 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: desktop-windows
     environment: release
+    # Only this job publishes the release.
+    permissions:
+      contents: write
     timeout-minutes: 90
     steps:
       - name: Free disk space (preinstalled SDKs this project does not use)
         run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # `git describe` (the version, and the build id the apps compare) needs the history.
           fetch-depth: 0
       - run: rustup show
-      - uses: mlugg/setup-zig@v2
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: 0.17.1
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
-          tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
+          tool: just@1.59.0,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
       - name: Podman
         run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
       - name: Build and sign the image and the system update
         env:
           SURSUM_BUNDLE_KEY: ${{ vars.SURSUM_BUNDLE_KEY }}
           SIGNING_KEY: ${{ secrets.SURSUM_BUNDLE_SIGNING_KEY }}
-          SURSUM_SSH_PUBKEY: ${{ vars.SURSUM_SSH_PUBKEY }}
+          SURSUM_SSH_PUBKEY: none
           SURSUM_PODMAN: sudo podman
         run: |
           set -euo pipefail
           test -n "$SIGNING_KEY" || { echo "the signing secret is missing"; exit 1; }
-          test -n "$SURSUM_SSH_PUBKEY" || { echo "the SURSUM_SSH_PUBKEY variable is missing"; exit 1; }
           key_file="$RUNNER_TEMP/update-signing.key"
           trap 'rm -f "$key_file"' EXIT
           (umask 077 && printf '%s' "$SIGNING_KEY" > "$key_file")
           SURSUM_BUNDLE_SIGNING_KEY="$key_file" just image
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: desktop-windows
           path: target/desktop-windows
@@ -87,9 +92,17 @@ jobs:
           set -euo pipefail
           version="$(git describe --always --dirty)"
           cp target/desktop-windows/sursum.exe "target/sursum-$version-windows-x86_64.exe"
-          cp target/image/work/deploy-*/sursum.img.zst "target/sursum-$version.img.zst"
+          deploy=(target/image/work/deploy-*)
+          test "${#deploy[@]}" -eq 1 || { echo "expected one image build, found: ${deploy[*]}" >&2; exit 1; }
+          cp "${deploy[0]}/sursum.img.zst" "target/sursum-$version.img.zst"
+          # The exact Debian and Raspberry Pi packages in the image and the system update, for
+          # the GPL sources offer (docs/sources.md, ADR 0026).
+          zstd -dc "${deploy[0]}/manifest.zst" > "target/sursum-$version.packages.txt"
+          cp "${deploy[0]}"/filesystem-*.sbom.zst "target/sursum-$version.spdx.json.zst"
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
-            --notes "Built by GitHub Actions from this tag. Code signing policy: https://github.com/dpieczynski/sursum#code-signing-policy" \
+            --notes "Built by GitHub Actions from this tag. Code signing policy: https://github.com/dpieczynski/sursum#code-signing-policy. The device image and the system update contain free software packages listed in sursum-$version.packages.txt; their sources are available as described in https://github.com/dpieczynski/sursum/blob/main/docs/sources.md (written offer included)." \
             "target/sursum-$version.img.zst" \
             "target/sursum-system-$version.sursum-system" \
+            "target/sursum-$version.packages.txt" \
+            "target/sursum-$version.spdx.json.zst" \
             "target/sursum-$version-windows-x86_64.exe"

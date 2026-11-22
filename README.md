@@ -62,7 +62,9 @@ and the server only listens on loopback (it refuses any other address) — for d
 Releases are built by GitHub Actions from the tagged commit and published on the
 [releases page](https://github.com/dpieczynski/sursum/releases): the card image and the signed
 system update for the Raspberry Pi 5, and the desktop program for Windows. See also the code
-signing policy below.
+signing policy below. The card image lets nobody log in over SSH; to administer a device, add your
+key on its persistent partition (ADR 0026). The free software inside the image and where its
+sources are: [docs/sources.md](docs/sources.md).
 
 ## Code signing policy
 
