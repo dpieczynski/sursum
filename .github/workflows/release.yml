@@ -100,7 +100,7 @@ jobs:
           zstd -dc "${deploy[0]}/manifest.zst" > "target/sursum-$version.packages.txt"
           cp "${deploy[0]}"/filesystem-*.sbom.zst "target/sursum-$version.spdx.json.zst"
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
-            --notes "Built by GitHub Actions from this tag. Code signing policy: https://github.com/dpieczynski/sursum#code-signing-policy. The device image and the system update contain free software packages listed in sursum-$version.packages.txt; their sources are available as described in https://github.com/dpieczynski/sursum/blob/main/docs/sources.md (written offer included)." \
+            --notes "Built by GitHub Actions from this tag. The Windows program is not code-signed: https://github.com/dpieczynski/sursum#signing-and-privacy. The device image and the system update contain free software packages listed in sursum-$version.packages.txt; their sources are available as described in https://github.com/dpieczynski/sursum/blob/main/docs/sources.md (written offer included)." \
             "target/sursum-$version.img.zst" \
             "target/sursum-system-$version.sursum-system" \
             "target/sursum-$version.packages.txt" \

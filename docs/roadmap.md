@@ -13,8 +13,8 @@ below comes before new features. Order: CI image build, one update path, engine 
   `deploy/windows/start-pilot.ps1`, `just cross-win`, `sursum-server.exe` in CI and releases
 - [x] Public repository (ADR 0011 amendment): history checked for secrets and song texts
   (2026-11-19, nothing found); visibility switched by the maintainer the same day
-- [ ] Apply for free signing of the Windows program (SignPath Foundation ⚠) to end Defender
-  deleting the download
+- [x] Applied for free signing of the Windows program (SignPath Foundation); declined
+  (2026-11-22). The program stays unsigned (ADR 0020); Defender deleting the download is in D1
 - [x] One level of rights (ADR 0024, 2026-11-19): admin mode removed (second PIN entry,
   `/api/admin`, `SessionInfo.admin`/`admin_remaining_s`, the countdown, the locks in Ustawienia,
   the per-device lockout); pairing, the PIN and revocation stay. Server and e2e tests rewritten;
@@ -284,7 +284,7 @@ songs at home ("Zapisz plik", then "Wczytaj plik" in the church) and later for t
 Work packages and the spike's findings: [plan-desktop-and-ipad.md](plan-desktop-and-ipad.md).
 
 - [x] Spike (branch `spike/desktop-shell`, 2026-11-18; merged into `main` as pull request #1 on 2026-11-19): crate `sursum-desktop`; Linux window on GTK 4 + WebKitGTK 6.0 built and run on Fedora 45 (the remote connects and stays connected); Windows window on `tao` + `wry` cross-compiles with `cargo zigbuild` (9.9 MB, GUI subsystem); clippy clean for both targets; `cargo deny` passes with one exception
-- [ ] ⚠ Windows Defender flags the downloaded CI artifact (the ZIP with the unsigned `sursum.exe`) as a virus and deletes it right after the download (2026-11-19). Blocks the guide's download step. To find out: the detection name in Defender's protection history; whether the release's bare `.exe` is flagged too. Ways out: report a false positive to Microsoft (file submission), signing (the ADR 0020 amendment chose unsigned; revisit with an ADR if reporting is not enough)
+- [ ] ⚠ Windows Defender flags the downloaded CI artifact (the ZIP with the unsigned `sursum.exe`) as a virus and deletes it right after the download (2026-11-19). Blocks the guide's download step. To find out: the detection name in Defender's protection history; whether the release's bare `.exe` is flagged too. Ways out: report a false positive to Microsoft (file submission); signing through SignPath was declined (2026-11-22), so other signing would cost money (revisit with an ADR if reporting is not enough)
 - [ ] ⚠ First run on Windows (the program starts, 2026-11-19; the rest not yet reported): the window opens, "Zapisz plik" saves a file, "Wczytaj plik" opens the file picker, closing the window ends the process; WebView2 present on the parish PC's Windows 10
 - [ ] ⚠ Linux by hand: the "save as" dialog of the export, the file picker of the merge, a second start only raises the first window
 - [x] The window behaves like a program: the web view's data in `webview/` beside the database, `sursum.log` (previous run kept as `sursum.previous.log`), a Polish message page instead of a silent exit (server failed, another copy running), one copy at a time through `sursum.lock` (Linux also hands a second start to the first window over D-Bus), links outside the server open in the system browser; checked on Fedora 45 (first start, second start, lock held by another process)
