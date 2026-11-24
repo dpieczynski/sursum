@@ -142,6 +142,48 @@ async fn black_overlay_hides_content_and_navigation_under_it_stays_hidden() -> a
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_screen_that_loads_under_black_never_shows_the_live_slide() -> anyhow::Result<()> {
+    // Long fades make a fading overlay easy to catch: the page loads (a kiosk restart, a boot)
+    // while a slide is live under black, as on the pilot Pi after its server restarted.
+    let server = Server::start_with(&[], Some("transition_ms = 3000\n")).await?;
+    let mut remote = server.remote("organist").await?;
+    remote.command(Command::Next).await?;
+    remote.command(Command::SetOverlay { overlay: Overlay::Black }).await?;
+    with_browser(WIDTH, HEIGHT, async |driver| {
+        driver.goto(server.url("/screen/")).await?;
+        wait_until(Duration::from_secs(10), || async {
+            attribute(driver, SCREEN_ROOT, "data-overlay").await == "black"
+        })
+        .await?;
+        let opacity = "return getComputedStyle(document.querySelector('.sursum-overlay')).opacity;";
+        for _ in 0..3 {
+            let value = driver.execute(opacity, Vec::new()).await?;
+            anyhow::ensure!(
+                value.json().as_str() == Some("1"),
+                "the first overlay must be there at once, not fade in (opacity {:?})",
+                value.json()
+            );
+            let image = screenshot(driver).await?;
+            anyhow::ensure!(
+                is_black(&image, 0, 0, image.width(), image.height()),
+                "the live slide showed under black"
+            );
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        // The slide really is drawn underneath (its own fade ends after 3 s), and stays hidden.
+        wait_for_slide(driver, "v1#").await?;
+        let image = screenshot(driver).await?;
+        anyhow::ensure!(
+            is_black(&image, 0, 0, image.width(), image.height()),
+            "the live slide showed under black once drawn"
+        );
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn text_stays_out_of_exclusion_zones_and_zones_are_black() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     let mut organist = server.remote("organist").await?;

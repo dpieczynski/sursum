@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The audience screen. It only draws what the server sends; it has no UI and never shows an
 //! error. If the WebAssembly panics, the page reloads itself (the black background in
-//! `index.html` covers the reload).
+//! `index.html` covers the reload). Every reload waits until the server answers: reloading while
+//! it is down would leave the browser on its own error page.
 
 // Leptos components take their props by value; clippy's pass-by-value lint does not fit them.
 #![allow(clippy::needless_pass_by_value)]
@@ -49,19 +50,33 @@ fn reload_if_safe(state: Option<&ScreenState>) {
     }
 }
 
+/// Plain JavaScript (a panicked WebAssembly module cannot run Rust code any more): reloads once
+/// `/healthz` answers, asking again every half second until then. Runs once per page however
+/// often it is called (a new build asks on `Welcome` and again on the next snapshot), and gives
+/// up on an answer after 2 s, so a server that accepts but hangs is asked again on time.
+const RELOAD_WHEN_SERVER_ANSWERS: &str = "(function () { \
+    if (window.sursumReloading) { return; } \
+    window.sursumReloading = true; \
+    (function ask() { \
+        var controller = new AbortController(); \
+        var timer = setTimeout(function () { controller.abort(); }, 2000); \
+        fetch('/healthz', { cache: 'no-store', signal: controller.signal }).then( \
+            function (response) { \
+                clearTimeout(timer); \
+                if (response.ok) { location.reload(); } else { setTimeout(ask, 500); } \
+            }, \
+            function () { clearTimeout(timer); setTimeout(ask, 500); }); \
+    })(); })()";
+
 fn reload() {
-    if let Some(window) = web_sys::window() {
-        let _ = window.location().reload();
-    }
+    let _ = js_sys::Function::new_no_args(RELOAD_WHEN_SERVER_ANSWERS).call0(&wasm_bindgen::JsValue::NULL);
 }
 
 /// Logs panics to the console and reloads the page after a short delay.
 fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
         console_error_panic_hook::hook(info);
-        // A panicked WebAssembly module cannot run Rust code any more, so the reload is
-        // scheduled as plain JavaScript.
-        let reload = js_sys::Function::new_no_args("location.reload()");
+        let reload = js_sys::Function::new_no_args(RELOAD_WHEN_SERVER_ANSWERS);
         if let Some(window) = web_sys::window() {
             let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&reload, 2_000);
         }

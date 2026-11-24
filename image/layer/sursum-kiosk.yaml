@@ -26,6 +26,8 @@ mmdebstrap:
     - sh ../deploy/kiosk/blank-cursors.sh $1
     - install -m 0644 ../deploy/kiosk/sursum-kiosk.service $1/etc/systemd/system/sursum-kiosk.service
     - install -D -m 0755 ../deploy/kiosk/kiosk-session $1/usr/lib/sursum/kiosk-session
+    # The first page: black until the server answers (sursum-kiosk.service).
+    - install -D -m 0644 ../deploy/kiosk/start.html $1/usr/share/sursum/kiosk/start.html
     # The screen guard's restart requests (see /etc/sursum/config.toml).
     - install -m 0644 ../deploy/kiosk/sursum-kiosk-restart.path ../deploy/kiosk/sursum-kiosk-restart.service $1/etc/systemd/system/
     # tty1 belongs to the screen: no login prompt there.

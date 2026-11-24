@@ -37,6 +37,9 @@ way to run the screen (ADR 0023).
   do goes into **managed policies** (`/etc/chromium/policies/managed/`), the command line keeps
   only what no policy covers, cage gets a transparent cursor theme, and the kiosk unit may reach
   localhost only (`IPAddressAllow=localhost`, `IPAddressDeny=any`; all in `deploy/kiosk/`).
+  The browser opens `file:///usr/share/sursum/kiosk/start.html` (black, opens `/screen/` once
+  `/healthz` answers), never the server directly: a server that is down would leave the browser
+  on its error page. A `KIOSK_APP` override in `kiosk.env` should keep that page.
   cog is legacy and not used on devices. A spike decides whether WPE WebKit 2.54 on DRM (our
   rebuild of Debian's source package, WebKit's own MiniBrowser, no cage) replaces all of this
   (ADR 0009 amendment of 2026-11-19).

@@ -89,13 +89,15 @@ An external review of main was checked claim by claim; what held up is fixed in 
   and written offer for GPL sources)
 - [ ] Protocol cleanup (slide part info, version views with number and order, import problem
   codes) and docs/CI hygiene
-- [ ] The screen shows Chromium's "This site can't be reached" page whenever the kiosk starts
-  while the server does not answer (seen during the failed trial on the pilot Pi; also after a
-  server crash or a slow boot) and keeps it until the kiosk restarts, against hard rule 3. Either
-  start the browser only once the server answers and restart it with the server, or open a local
-  black page that retries (a `file://` page with an inline black background that polls
-  `/healthz` and then replaces itself with `/screen/` works the same on Chromium and WPE); mind
-  ADR 0009 before adding to the cage setup
+- [x] The screen showed Chromium's "This site can't be reached" page whenever the kiosk started
+  while the server did not answer (seen during the failed trial on the pilot Pi; also after a
+  server crash or a slow boot), against hard rule 3. The kiosk now opens a black page on the
+  system (`deploy/kiosk/start.html`) that opens `/screen/` once `/healthz` answers, and the screen
+  app reloads only when the server answers. Checked on the pilot Pi (2026-11-24) with a
+  crash-looping server: the screen connected 0.5 s after the server came back. Not yet tried in
+  the WPE spike image. The same test showed the live slide for a moment when the screen page
+  loaded under black (the first overlay faded in like any later one); the first snapshot's
+  overlay now appears at once
 - [x] A rollback left empty `-shm`/`-wal` files next to the database moved to `rolled-back/`;
   now only the database and a WAL with pending changes are moved
 - [x] The damaged-database restore failed on Windows (os error 5): the restored file was flushed
@@ -192,7 +194,7 @@ test passes in Chromium and WPE; CI is green.
 - [x] `sursum-client`: WebSocket with reconnect (backoff + jitter), heartbeat, Hello/Welcome, build-id reload. No stale-`rev` dropping: messages arrive in order per connection and server revisions restart after a server restart, so clients apply every snapshot
 - [x] remote: current/next preview, next/prev, item prev/next, section chips (now slide tiles, ADR 0017), set list, BLACK/LOGO, pedal keys (PgDn/PgUp/arrows/space/B). UI texts via a compile-time message enum (`apps/remote/src/messages.rs`); `leptos_i18n` deferred until a second language is needed
 - [ ] On-site display power spike: `cec-ctl` on both displays (on / standby / power status), projector LAN (PJLink) and RS-232 check in Tulce; record result in ADR 0012
-- [ ] Hardware spike on a Pi 5: cage + Chromium ran on the pilot Pi 5 (2026-11-17, see M4: flags and policies ✓, cursor ✓ transparent theme, forced 1080p60 ✓; first boot showed black, then the logo). Still open: white flash ⚠ and crossfade smoothness checked with an HDMI capture, and a first look at the Tulce pillar. The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)
+- [ ] Hardware spike on a Pi 5: cage + Chromium ran on the pilot Pi 5 (2026-11-17, see M4: flags and policies ✓, cursor ✓ transparent theme, forced 1080p60 ✓; first boot showed black, then the logo). Still open: white flash ⚠, a brief gray frame at boot before the logo ⚠ (seen 2026-11-24 after the firmware and kernel's black; also with the kiosk opening `/screen/` directly, but not on kiosk restarts, which do the same 4K30 → 1080p60 mode change) and crossfade smoothness, checked with an HDMI capture, and a first look at the Tulce pillar. The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)
 - [x] Screen WebDriver tests pass on WPE locally; cross-engine fit test (WPE screen vs Chromium remote) passes. Blocking in CI once CI runs
 
 **Done when:** WebDriver tests pass (black first frame; last slide stays on disconnect; reconnect
@@ -296,6 +298,9 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] ~~Admin mode counts down in the remote~~ (removed with admin mode, ADR 0024)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
 - [x] Review of the running remote (2026-11-18, ADR 0017 amendment): sheets leave the controls tappable and focus their field, the live strip fits one row on phones, the next-slide preview fits again after the tablet turns, green only for what is on screen, "Brak logo" without a logo, back gesture between views, editor actions always in view, local pairing dates and device-type names, equal admin rows, contrast of filled green and blue (e2e: `remote_live.rs`)
+- [ ] Removing the logo in Ustawienia → Ekran: the server already takes `SetLogo` without a
+  picture, but the remote can only set one (`picture.rs`), so a wrong or test logo stays until
+  another one is uploaded. Then "Brak logo" again and the logo button disabled
 
 ## M7 — Offline system updates
 
