@@ -191,17 +191,32 @@ async fn healthz_answers() {
     stream.read_to_string(&mut response).await.unwrap();
     assert!(response.starts_with("HTTP/1.1 200"));
     assert!(response.ends_with("ok"));
+    // A system on trial is healthy only with its screen connected (and the state answering).
+    // finish-trial reads only the status line, so that is what must say it.
+    let (status, why) = http_get_with_status(&server, "/healthz/trial").await;
+    assert_eq!((status, why.as_str()), (503, "no screen connected"));
+    let mut screen = connect(&server, Role::Screen, "kiosk").await;
+    next_screen_state(&mut screen).await;
+    let (status, body) = http_get_with_status(&server, "/healthz/trial").await;
+    assert_eq!((status, body.as_str()), (200, "ok"));
+    drop(screen);
     server.stop().await.unwrap();
 }
 
 async fn http_get(server: &RunningServer, path: &str) -> String {
+    http_get_with_status(server, path).await.1
+}
+
+async fn http_get_with_status(server: &RunningServer, path: &str) -> (u16, String) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut stream = TcpStream::connect(server.addr).await.unwrap();
     let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).await.unwrap();
     let mut response = String::new();
     stream.read_to_string(&mut response).await.unwrap();
-    response.split_once("\r\n\r\n").map(|(_, body)| body.to_owned()).unwrap_or_default()
+    let status = response.split(' ').nth(1).and_then(|code| code.parse().ok()).unwrap_or(0);
+    let body = response.split_once("\r\n\r\n").map(|(_, body)| body.to_owned()).unwrap_or_default();
+    (status, body)
 }
 
 #[tokio::test]

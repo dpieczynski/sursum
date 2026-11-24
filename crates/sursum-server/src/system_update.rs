@@ -12,7 +12,8 @@
 //!
 //! The flow, from the remote's upload to the next boot:
 //! 1. The server (unprivileged) receives the file into `system-update/` in the data directory,
-//!    [`verify`]s it, copies the database (`backups/*-before-<version>.db`) and notes its schema,
+//!    [`verify`]s it, copies the database (`system-update/before-<version>.db`, outside the
+//!    rotating `backups/`, so a crash-looping trial cannot push it out) and notes its schema,
 //!    renames the file to `ready.sursum-system` and asks for the install by creating [`REQUEST`].
 //! 2. A root unit runs the read-only system's server (so a compromised server process cannot
 //!    plant a system): [`apply`] verifies again, writes both images to the **other** slot,
@@ -292,6 +293,10 @@ pub fn apply(data_dir: &Path, trusted: &VerifyingKey, slots: &Slots) -> anyhow::
     let _ = std::fs::remove_file(&ready);
     let _ = std::fs::remove_file(dir.join(READY_NOTE));
     if result.is_err() {
+        // The update did not go on trial: no trial may be left to be ended at the next boot,
+        // and the database copy is not needed.
+        let _ = std::fs::remove_file(dir.join(TRIAL));
+        let _ = remove_database_copies(data_dir);
         let failed = version.unwrap_or_else(|| "the uploaded update".into());
         write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed, database_restored: false })?;
     }
@@ -334,7 +339,33 @@ pub fn end_failed_trial(data_dir: &Path) -> anyhow::Result<LastSystemUpdate> {
     let outcome = LastSystemUpdate::RolledBack { failed: trial.version.clone(), database_restored };
     write_json(&dir, OUTCOME, &outcome)?;
     std::fs::remove_file(dir.join(TRIAL))?;
+    // Only space is at stake: a copy left behind is removed with the next update.
+    let _ = remove_database_copies(data_dir);
     Ok(outcome)
+}
+
+/// At boot, with no update on trial: removes what an install interrupted by a restart or a power
+/// cut left behind. The request to install lived in `/run` and is gone, so a ready update would
+/// count as "installing" forever and block every later one. True if anything was removed.
+pub fn clear_unfinished_install(data_dir: &Path) -> anyhow::Result<bool> {
+    let dir = data_dir.join(DIR);
+    let interrupted = dir.join(READY).exists();
+    let version = read_json::<Ready>(&dir, READY_NOTE).ok().flatten().map(|note| note.version);
+    let mut removed = false;
+    for name in [READY, READY_NOTE, INCOMING] {
+        match std::fs::remove_file(dir.join(name)) {
+            Ok(()) => removed = true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).with_context(|| format!("removing {name}")),
+        }
+    }
+    remove_database_copies(data_dir)?;
+    if interrupted {
+        // The remote says the update did not install, as it does after a failed install.
+        let failed = version.unwrap_or_else(|| "the uploaded update".into());
+        write_json(&dir, OUTCOME, &LastSystemUpdate::RolledBack { failed, database_restored: false })?;
+    }
+    Ok(removed)
 }
 
 /// Puts the pre-update copy back if the schema is newer than before the update; true if it did.
@@ -353,13 +384,18 @@ fn restore_database_if_migrated(data_dir: &Path, trial: &Trial) -> anyhow::Resul
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     for suffix in ["", "-wal", "-shm"] {
         let file = data_dir.join(format!("{}{suffix}", crate::db::DATABASE_FILE));
-        if file.exists() {
+        let Ok(metadata) = std::fs::metadata(&file) else { continue };
+        // The restored copy must not meet the old WAL files. The shared-memory index and an empty
+        // WAL hold nothing, so only the database and a WAL with pending changes are kept.
+        if suffix == "-shm" || (suffix == "-wal" && metadata.len() == 0) {
+            std::fs::remove_file(&file)?;
+        } else {
             std::fs::rename(&file, aside.join(format!("{stamp}-{}{suffix}", crate::db::DATABASE_FILE)))?;
         }
     }
     let staged = data_dir.join(format!(".{}.restoring", crate::db::DATABASE_FILE));
     std::fs::copy(&backup, &staged)?;
-    std::fs::File::open(&staged)?.sync_all()?;
+    crate::durable::sync_file(&staged)?;
     std::fs::rename(&staged, data_dir.join(crate::db::DATABASE_FILE))?;
     crate::durable::sync_dir(data_dir)?;
     Ok(true)
@@ -375,6 +411,7 @@ pub fn commit(data_dir: &Path, slots: &Slots) -> anyhow::Result<String> {
     slots.write_autoboot(active, other)?;
     write_json(&dir, OUTCOME, &LastSystemUpdate::Committed { version: trial.version.clone() })?;
     std::fs::remove_file(dir.join(TRIAL))?;
+    let _ = remove_database_copies(data_dir);
     Ok(trial.version)
 }
 
@@ -443,20 +480,29 @@ impl SystemUpdates {
         if self.version.as_deref() == Some(manifest.version.as_str()) {
             return Err(SystemUpdateError::AlreadyCurrent);
         }
+        let dir = data_dir.join(DIR);
+        let backup = Path::new(DIR).join(format!("before-{}.db", manifest.version));
         let staged = (|| -> anyhow::Result<()> {
-            let backup = Database::backup_file(data_dir, &format!("before-{}", manifest.version))?;
+            remove_database_copies(data_dir)?;
+            let copied = Database::copy_to(data_dir, &data_dir.join(&backup))?;
             let note = Ready {
                 version: manifest.version.clone(),
-                backup: backup.and_then(|path| path.strip_prefix(data_dir).ok().map(Path::to_path_buf)),
+                backup: copied.then(|| backup.clone()),
                 schema_before: Database::schema_version(data_dir)?,
             };
-            let dir = data_dir.join(DIR);
             write_json(&dir, READY_NOTE, &note)?;
             std::fs::rename(incoming, dir.join(READY))?;
             std::fs::write(&self.request, b"")?;
             Ok(())
         })();
-        staged.map_err(SystemUpdateError::Failed)?;
+        if let Err(error) = staged {
+            // Nothing half-staged may stay: a ready file without its request would count as
+            // "installing" forever and block every later update.
+            let _ = std::fs::remove_file(dir.join(READY));
+            let _ = std::fs::remove_file(dir.join(READY_NOTE));
+            let _ = remove_database_copies(data_dir);
+            return Err(SystemUpdateError::Failed(error));
+        }
         Ok(manifest.version)
     }
 }
@@ -483,13 +529,41 @@ fn digest(reader: &mut impl Read, mut writer: impl Write) -> std::io::Result<(u6
     Ok((total, hex(&hasher.finalize())))
 }
 
+/// Writes a note atomically and durably. The temporary name is unique: root (`apply`, `commit`)
+/// and the server's user (`stage`, `end_failed_trial`) write here, and a leftover of one must not
+/// stop the other (a root-owned file cannot be truncated by the server's user).
 fn write_json(dir: &Path, name: &str, value: &impl Serialize) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir)?;
-    let staged = dir.join(format!(".{name}.new"));
-    let mut file = std::fs::File::create(&staged)?;
-    file.write_all(&serde_json::to_vec_pretty(value)?)?;
-    file.sync_all()?;
-    std::fs::rename(&staged, dir.join(name))?;
+    let staged = dir.join(format!(".{name}.{}.new", uuid::Uuid::new_v4().simple()));
+    let written = (|| -> anyhow::Result<()> {
+        let mut file = std::fs::File::create_new(&staged)?;
+        file.write_all(&serde_json::to_vec_pretty(value)?)?;
+        file.sync_all()?;
+        std::fs::rename(&staged, dir.join(name))?;
+        crate::durable::sync_dir(dir)?;
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&staged);
+    }
+    written
+}
+
+/// Removes the pre-update database copies in `system-update/` (and unfinished ones): once an
+/// update is committed or rolled back, nothing needs them.
+fn remove_database_copies(data_dir: &Path) -> std::io::Result<()> {
+    let dir = data_dir.join(DIR);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("before-") && (name.ends_with(".db") || name.ends_with(".db.part")) {
+            std::fs::remove_file(entry.path())?;
+        }
+    }
     Ok(())
 }
 
@@ -596,11 +670,13 @@ mod tests {
         let key = key();
         let data = tempfile::tempdir().unwrap();
         let mut device = Device::new('a');
+        drop(Database::open(data.path()).unwrap());
         let file = update(data.path(), &key, "v2");
         let updates = uploaded(data.path(), &file, &key, &device.slots);
         let incoming = updates.incoming(data.path()).unwrap();
         assert_eq!(updates.stage(data.path(), &incoming).unwrap(), "v2");
         assert!(data.path().join("request").exists(), "the root unit is asked");
+        assert!(data.path().join(DIR).join("before-v2.db").is_file(), "the rollback's copy");
         let status = updates.status(data.path()).unwrap();
         assert!(!status.can_install, "one update at a time");
         assert_eq!(status.target.as_deref(), Some("v2"), "a remote that connects now can follow it");
@@ -624,6 +700,7 @@ mod tests {
         assert_eq!(status.last, Some(LastSystemUpdate::Committed { version: "v2".into() }));
         assert!(!status.on_trial);
         assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::None);
+        assert!(!data.path().join(DIR).join("before-v2.db").exists(), "a committed update needs no copy");
     }
 
     #[test]
@@ -659,10 +736,14 @@ mod tests {
         updates.stage(data.path(), &updates.incoming(data.path()).unwrap()).unwrap();
         apply(data.path(), &key.verifying_key(), &device.slots).unwrap();
 
-        // The new system's server changes data and migrates the schema, then never gets healthy.
+        // The new system's server changes data and migrates the schema, then crash-loops: every
+        // start writes a startup backup, far more than the rotation keeps.
         device.boot_into('b');
         let database = Database::open(data.path()).unwrap();
         database.set_setting("marker", &"during the trial").unwrap();
+        for start in 0..crate::db::BACKUPS_KEPT + 3 {
+            database.backup(data.path(), &format!("startup{start:02}")).unwrap();
+        }
         drop(database);
         let schema = Database::supported_schema();
         rusqlite::Connection::open(data.path().join(crate::db::DATABASE_FILE))
@@ -682,6 +763,71 @@ mod tests {
             .filter(|entry| entry.as_ref().unwrap().file_name().to_string_lossy().ends_with("-sursum.db"))
             .count();
         assert_eq!(kept, 1, "the migrated database is kept aside");
+        let aside = std::fs::read_dir(data.path().join(ROLLED_BACK_DIR)).unwrap().count();
+        assert_eq!(aside, 1, "without the empty WAL files the schema check left");
+        assert!(!data.path().join(DIR).join("before-v2.db").exists(), "the copy is not needed any more");
+    }
+
+    #[test]
+    fn an_install_that_fails_after_writing_the_trial_leaves_no_trial_and_no_copy() {
+        let key = key();
+        let data = tempfile::tempdir().unwrap();
+        let device = Device::new('a');
+        drop(Database::open(data.path()).unwrap());
+        let file = update(data.path(), &key, "v2");
+        let updates = uploaded(data.path(), &file, &key, &device.slots);
+        updates.stage(data.path(), &updates.incoming(data.path()).unwrap()).unwrap();
+        // The images are written and the trial recorded, then autoboot.txt cannot be written.
+        std::fs::remove_dir_all(&device.slots.bootfs).unwrap();
+        assert!(apply(data.path(), &key.verifying_key(), &device.slots).is_err());
+        let dir = data.path().join(DIR);
+        assert!(!dir.join(TRIAL).exists(), "no trial is left for the next boot to end");
+        assert!(!dir.join("before-v2.db").exists());
+        let status = updates.status(data.path()).unwrap();
+        assert_eq!(
+            status.last,
+            Some(LastSystemUpdate::RolledBack { failed: "v2".into(), database_restored: false })
+        );
+        assert!(status.can_install && !status.installing);
+    }
+
+    #[test]
+    fn an_install_interrupted_by_a_restart_is_cleared_at_the_next_boot() {
+        let key = key();
+        let data = tempfile::tempdir().unwrap();
+        let device = Device::new('a');
+        drop(Database::open(data.path()).unwrap());
+        let file = update(data.path(), &key, "v2");
+        let updates = uploaded(data.path(), &file, &key, &device.slots);
+        updates.stage(data.path(), &updates.incoming(data.path()).unwrap()).unwrap();
+        // Power is lost before the root unit installs; the request in /run is gone after it.
+        assert!(updates.status(data.path()).unwrap().installing);
+        assert_eq!(trial_state(data.path(), &device.slots).unwrap(), TrialState::None);
+        assert!(clear_unfinished_install(data.path()).unwrap());
+        let status = updates.status(data.path()).unwrap();
+        assert!(status.can_install && !status.installing, "the next update is not blocked");
+        assert_eq!(
+            status.last,
+            Some(LastSystemUpdate::RolledBack { failed: "v2".into(), database_restored: false })
+        );
+        assert!(!data.path().join(DIR).join("before-v2.db").exists());
+        assert!(!clear_unfinished_install(data.path()).unwrap(), "a normal boot changes nothing");
+    }
+
+    #[test]
+    fn a_stage_that_cannot_ask_for_the_install_leaves_nothing_behind() {
+        let key = key();
+        let data = tempfile::tempdir().unwrap();
+        let device = Device::new('a');
+        drop(Database::open(data.path()).unwrap());
+        let file = update(data.path(), &key, "v2");
+        let mut updates = uploaded(data.path(), &file, &key, &device.slots);
+        updates.request = data.path().join("missing-run-dir").join("system-update");
+        let incoming = updates.incoming(data.path()).unwrap();
+        assert!(matches!(updates.stage(data.path(), &incoming), Err(SystemUpdateError::Failed(_))));
+        let status = updates.status(data.path()).unwrap();
+        assert!(status.can_install && !status.installing, "a failed stage does not block the next one");
+        assert!(!data.path().join(DIR).join("before-v2.db").exists());
     }
 
     #[test]

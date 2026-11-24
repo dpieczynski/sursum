@@ -8,3 +8,10 @@ use std::path::Path;
 pub fn sync_dir(dir: &Path) -> std::io::Result<()> {
     if cfg!(unix) { std::fs::File::open(dir)?.sync_all() } else { Ok(()) }
 }
+
+/// Makes the contents of the file at `path` durable, for files written by someone else (SQLite's
+/// `VACUUM INTO`, `std::fs::copy`). Opened for writing: Windows refuses to flush a read-only
+/// handle ("Access is denied").
+pub fn sync_file(path: &Path) -> std::io::Result<()> {
+    std::fs::OpenOptions::new().write(true).open(path)?.sync_all()
+}

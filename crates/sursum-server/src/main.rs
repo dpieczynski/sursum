@@ -100,7 +100,7 @@ enum SystemTask {
     /// At boot, after the server started: in the slot of a system on trial, wait until the
     /// server and the kiosk are healthy and make it the default, or reboot into the old slot.
     FinishTrial {
-        /// The server's address for /healthz.
+        /// The server's address for /healthz/trial.
         #[arg(long, default_value = "127.0.0.1:80")]
         server: String,
     },
@@ -202,12 +202,18 @@ fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Res
             let version = system_update::apply(data_dir, &trusted()?, &Slots::device())?;
             println!("system {version} written to the other slot; reboot with \"0 tryboot\"");
         }
-        SystemTask::CheckTrial => {
-            if let TrialState::BootedBack(version) = system_update::trial_state(data_dir, &Slots::device())? {
+        SystemTask::CheckTrial => match system_update::trial_state(data_dir, &Slots::device())? {
+            TrialState::BootedBack(version) => {
                 let outcome = system_update::end_failed_trial(data_dir)?;
                 println!("system {version} did not come up; running the previous one ({outcome:?})");
             }
-        }
+            TrialState::None => {
+                if system_update::clear_unfinished_install(data_dir)? {
+                    println!("removed an update whose install a restart interrupted");
+                }
+            }
+            TrialState::OnTrial(_) => {}
+        },
         SystemTask::FinishTrial { server } => match system_update::trial_state(data_dir, &Slots::device())? {
             // A failed trial is check-trial's, before the server starts.
             TrialState::None | TrialState::BootedBack(_) => {}
@@ -217,7 +223,8 @@ fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Res
                     println!("system {version} is healthy and now the default");
                 } else {
                     println!("system {version} is not healthy; rebooting into the previous system");
-                    std::process::Command::new("systemctl").arg("reboot").status()?;
+                    let status = std::process::Command::new("systemctl").arg("reboot").status()?;
+                    anyhow::ensure!(status.success(), "systemctl reboot failed ({status})");
                 }
             }
         },
@@ -225,8 +232,9 @@ fn run_system_task(task: &SystemTask, data_dir: &std::path::Path) -> anyhow::Res
     Ok(())
 }
 
-/// Up to three minutes for the server to answer /healthz and the kiosk to run, then both must
-/// stay so for 30 s (six checks 5 s apart).
+/// Up to three minutes (by the clock, however long each check takes) for the server to answer
+/// /healthz/trial (its state actor answers and the kiosk's screen page is connected) and the kiosk
+/// unit to run, then both must stay so for 30 s (six checks 5 s apart).
 fn healthy_for_a_while(server: &str) -> bool {
     let healthy = || {
         let answers = (|| -> std::io::Result<bool> {
@@ -235,7 +243,7 @@ fn healthy_for_a_while(server: &str) -> bool {
             let mut stream =
                 std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_secs(3))?;
             stream.set_read_timeout(Some(std::time::Duration::from_secs(3)))?;
-            stream.write_all(b"GET /healthz HTTP/1.0\r\nHost: localhost\r\n\r\n")?;
+            stream.write_all(b"GET /healthz/trial HTTP/1.0\r\nHost: localhost\r\n\r\n")?;
             let mut answer = String::new();
             stream.read_to_string(&mut answer)?;
             Ok(answer.starts_with("HTTP/1.0 200") || answer.starts_with("HTTP/1.1 200"))
@@ -247,8 +255,9 @@ fn healthy_for_a_while(server: &str) -> bool {
             .is_ok_and(|status| status.success());
         answers && kiosk
     };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
     let mut in_a_row = 0;
-    for _ in 0..36 {
+    while std::time::Instant::now() < deadline {
         std::thread::sleep(std::time::Duration::from_secs(5));
         in_a_row = if healthy() { in_a_row + 1 } else { 0 };
         if in_a_row >= 6 {

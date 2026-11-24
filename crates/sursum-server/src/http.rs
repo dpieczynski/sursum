@@ -51,6 +51,22 @@ struct App {
     installation: sursum_protocol::Installation,
 }
 
+/// `GET /healthz/trial`: whether a system on trial works (ADR 0019): the state actor answers
+/// and the kiosk's screen page is connected, so a release whose server hangs or whose screen app
+/// does not load is rolled back instead of committed. 503 otherwise.
+async fn trial_health(State(app): State<App>) -> Response {
+    // A stuck actor (its channel still open) must fail the check, not hang it.
+    let actor =
+        tokio::time::timeout(std::time::Duration::from_secs(2), app.state.alive()).await.unwrap_or(false);
+    let screen = app.presence.any();
+    if actor && screen {
+        "ok".into_response()
+    } else {
+        let why = if actor { "no screen connected" } else { "the state actor does not answer" };
+        (StatusCode::SERVICE_UNAVAILABLE, why).into_response()
+    }
+}
+
 /// What the server needs for work that ends in a restart: a system update (ADR 0019, ADR 0022)
 /// or restoring a device backup (ADR 0018).
 #[derive(Clone)]
@@ -139,6 +155,7 @@ pub fn router(
     Router::new()
         .route("/", get(|| async { Redirect::temporary("/remote/") }))
         .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz/trial", get(trial_health))
         .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
         .route("/api/session", get(session))
         .route("/api/pair", axum::routing::post(pair))
@@ -358,6 +375,9 @@ async fn install_system_update(State(app): State<App>, body: axum::body::Body) -
     let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
     let system = app.maintenance.system.clone();
     let data_dir = app.data_dir.clone();
+    // One upload at a time: a second one must not overwrite the first while it is staged or
+    // installed, so the status is read only while holding the lock.
+    let Ok(_busy) = app.maintenance.busy.try_lock() else { return refuse(InstallRefusal::Busy) };
     match system.status(&data_dir) {
         None => return refuse(InstallRefusal::NotSupervised),
         Some(_) if system.key.is_none() => return refuse(InstallRefusal::NoKey),
@@ -365,7 +385,6 @@ async fn install_system_update(State(app): State<App>, body: axum::body::Body) -
         Some(status) if !status.can_install => return refuse(InstallRefusal::NotSupervised),
         Some(_) => {}
     }
-    let _busy = app.maintenance.busy.lock().await;
     let incoming = match system.incoming(&data_dir) {
         Ok(incoming) => incoming,
         Err(error) => {

@@ -74,19 +74,33 @@ An external review of main was checked claim by claim; what held up is fixed in 
   closing the key settings ends it; a WebSocket client counts as gone after 30 s of its own
   silence (snapshots no longer keep it alive) and messages are size-limited; the screen drops a
   transition overtaken by a newer snapshot; the screen guard stops at shutdown
-- [ ] Remote reactivity and live UX (memos and keyed lists, editor double save, left-hand phone
+- [x] Remote reactivity and live UX (memos and keyed lists, editor double save, left-hand phone
   strip, WebSocket client reconnect on silence)
-- [ ] Editor and import data integrity (editor round trip keeps leading-space lines, blank
+- [x] Editor and import data integrity (editor round trip keeps leading-space lines, blank
   lines with spaces, zero-area zones and a zone cap, tolerant OpenSong parsing)
-- [ ] Server robustness and Windows (directory sync on Windows, Windows tests in CI, picture
+- [x] Server robustness and Windows (directory sync on Windows, Windows tests in CI, picture
   cleanup across all sets, storage errors reported, uploads off the async workers, atomic
   backups)
-- [ ] System update safety (pre-update database copy outside the backup rotation, cleanup of a
-  failed stage, a trial health check that needs the screen)
-- [ ] Release and licence (actions pinned by SHA, no SSH key in public images, package manifest
+- [x] System update safety (pre-update database copy outside the backup rotation, cleanup of a
+  failed stage, a trial health check that needs the screen); run on the pilot Pi on 2026-11-24:
+  a normal update was committed, a release that raised the schema and exited rolled back with the
+  database restored, and no copy was left behind either time
+- [x] Release and licence (actions pinned by SHA, no SSH key in public images, package manifest
   and written offer for GPL sources)
 - [ ] Protocol cleanup (slide part info, version views with number and order, import problem
   codes) and docs/CI hygiene
+- [ ] The screen shows Chromium's "This site can't be reached" page whenever the kiosk starts
+  while the server does not answer (seen during the failed trial on the pilot Pi; also after a
+  server crash or a slow boot) and keeps it until the kiosk restarts, against hard rule 3. Either
+  start the browser only once the server answers and restart it with the server, or open a local
+  black page that retries (a `file://` page with an inline black background that polls
+  `/healthz` and then replaces itself with `/screen/` works the same on Chromium and WPE); mind
+  ADR 0009 before adding to the cage setup
+- [x] A rollback left empty `-shm`/`-wal` files next to the database moved to `rolled-back/`;
+  now only the database and a WAL with pending changes are moved
+- [x] The damaged-database restore failed on Windows (os error 5): the restored file was flushed
+  through a read-only handle, which Windows refuses; files written by others are now synced
+  through a writable handle and the tests run on Windows again
 
 ## Y1 — Synchronizing songs and sets (ADR 0025)
 

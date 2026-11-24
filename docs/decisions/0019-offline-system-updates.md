@@ -1,7 +1,7 @@
 # 0019 — Offline system updates through the firmware's tryboot
 
-Status: Accepted (2026-11-17). ADR 0022 (2026-11-19, not built yet) makes this the only update
-path: the server moves into the system, and the database copy and restore join the trial.
+Status: Accepted (2026-11-17). ADR 0022 (2026-11-19, built) makes this the only update path: the
+server moves into the system, and the database copy and restore join the trial.
 
 ## Context
 The device image (ADR 0013) has a read-only A/B system. Application bundles (`.sursum-app`) only
@@ -74,3 +74,23 @@ Our own small updater on the Raspberry Pi firmware's **tryboot** (`autoboot.txt`
   system whose kiosk unit runs `/bin/false`: it booted, was found unhealthy after three minutes,
   the device restarted into v0.1.0-40 by itself and recorded `rolled_back`; data and pairing
   untouched).
+
+## Amendment (2026-11-22): a stricter trial and a protected database copy
+- The trial waits for `/healthz/trial` instead of `/healthz`: it answers only while the server's
+  state actor responds and the kiosk's screen page is connected, so a release whose server hangs
+  or whose screen app does not load is rolled back, not committed. The kiosk unit must still be
+  active too.
+- The database copy a rollback depends on is `system-update/before-<version>.db`, outside the
+  rotating `backups/`: a new server that migrates the schema and then crash-loops writes a startup
+  backup on every start and could push a copy in `backups/` out within the three minutes, leaving
+  the old system unable to open the database. The copy is removed once the update is committed or
+  rolled back.
+- A failed stage removes what it staged (a ready file without its request blocked every later
+  update), a failed install removes its trial record, and the notes in `system-update/` are written
+  under unique temporary names and synced with their directory.
+- An install that a restart or power cut interrupted before the trial began is cleared at the
+  next boot by `check-trial` (the install request lived in `/run`, so the ready update would
+  otherwise block every later one) and recorded as rolled back. The trial's three minutes are
+  counted by the clock, and `/healthz/trial` gives a stuck state actor 2 s.
+- Run on the pilot Pi on 2026-11-24: a normal update was committed; a release that raised the
+  schema and then exited was rolled back with the database restored; no copy was left either time.

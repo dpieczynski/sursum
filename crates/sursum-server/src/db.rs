@@ -183,6 +183,38 @@ impl Database {
         i64::try_from(SCHEMA_BASE + MIGRATIONS.len()).unwrap_or(i64::MAX)
     }
 
+    /// A consistent copy of the database in `data_dir` at `target`, outside the rotating
+    /// `backups/` (e.g. the copy a system update's rollback depends on, which no number of
+    /// restarts may push out). Through a plain connection: no migration, no repair, safe while
+    /// the server runs. Written under a temporary name and renamed when complete. False if
+    /// there is no database yet.
+    pub fn copy_to(data_dir: &Path, target: &Path) -> anyhow::Result<bool> {
+        let path = data_dir.join(DATABASE_FILE);
+        if !path.exists() {
+            return Ok(false);
+        }
+        let parent = target.parent().context("the copy's target has no directory")?;
+        std::fs::create_dir_all(parent)?;
+        let mut part = target.as_os_str().to_owned();
+        part.push(PART_SUFFIX);
+        let part = PathBuf::from(part);
+        let _ = std::fs::remove_file(&part);
+        let copied = (|| -> anyhow::Result<()> {
+            let connection = Connection::open(&path)?;
+            connection.busy_timeout(std::time::Duration::from_secs(5))?;
+            connection.execute("VACUUM INTO ?1", [part.to_string_lossy()])?;
+            drop(connection);
+            crate::durable::sync_file(&part)?;
+            std::fs::rename(&part, target)?;
+            crate::durable::sync_dir(parent)?;
+            Ok(())
+        })();
+        if copied.is_err() {
+            let _ = std::fs::remove_file(&part);
+        }
+        copied.map(|()| true)
+    }
+
     /// A backup of the database in `data_dir` through a plain connection: no migration and no
     /// repair, so it is safe while the server is running (e.g. before installing an update).
     pub fn backup_file(data_dir: &Path, label: &str) -> anyhow::Result<Option<PathBuf>> {
@@ -556,7 +588,7 @@ fn restore_backup(data_dir: &Path, backup: &Path) -> anyhow::Result<()> {
     }
     let staged = data_dir.join(format!(".{DATABASE_FILE}.restoring"));
     std::fs::copy(backup, &staged)?;
-    std::fs::File::open(&staged)?.sync_all()?;
+    crate::durable::sync_file(&staged)?;
     std::fs::rename(&staged, data_dir.join(DATABASE_FILE))?;
     crate::durable::sync_dir(data_dir)?;
     tracing::warn!(backup = %backup.display(), "restored the database from a backup");
@@ -584,8 +616,26 @@ mod tests {
         }
     }
 
+    /// A system on trial may raise the schema and lose power before SQLite checkpoints: the new
+    /// version is only in the WAL and the shared-memory index is gone. The rollback's check must
+    /// still see it, or it keeps a database the old server cannot open.
     #[test]
-    #[cfg_attr(windows, ignore = "Windows refuses to move the damaged file aside (os error 5); roadmap R1")]
+    fn the_schema_version_is_read_from_the_wal_after_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let crashed = tempfile::tempdir().unwrap();
+        let database = Database::open(dir.path()).unwrap();
+        database.connection.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+        let newer = Database::supported_schema() + 1;
+        database.connection.pragma_update(None, "user_version", newer).unwrap();
+        for name in [DATABASE_FILE.to_owned(), format!("{DATABASE_FILE}-wal")] {
+            std::fs::copy(dir.path().join(&name), crashed.path().join(&name)).unwrap();
+        }
+        drop(database);
+        assert!(!crashed.path().join(format!("{DATABASE_FILE}-shm")).exists());
+        assert_eq!(Database::schema_version(crashed.path()).unwrap(), newer);
+    }
+
+    #[test]
     fn backups_rotate_and_a_damaged_database_is_restored() {
         let dir = tempfile::tempdir().unwrap();
         {
@@ -605,7 +655,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(windows, ignore = "Windows refuses to move the damaged file aside (os error 5); roadmap R1")]
     fn a_damaged_newest_backup_falls_back_to_an_older_one() {
         let dir = tempfile::tempdir().unwrap();
         {
