@@ -93,10 +93,14 @@ An external review of main was checked claim by claim; what held up is fixed in 
   while the server does not answer (seen during the failed trial on the pilot Pi; also after a
   server crash or a slow boot) and keeps it until the kiosk restarts, against hard rule 3. Either
   start the browser only once the server answers and restart it with the server, or open a local
-  black page that retries; mind ADR 0009 before adding to the cage setup
-- [ ] A rollback leaves empty `-shm`/`-wal` files next to the database moved to `rolled-back/`
-- [ ] The damaged-database restore tests fail on Windows (os error 5) and are skipped there; find
-  which handle stays open and make the restore work on Windows
+  black page that retries (a `file://` page with an inline black background that polls
+  `/healthz` and then replaces itself with `/screen/` works the same on Chromium and WPE); mind
+  ADR 0009 before adding to the cage setup
+- [x] A rollback left empty `-shm`/`-wal` files next to the database moved to `rolled-back/`;
+  now only the database and a WAL with pending changes are moved
+- [x] The damaged-database restore failed on Windows (os error 5): the restored file was flushed
+  through a read-only handle, which Windows refuses; files written by others are now synced
+  through a writable handle and the tests run on Windows again
 
 ## Y1 — Synchronizing songs and sets (ADR 0025)
 
