@@ -102,6 +102,7 @@ jobs:
         with:
           tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130
       - run: just desktop-windows
+      - run: just test-windows
       - name: One file (no DLLs beyond what Windows itself has)
         # The runner has the Visual C++ Redistributable; ordinary PCs do not.
         shell: pwsh

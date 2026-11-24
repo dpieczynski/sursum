@@ -26,6 +26,11 @@ desktop: build-web
 desktop-windows: build-web
     cargo build --release -p sursum-desktop --target x86_64-pc-windows-msvc
 
+# The server's tests on Windows, where the desktop program runs it (after `desktop-windows`,
+# which builds the embedded apps). Catches what only Windows does, e.g. with directories.
+test-windows:
+    cargo test -p sursum-core -p sursum-formats -p sursum-server --target x86_64-pc-windows-msvc
+
 # Install the desktop program for this Linux user: the binary in ~/.local/bin, the menu entry and
 # its icon (GTK finds the window's icon by the application id).
 desktop-install: desktop
@@ -146,11 +151,14 @@ update-keys:
 image diagnostic="n" engine="chromium": update-keys cross-pi
     #!/usr/bin/env bash
     set -euo pipefail
+    # The administrator's key goes to /home on the persistent partition (kept by system
+    # updates); `none` builds an image nobody can log in to (public releases, ADR 0026).
     key="${SURSUM_SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
     mkdir -p target/image/work
     case "$key" in
+        none) : > target/image/admin.pub ;;
         ssh-*) printf '%s\n' "$key" > target/image/admin.pub ;;
-        *) test -f "$key" || { echo "no SSH public key at $key (set SURSUM_SSH_PUBKEY)" >&2; exit 1; }
+        *) test -f "$key" || { echo "no SSH public key at $key (set SURSUM_SSH_PUBKEY, or none)" >&2; exit 1; }
            cp "$key" target/image/admin.pub ;;
     esac
     system_version="$(git describe --always --dirty)"

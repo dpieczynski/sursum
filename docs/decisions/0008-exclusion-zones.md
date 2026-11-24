@@ -48,3 +48,9 @@ and dropped the file source: the server no longer reads `[screen_profile]` (an o
 starts, with a warning in the log), a device that was never calibrated uses 48 px margins and no
 zones, and the browser tests set their zones with `SetScreenProfile` like the panel does.
 Calibration no longer needs admin mode (ADR 0024).
+
+## Amendment (2026-11-22): calibration ends with its remote
+The server remembers which remote turned calibration on and ends it when that remote's session
+closes (a reload, a closed browser, a flat battery), so the test card can never stay on the
+church screen with nobody calibrating. The panel turns calibration on again after a reconnect and
+off however it closes.

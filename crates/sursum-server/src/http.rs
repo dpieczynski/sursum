@@ -369,7 +369,6 @@ async fn upload_asset(State(app): State<App>, body: axum::body::Bytes) -> Respon
 /// directory (streamed: it is hundreds of megabytes), verifies it and asks the root unit to write
 /// it to the other slot; the device then restarts into it on trial.
 async fn install_system_update(State(app): State<App>, body: axum::body::Body) -> Response {
-    use futures_util::StreamExt as _;
     use sursum_protocol::{InstallOutcome, InstallRefusal};
     let refuse = |reason| axum::Json(InstallOutcome::Refused { reason }).into_response();
     let system = app.maintenance.system.clone();
@@ -390,23 +389,13 @@ async fn install_system_update(State(app): State<App>, body: axum::body::Body) -
         }
     };
     let received = async {
-        let mut file = std::fs::File::create(&incoming)?;
-        let mut total: u64 = 0;
-        let mut stream = body.into_data_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(std::io::Error::other)?;
-            total += chunk.len() as u64;
-            if total > crate::system_update::MAX_SYSTEM_BYTES {
-                return Err(std::io::Error::other("larger than any system update"));
-            }
-            std::io::Write::write_all(&mut file, &chunk)?;
-        }
-        file.sync_all()?;
-        Ok::<_, std::io::Error>(())
+        let file = std::fs::File::create(&incoming).map_err(UploadError::Storage)?;
+        let file = receive_into(body, file, crate::system_update::MAX_SYSTEM_BYTES).await?;
+        blocking(move || file.sync_all()).await.map_err(UploadError::Storage)
     }
     .await;
     if let Err(error) = received {
-        tracing::warn!(%error, "system update upload failed");
+        tracing::warn!(?error, "system update upload failed");
         let _ = std::fs::remove_file(&incoming);
         return refuse(InstallRefusal::Failed);
     }
@@ -544,7 +533,6 @@ async fn download_backup(State(app): State<App>) -> Response {
 /// `POST /api/backup/restore`: checks and stages a backup, answers, then restarts so the
 /// next start puts it in place.
 async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Response {
-    use futures_util::StreamExt as _;
     use sursum_protocol::{RestoreOutcome, RestoreRefusal};
     let refuse = |reason| axum::Json(RestoreOutcome::Refused { reason }).into_response();
     if !app.maintenance.supervised {
@@ -559,15 +547,15 @@ async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Respo
             return refuse(RestoreRefusal::Failed);
         }
     };
-    let mut received: u64 = 0;
-    let mut stream = body.into_data_stream();
-    while let Some(chunk) = stream.next().await {
-        let Ok(chunk) = chunk else { return StatusCode::BAD_REQUEST.into_response() };
-        received += chunk.len() as u64;
-        if received > crate::device_backup::MAX_BACKUP_BYTES {
-            return refuse(RestoreRefusal::TooLarge);
-        }
-        if let Err(error) = std::io::Write::write_all(upload.file(), &chunk) {
+    let received = match upload.file().try_clone() {
+        Ok(file) => receive_into(body, file, crate::device_backup::MAX_BACKUP_BYTES).await,
+        Err(error) => Err(UploadError::Storage(error)),
+    };
+    match received {
+        Ok(_) => {}
+        Err(UploadError::Interrupted) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(UploadError::TooLarge) => return refuse(RestoreRefusal::TooLarge),
+        Err(UploadError::Storage(error)) => {
             tracing::error!(?error, "could not store an uploaded backup");
             return refuse(RestoreRefusal::Failed);
         }
@@ -601,6 +589,60 @@ async fn restore_backup(State(app): State<App>, body: axum::body::Body) -> Respo
     }
 }
 
+/// Why an upload could not be received.
+#[derive(Debug)]
+enum UploadError {
+    /// The client's request broke off.
+    Interrupted,
+    /// More bytes than the limit.
+    TooLarge,
+    /// Writing to the device's storage failed.
+    Storage(std::io::Error),
+}
+
+/// How much of an upload is collected before it is written out.
+const UPLOAD_WRITE_BYTES: usize = 1 << 20;
+
+/// Streams a request body into `file`, at most `limit` bytes, and returns the file. The writes
+/// run on the blocking pool, so a slow SD card never holds up the async workers that also serve
+/// the live controls.
+async fn receive_into(
+    body: axum::body::Body,
+    file: std::fs::File,
+    limit: u64,
+) -> Result<std::fs::File, UploadError> {
+    use futures_util::StreamExt as _;
+    let write = |mut file: std::fs::File, pending: Vec<u8>| async move {
+        blocking(move || std::io::Write::write_all(&mut file, &pending).map(|()| file))
+            .await
+            .map_err(UploadError::Storage)
+    };
+    let mut file = file;
+    let mut pending = Vec::with_capacity(UPLOAD_WRITE_BYTES);
+    let mut total: u64 = 0;
+    let mut stream = body.into_data_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|_| UploadError::Interrupted)?;
+        total += chunk.len() as u64;
+        if total > limit {
+            return Err(UploadError::TooLarge);
+        }
+        pending.extend_from_slice(&chunk);
+        if pending.len() >= UPLOAD_WRITE_BYTES {
+            let full = std::mem::replace(&mut pending, Vec::with_capacity(UPLOAD_WRITE_BYTES));
+            file = write(file, full).await?;
+        }
+    }
+    write(file, pending).await
+}
+
+/// Runs blocking file work on the blocking pool.
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> std::io::Result<T> + Send + 'static,
+) -> std::io::Result<T> {
+    tokio::task::spawn_blocking(work).await.map_err(std::io::Error::other)?
+}
+
 #[derive(Deserialize)]
 struct MergeQuery {
     #[serde(default)]
@@ -613,23 +655,22 @@ async fn merge_library(
     Query(query): Query<MergeQuery>,
     body: axum::body::Body,
 ) -> Response {
-    use futures_util::StreamExt as _;
     // The file goes to disk as it arrives: with pictures it can be large.
     let data_dir = app.data_dir.clone();
     let Ok(mut upload) = crate::device_backup::TemporaryFile::new(&data_dir) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
-    let mut received: u64 = 0;
-    let mut stream = body.into_data_stream();
-    while let Some(chunk) = stream.next().await {
-        let Ok(chunk) = chunk else { return StatusCode::BAD_REQUEST.into_response() };
-        received += chunk.len() as u64;
-        if received > MAX_LIBRARY_FILE_BYTES {
+    let received = match upload.file().try_clone() {
+        Ok(file) => receive_into(body, file, MAX_LIBRARY_FILE_BYTES).await,
+        Err(error) => Err(UploadError::Storage(error)),
+    };
+    match received {
+        Ok(_) => {}
+        Err(UploadError::Interrupted) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(UploadError::TooLarge) => {
             return (StatusCode::PAYLOAD_TOO_LARGE, "the file is too large").into_response();
         }
-        if std::io::Write::write_all(upload.file(), &chunk).is_err() {
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
+        Err(UploadError::Storage(_)) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
     let dry_run = query.dry_run;
     // Read the documents; store the pictures first (unless trying), so sets never point at a
@@ -745,7 +786,14 @@ fn socket(
         presence: app.presence.clone(),
         local_peer,
     };
-    upgrade.on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
+    let limit = match role {
+        Role::Screen => ws::MAX_SCREEN_MESSAGE,
+        Role::Remote => ws::MAX_REMOTE_MESSAGE,
+    };
+    upgrade
+        .max_message_size(limit)
+        .max_frame_size(limit)
+        .on_upgrade(move |socket| ws::session(socket, app.state, role, guard))
 }
 
 async fn screen_index(State(app): State<App>) -> Response {

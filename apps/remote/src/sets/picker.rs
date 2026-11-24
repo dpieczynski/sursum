@@ -86,11 +86,15 @@ fn Picker(
 ) -> impl IntoView {
     let close = move || open.set(None);
     let live = move || state.with(|state| state.as_ref().is_some_and(|state| state.program.live.is_some()));
-    let rows = move || {
-        let (sets, active) = state.with(|state| match state {
+    // A memo: rows (and a hold on "Usuń" in one) survive snapshots that do not change the list.
+    let listed = Memo::new(move |_| {
+        state.with(|state| match state {
             Some(state) => (state.sets.clone(), state.active_set.as_ref().map(|set| set.set_id.clone())),
             None => (Vec::new(), None),
-        });
+        })
+    });
+    let rows = move || {
+        let (sets, active) = listed.get();
         sets.into_iter().map(|set| set_row(set, active.clone(), commands, open)).collect_view()
     };
     view! {

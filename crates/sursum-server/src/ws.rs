@@ -70,6 +70,11 @@ impl Control<'_> {
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 /// A client that sends nothing (not even `Ping`) for this long is considered gone.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+/// The largest message a remote may send. Commands are small; the largest is a screen profile
+/// or an announcement's text. Songs and files go through HTTP, not the socket.
+pub const MAX_REMOTE_MESSAGE: usize = 256 * 1024;
+/// The largest message a screen may send (it only says `Hello` and `Ping`).
+pub const MAX_SCREEN_MESSAGE: usize = 4 * 1024;
 
 /// Runs one session until the client disconnects.
 pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role, guard: Guard) {
@@ -102,14 +107,16 @@ pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role, guar
         Role::Remote => {
             let remote = state.remote.clone();
             let control = Control { state: &state, client_id: client_id.clone(), guard: &guard };
-            forward_loop(
+            let result = forward_loop(
                 &mut sender,
                 &mut receiver,
                 remote,
                 |state| ServerMsg::Remote { state },
                 Some(control),
             )
-            .await
+            .await;
+            state.remote_gone(client_id.clone()).await;
+            result
         }
     };
     tracing::debug!(%client_id, ?result, "client disconnected");
@@ -130,6 +137,9 @@ async fn forward_loop<T: Clone + Serialize>(
     if control.as_ref().is_some_and(|control| !control.guard.allows()) {
         return Err("device revoked");
     }
+    // Only what the client sends moves the deadline: a hung client (socket open, page dead)
+    // must count as gone even while snapshots keep flowing to it, so the screen guard can act.
+    let mut deadline = tokio::time::Instant::now() + IDLE_TIMEOUT;
     loop {
         tokio::select! {
             Some(()) = revoked(&mut revocations) => {
@@ -142,8 +152,9 @@ async fn forward_loop<T: Clone + Serialize>(
                 let snapshot = snapshots.borrow_and_update().as_ref().clone();
                 send(sender, &wrap(snapshot)).await.map_err(|_| "send failed")?;
             }
-            message = tokio::time::timeout(IDLE_TIMEOUT, next_message(receiver)) => {
+            message = tokio::time::timeout_at(deadline, next_message(receiver)) => {
                 let message = message.map_err(|_| "idle timeout")?.ok_or("closed")?;
+                deadline = tokio::time::Instant::now() + IDLE_TIMEOUT;
                 let reply = match (message, &control) {
                     (ClientMsg::Ping, _) => Some(ServerMsg::Pong),
                     (ClientMsg::Cmd { seq, base_rev, cmd }, Some(control)) => {

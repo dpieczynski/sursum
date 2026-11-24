@@ -130,6 +130,8 @@ pub enum Msg {
     About,
     SearchPlaceholder,
     NoResults,
+    Searching,
+    SearchFailed,
     Add,
     NewSong,
     Edit,
@@ -147,6 +149,7 @@ pub enum Msg {
     CopySetShort,
     SetDate,
     InvalidDate,
+    StorageFailed,
     ChurchName,
     ChurchNameExample,
     ChurchMissing,
@@ -443,6 +446,8 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::About => "Licencje",
         Msg::SearchPlaceholder => "Szukaj: numer, tytuł lub fragment tekstu",
         Msg::NoResults => "Brak wyników",
+        Msg::Searching => "Szukam…",
+        Msg::SearchFailed => "Nie udało się zapytać urządzenia – sprawdź połączenie",
         Msg::Add => "Dodaj",
         Msg::NewSong => "Nowa pieśń",
         Msg::Edit => "Edytuj",
@@ -460,6 +465,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::CopySetShort => "Nowy z tego",
         Msg::SetDate => "Data (niekoniecznie)",
         Msg::InvalidDate => "Niepoprawna data zestawu",
+        Msg::StorageFailed => {
+            "Urządzenie nie mogło zapisać zmiany (karta pełna lub uszkodzona) – nic się nie zmieniło"
+        }
         Msg::ChurchName => "Nazwa kościoła",
         Msg::ChurchNameExample => "np. Tulce",
         Msg::ChurchMissing => "Wpisz nazwę kościoła, w którym stoi to urządzenie",
@@ -552,7 +560,9 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::MarginBottom => "dół",
         Msg::MarginLeft => "lewo",
         Msg::MarginRight => "prawo",
-        Msg::InvalidProfile => "Ta strefa zasłoniłaby cały ekran – zmiana nie została zapisana",
+        Msg::InvalidProfile => {
+            "Strefy zasłoniłyby cały ekran albo jest ich za dużo (najwyżej 16) – zmiana nie została zapisana"
+        }
         Msg::Devices => "Urządzenia",
         Msg::ThisDevice => "to urządzenie",
         Msg::Revoke => "Odłącz",
@@ -776,6 +786,7 @@ pub fn rejection(code: sursum_protocol::ErrorCode) -> Msg {
         ErrorCode::InvalidProfile => Msg::InvalidProfile,
         ErrorCode::SetOnScreen => Msg::SetOnScreen,
         ErrorCode::InvalidDate => Msg::InvalidDate,
+        ErrorCode::StorageFailed => Msg::StorageFailed,
         ErrorCode::Forbidden => Msg::NotPaired,
         ErrorCode::DisplayBusy => Msg::DisplayBusy,
         ErrorCode::DisplayAuthFailed => Msg::DisplayAuthFailed,

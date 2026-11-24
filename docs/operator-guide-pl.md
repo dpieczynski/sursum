@@ -98,7 +98,8 @@ lewą stronę.
 
 Pedał (Bluetooth) albo pilot do prezentacji działa od razu: zwykle wysyła klawisze „Page Down /
 Page Up”, które znaczą **Dalej** i **Wstecz**. Jeśli Twój pedał wysyła coś innego, otwórz
-**Ustawienia → Pedał i klawisze**, dotknij **Naucz** przy wybranej akcji i naciśnij pedał.
+**Ustawienia → Pedał i klawisze**, dotknij **Naucz** przy wybranej akcji i naciśnij pedał
+(klawisz Esc przerywa naukę).
 Ustawienie zapamiętuje to jedno urządzenie. Przytrzymanie pedału nie przewija wielu slajdów naraz.
 
 Na tablecie z Androidem po sparowaniu pedału może zniknąć klawiatura ekranowa; włącz ją w
@@ -285,8 +286,9 @@ obsługują ekranu.
   przywrócić kopię.
 - **Usuń nieużywane obrazy** (w **Dane urządzenia**): plakaty zostają na urządzeniu także po
   usunięciu ich z zestawu. Przycisk najpierw pokazuje, ile obrazów nic już nie używa i ile
-  miejsca zajmują; usuwa je dopiero przytrzymanie **Usuń obrazy**. Obrazy z zestawów, logo, to,
-  co jest na ekranie, i obrazy przesłane w ostatnich 10 minutach zawsze zostają. Program nigdy
+  miejsca zajmują; usuwa je dopiero przytrzymanie **Usuń obrazy**. Obrazy z zestawów (także
+  zestawów drugiego kościoła, które urządzenie przechowuje i przekazuje dalej), logo, to, co jest
+  na ekranie, i obrazy przesłane w ostatnich 10 minutach zawsze zostają. Program nigdy
   nie usuwa obrazów sam.
 
 **Pierwsze uruchomienie:** dopóki nie ma PIN-u, nikt nie może sterować ekranem. Pierwszy pilot,

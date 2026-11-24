@@ -4,8 +4,9 @@
 //! It connects to `/ws/<role>` on the page's own host, introduces itself with `Hello`, passes
 //! every server message to a callback and keeps the connection alive:
 //! - reconnects after a drop with exponential backoff (250 ms → 5 s, plus jitter);
-//! - sends `Ping` every 5 s and reconnects if nothing arrived for 15 s (a dead Wi-Fi link does
-//!   not always close the socket).
+//! - sends `Ping` every 5 s and reconnects at once if nothing arrived for 15 s (a dead Wi-Fi
+//!   link does not always close the socket, and a closing handshake over it can take minutes);
+//! - gives up on a connection attempt that has not opened within 10 s and tries again.
 //!
 //! While disconnected the apps simply keep showing their last state.
 
@@ -26,6 +27,7 @@ pub const BUILD_ID: &str = match option_env!("SURSUM_BUILD_ID") {
 
 const PING_INTERVAL_MS: u32 = 5_000;
 const SILENCE_LIMIT_MS: f64 = 15_000.0;
+const CONNECT_LIMIT_MS: f64 = 10_000.0;
 const BACKOFF_START_MS: u32 = 250;
 const BACKOFF_MAX_MS: u32 = 5_000;
 
@@ -55,6 +57,8 @@ struct Inner {
     handlers: RefCell<Vec<EventHandler>>,
     failed_attempts: Cell<u32>,
     last_heard_ms: Cell<f64>,
+    /// When the current socket was created, to give up on one that never opens.
+    opened_ms: Cell<f64>,
     heartbeat: RefCell<Option<Interval>>,
 }
 
@@ -70,6 +74,7 @@ impl Client {
             handlers: RefCell::new(Vec::new()),
             failed_attempts: Cell::new(0),
             last_heard_ms: Cell::new(now_ms()),
+            opened_ms: Cell::new(now_ms()),
             heartbeat: RefCell::new(None),
         });
         open(&inner);
@@ -106,6 +111,7 @@ fn open(inner: &Rc<Inner>) {
         return;
     };
     inner.status.set(Status::Connecting);
+    inner.opened_ms.set(now_ms());
     let weak = Rc::downgrade(inner);
     let on_open = handler(&weak, |inner, _| {
         inner.failed_attempts.set(0);
@@ -186,17 +192,18 @@ pub fn backoff_ms(failed_attempts: u32) -> u32 {
 
 fn heartbeat(weak: &Weak<Inner>) {
     let Some(inner) = weak.upgrade() else { return };
-    if inner.status.get_untracked() != Status::Connected {
-        return;
-    }
-    if now_ms() - inner.last_heard_ms.get() > SILENCE_LIMIT_MS {
-        // The link is dead without a close event; closing triggers a reconnect.
-        if let Some(socket) = inner.socket.borrow().as_ref() {
-            let _ = socket.close();
+    let now = now_ms();
+    match inner.status.get_untracked() {
+        // The link is dead without a close event: open a new socket now (the old one is
+        // detached and closed), so the status never claims a connection that is gone.
+        Status::Connected if now - inner.last_heard_ms.get() > SILENCE_LIMIT_MS => open(&inner),
+        Status::Connected => {
+            send(&inner, &ClientMsg::Ping);
         }
-        return;
+        // An attempt that hangs (e.g. its packets are lost) would otherwise never time out.
+        Status::Connecting if now - inner.opened_ms.get() > CONNECT_LIMIT_MS => open(&inner),
+        Status::Connecting | Status::Disconnected => {}
     }
-    send(&inner, &ClientMsg::Ping);
 }
 
 fn send(inner: &Inner, message: &ClientMsg) -> bool {

@@ -4,19 +4,31 @@
 
 use encoding_rs::{Encoding, UTF_8, WINDOWS_1250};
 
-/// Decodes an XML file. Returns the text and whether windows-1250 had to be assumed.
-pub fn decode_text(bytes: &[u8]) -> (String, bool) {
+/// How a file's text was obtained, for the import report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decoding {
+    /// In the encoding of its byte-order mark or declaration, or valid UTF-8.
+    Clean,
+    /// Not valid UTF-8 and no other encoding declared: read as windows-1250.
+    AssumedWindows1250,
+    /// Bytes invalid in the file's own encoding were replaced with U+FFFD.
+    Damaged,
+}
+
+/// Decodes an XML file. Returns the text and how it was obtained.
+pub fn decode_text(bytes: &[u8]) -> (String, Decoding) {
+    let checked = |had_errors: bool| if had_errors { Decoding::Damaged } else { Decoding::Clean };
     if let Some((encoding, bom_length)) = Encoding::for_bom(bytes) {
-        let (text, _) = encoding.decode_without_bom_handling(&bytes[bom_length..]);
-        return (text.into_owned(), false);
+        let (text, had_errors) = encoding.decode_without_bom_handling(&bytes[bom_length..]);
+        return (text.into_owned(), checked(had_errors));
     }
     if let Some(encoding) = declared_encoding(bytes) {
-        let (text, _, _) = encoding.decode(bytes);
-        return (text.into_owned(), false);
+        let (text, _, had_errors) = encoding.decode(bytes);
+        return (text.into_owned(), checked(had_errors));
     }
     match std::str::from_utf8(bytes) {
-        Ok(text) => (text.to_owned(), false),
-        Err(_) => (WINDOWS_1250.decode(bytes).0.into_owned(), true),
+        Ok(text) => (text.to_owned(), Decoding::Clean),
+        Err(_) => (WINDOWS_1250.decode(bytes).0.into_owned(), Decoding::AssumedWindows1250),
     }
 }
 
@@ -41,7 +53,7 @@ mod tests {
     #[test]
     fn utf8_with_bom() {
         let bytes = "\u{feff}<song>Łąka</song>".as_bytes();
-        assert_eq!(decode_text(bytes), ("<song>Łąka</song>".to_owned(), false));
+        assert_eq!(decode_text(bytes), ("<song>Łąka</song>".to_owned(), Decoding::Clean));
     }
 
     #[test]
@@ -56,7 +68,7 @@ mod tests {
     fn declaration_is_found_even_when_the_body_is_not_utf8() {
         let mut bytes = br#"<?xml version="1.0" encoding="windows-1250"?><song><title>"#.to_vec();
         bytes.extend_from_slice(&WINDOWS_1250.encode("Pieśń").0);
-        assert!(!decode_text(&bytes).1);
+        assert_eq!(decode_text(&bytes).1, Decoding::Clean);
     }
 
     #[test]
@@ -64,6 +76,14 @@ mod tests {
         let mut bytes = b"<song>".to_vec();
         bytes.extend_from_slice(&WINDOWS_1250.encode("żółw").0);
         bytes.extend_from_slice(b"</song>");
-        assert_eq!(decode_text(&bytes), ("<song>żółw</song>".to_owned(), true));
+        assert_eq!(decode_text(&bytes), ("<song>żółw</song>".to_owned(), Decoding::AssumedWindows1250));
+    }
+
+    #[test]
+    fn invalid_bytes_in_a_utf16_file_are_reported() {
+        let mut bytes = vec![0xff, 0xfe];
+        bytes.extend("<song>".encode_utf16().flat_map(u16::to_le_bytes));
+        bytes.extend([0x00, 0xd8]); // a lone surrogate
+        assert_eq!(decode_text(&bytes).1, Decoding::Damaged);
     }
 }

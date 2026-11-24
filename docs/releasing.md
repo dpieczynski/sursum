@@ -13,16 +13,17 @@ update a device (ADR 0019, ADR 0022).
    (only `main` and `v*` tags may use it). It:
    - builds the device's card image and its signed system update natively on an arm64 runner
      (`just image`, below), with the public key from the repository variable `SURSUM_BUNDLE_KEY`
-     compiled in, the secret `SURSUM_BUNDLE_SIGNING_KEY` (written to a file readable only by the
-     runner user, deleted at the end of the step) and the administrator's SSH key from the
-     variable `SURSUM_SSH_PUBKEY`;
+     compiled in and the secret `SURSUM_BUNDLE_SIGNING_KEY` (written to a file readable only by
+     the runner user, deleted at the end of the step); without an SSH key (ADR 0026);
    - checks the update against the compiled-in key, so a secret that does not match the variable
      fails the release instead of producing updates every device refuses;
    - builds the desktop program for Windows (`sursum-<version>-windows-x86_64.exe`, ADR 0020) on
      a Windows runner with MSVC (one file, the WebView2 loader linked in; unsigned, see the
      operator guide on SmartScreen);
    - attaches `sursum-<version>.img.zst` (flash it), `sursum-system-<version>.sursum-system`
-     (upload it in the remote) and the Windows program to a GitHub release with generated notes.
+     (upload it in the remote), `sursum-<version>.packages.txt` and
+     `sursum-<version>.spdx.json.zst` (what is in the image, for the sources offer in
+     [sources.md](sources.md)) and the Windows program to a GitHub release with generated notes.
 
 Pull requests that change `image/`, `deploy/`, the justfile or the system updater also build the
 image (`.github/workflows/image.yml`), signed with a throwaway key made for that run, so a broken
@@ -90,6 +91,8 @@ Locally, `~/.config/sursum/bundle-key.pub` holds the line `SURSUM_BUNDLE_KEY=<he
 with `set -a; . ~/.config/sursum/bundle-key.pub; set +a` rather than exporting the file's
 contents.
 
-The administrator's SSH public key goes into every image (login `admin`, key only). Locally it is
-`SURSUM_SSH_PUBKEY` (default `~/.ssh/id_ed25519.pub`); in CI the repository variable of the same
-name.
+A locally built image carries the administrator's SSH public key (login `admin`, key only):
+`SURSUM_SSH_PUBKEY` (default `~/.ssh/id_ed25519.pub`; `none` for no key). Release images carry
+none (ADR 0026). The key lands in `/home` on the persistent partition, so system updates keep it;
+on a device flashed from a release image, add it to `/home/admin/.ssh/authorized_keys` on the
+card's `persistent` partition (owner `admin`, mode 0600) from a Linux computer.

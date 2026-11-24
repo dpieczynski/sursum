@@ -80,6 +80,30 @@ async fn songs_are_added_from_a_search_that_stays_open() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_hold_on_remove_survives_another_remote_changing_the_screen() -> anyhow::Result<()> {
+    with_sets(async |server, _, remote| {
+        let before = item_count(remote).await;
+        let mut other = server.remote("second organist").await?;
+        let removes = remote.find_all(By::Css("[data-testid=set-items] [data-testid=remove-item]")).await?;
+        let last = removes.last().context("no remove button")?;
+        remote.action_chain().click_and_hold_element(last).perform().await?;
+        // Mid-hold, another remote changes what the screen shows: a new snapshot arrives.
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        other
+            .command(sursum_protocol::Command::SetOverlay { overlay: sursum_protocol::Overlay::Black })
+            .await?;
+        tokio::time::sleep(Duration::from_millis(750)).await;
+        remote.action_chain().release().perform().await?;
+        wait_until(Duration::from_secs(5), || async { item_count(remote).await == before - 1 })
+            .await
+            .context("the hold was cancelled by the snapshot")?;
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn the_song_card_shows_the_words_and_adds_the_song() -> anyhow::Result<()> {
     with_sets(async |_, _, remote| {
         remote

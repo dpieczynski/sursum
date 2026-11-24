@@ -43,11 +43,13 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
     let front = RwSignal::new(0_usize);
     let transitions = RwSignal::new(0_u32);
     let running = StoredValue::new_local(None::<web_sys::Animation>);
+    let snapshots = StoredValue::new(0_u64);
     let (wake, mut woken) = futures_channel::mpsc::unbounded::<()>();
 
     // Every new snapshot wakes the transition loop and cuts a running crossfade short.
     Effect::new(move |_| {
         state.track();
+        snapshots.update_value(|count| *count += 1);
         running.with_value(|animation| {
             if let Some(animation) = animation {
                 let _ = animation.finish();
@@ -56,7 +58,7 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
         let _ = wake.unbounded_send(());
     });
 
-    let parts = Parts { measurer, layer_refs, layers, front, transitions, running };
+    let parts = Parts { measurer, layer_refs, layers, front, transitions, running, snapshots };
     leptos::task::spawn_local(async move {
         while woken.next().await.is_some() {
             // Only the newest snapshot matters.
@@ -91,8 +93,14 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
             leptos::task::spawn_local(async move { dom::decode_image(&asset_url(&asset_id)).await });
         }
     });
+    // The cover last raised: the logo stays while the overlay fades out after "logo", but black
+    // stays plain black even with a logo configured.
+    let cover = Memo::new(move |previous: Option<&Overlay>| match overlay() {
+        Overlay::None => previous.copied().unwrap_or_default(),
+        raised => raised,
+    });
     let logo_view = move || {
-        logo().map(|asset_id| {
+        logo().filter(|_| cover.get() == Overlay::Logo).map(|asset_id| {
             view! {
                 <div class="sursum-logo-box" style=rect_style(content())>
                     <img class="sursum-logo" src=asset_url(&asset_id) alt="" />
@@ -141,6 +149,8 @@ struct Parts {
     front: RwSignal<usize>,
     transitions: RwSignal<u32>,
     running: StoredValue<Option<web_sys::Animation>, LocalStorage>,
+    /// Counts snapshots, so a transition can tell that a newer one arrived while it waited.
+    snapshots: StoredValue<u64>,
 }
 
 impl Parts {
@@ -158,9 +168,16 @@ impl Parts {
         }
         let Some(measurer) = self.measurer.get_untracked() else { return };
         let measurer: web_sys::HtmlElement = measurer.unchecked_into();
+        // A newer snapshot while fitting or decoding makes this one stale: give up before it
+        // shows (the loop goes on with the newest), instead of fading in a slide already passed.
+        let snapshot = self.snapshots.get_value();
+        let superseded = || self.snapshots.get_value() != snapshot;
         let fit = fit_deck(&live.deck, target.layout.content, &measurer).await;
         if let SlideBody::Image { asset_id, .. } = &slide.body {
             dom::decode_image(&asset_url(asset_id)).await;
+        }
+        if superseded() {
+            return;
         }
 
         let incoming = 1 - current;

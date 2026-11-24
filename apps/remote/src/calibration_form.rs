@@ -110,7 +110,7 @@ fn zone_row(
                 <input type="checkbox" prop:checked=masked on:change=toggle_mask />
                 {pl(Msg::MaskZone)}
             </label>
-            <button class="row-button" on:click=remove>
+            <button class="btn btn--sm" on:click=remove>
                 {pl(Msg::RemoveZone)}
             </button>
         </div>

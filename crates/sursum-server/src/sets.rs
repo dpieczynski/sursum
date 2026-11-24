@@ -58,12 +58,16 @@ impl SetStore {
         self.sets.iter().find(|set| &set.id == set_id)
     }
 
-    /// Every picture used by a set, including the set whose deletion can still be undone.
+    /// Every picture used by a set, including the set whose deletion and the item whose removal
+    /// can still be undone.
     pub fn pictures(&self) -> impl Iterator<Item = &sursum_protocol::AssetId> {
-        let deleted = self.last_deleted.iter().map(|deleted| &deleted.set);
-        self.sets.iter().chain(deleted).flat_map(|set| &set.items).filter_map(|item| match &item.kind {
-            ItemKind::Image { asset_id, .. } => Some(asset_id),
-            _ => None,
+        let deleted = self.last_deleted.iter().flat_map(|deleted| &deleted.set.items);
+        let removed = self.last_removed.iter().map(|removed| &removed.item);
+        self.sets.iter().flat_map(|set| &set.items).chain(deleted).chain(removed).filter_map(|item| {
+            match &item.kind {
+                ItemKind::Image { asset_id, .. } => Some(asset_id),
+                _ => None,
+            }
         })
     }
 

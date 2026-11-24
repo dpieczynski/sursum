@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use sursum_protocol::{BackupSummary, RestoreRefusal};
 
 use crate::db::{DATABASE_FILE, Database, Unreadable};
+use crate::durable::sync_dir;
 
 /// Version of the backup format.
 const FORMAT_VERSION: u32 = 1;
@@ -84,9 +85,18 @@ impl TemporaryFile {
         Ok(TemporaryFile { path, file: Some(file) })
     }
 
-    /// The open file.
+    /// A temporary name in `data_dir` for a file something else creates (`VACUUM INTO` insists
+    /// on creating its target). Holding no open file, it can be removed on every platform.
+    pub fn reserve(data_dir: &Path) -> Self {
+        TemporaryFile {
+            path: data_dir.join(format!("{TEMPORARY_PREFIX}{}", uuid::Uuid::new_v4())),
+            file: None,
+        }
+    }
+
+    /// The open file (of one made by [`TemporaryFile::new`]).
     pub fn file(&mut self) -> &mut std::fs::File {
-        self.file.as_mut().expect("the file is open until dropped")
+        self.file.as_mut().expect("a created temporary file is open until dropped")
     }
 
     /// The file's path.
@@ -106,9 +116,7 @@ impl Drop for TemporaryFile {
 /// Writes a backup of the device in `data_dir` to `out` and says what it holds. Safe while the
 /// server runs: the database is copied through its own connection.
 pub fn create(data_dir: &Path, out: impl Write + Seek) -> anyhow::Result<BackupSummary> {
-    let database = TemporaryFile::new(data_dir).context("creating a temporary file")?;
-    // `VACUUM INTO` wants to create the file itself.
-    std::fs::remove_file(database.path())?;
+    let database = TemporaryFile::reserve(data_dir);
     let contents =
         Database::copy_without_credentials(data_dir, database.path()).context("copying the database")?;
     let pictures = crate::assets::list(data_dir).context("listing the pictures")?;
@@ -246,10 +254,20 @@ pub fn apply_staged(data_dir: &Path) -> anyhow::Result<bool> {
         return Ok(false);
     }
     let applied = (|| -> anyhow::Result<()> {
-        Database::backup_file(data_dir, "before-restore").context("backing up the replaced database")?;
+        // A damaged database is the usual reason to restore: then there is nothing to copy or
+        // keep, and the restore goes ahead (the device asks for a new PIN).
+        if let Err(error) = Database::backup_file(data_dir, "before-restore") {
+            anyhow::ensure!(crate::db::is_damage(&error), error.context("backing up the replaced database"));
+            tracing::warn!(?error, "the replaced database is damaged; restoring without a copy of it");
+        }
         let live = data_dir.join(DATABASE_FILE);
         let mut restored = Database::open(&staged_dir).context("opening the staged backup")?;
-        restored.adopt_credentials(&live).context("keeping this device's PIN and remotes")?;
+        match restored.adopt_credentials(&live) {
+            Err(error) if crate::db::is_damage(&error) => {
+                tracing::warn!(?error, "the replaced database is damaged; its PIN and remotes are lost");
+            }
+            kept => kept.context("keeping this device's PIN and remotes")?,
+        }
         drop(restored);
         for suffix in ["-wal", "-shm"] {
             remove_if_present(&staged_dir.join(format!("{DATABASE_FILE}{suffix}")))?;
@@ -277,11 +295,6 @@ fn remove_if_present(path: &Path) -> std::io::Result<()> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
     }
-}
-
-/// Makes a rename durable (a no-op where directories cannot be opened, i.e. Windows).
-fn sync_dir(dir: &Path) -> std::io::Result<()> {
-    if cfg!(unix) { std::fs::File::open(dir)?.sync_all() } else { Ok(()) }
 }
 
 /// Reads a whole temporary file back from its start (for tests and small callers).
@@ -403,6 +416,28 @@ mod tests {
             .any(|entry| entry.file_name().to_string_lossy().ends_with("-before-restore.db"));
         assert!(replaced, "the replaced database is kept in backups/");
         assert!(!apply_staged(new.path()).unwrap(), "nothing is staged any more");
+    }
+
+    #[test]
+    fn a_backup_is_restored_over_a_damaged_database() {
+        let old = tempfile::tempdir().unwrap();
+        drop(device(old.path(), "old-pin", "old-token", &["Alfa"]));
+        let backup = backup_of(old.path());
+        let new = tempfile::tempdir().unwrap();
+        drop(device(new.path(), "new-pin", "new-token", &["Gamma"]));
+        stage(new.path(), &backup).unwrap();
+        // The card damaged the database before the restart that applies the backup.
+        std::fs::write(new.path().join(DATABASE_FILE), vec![0x5a; 8192]).unwrap();
+        let _ = std::fs::remove_file(new.path().join(format!("{DATABASE_FILE}-wal")));
+
+        assert!(apply_staged(new.path()).unwrap());
+        let database = Database::open(new.path()).unwrap();
+        assert_eq!(database.load_songs().unwrap()[0].titles, ["Alfa"]);
+        assert_eq!(
+            database.setting::<String>(crate::auth::PIN_SETTING).unwrap(),
+            None,
+            "a new PIN is needed"
+        );
     }
 
     #[test]

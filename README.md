@@ -61,32 +61,25 @@ and the server only listens on loopback (it refuses any other address) — for d
 
 Releases are built by GitHub Actions from the tagged commit and published on the
 [releases page](https://github.com/dpieczynski/sursum/releases): the card image and the signed
-system update for the Raspberry Pi 5, and the desktop program for Windows. See also the code
-signing policy below.
+system update for the Raspberry Pi 5, and the desktop program for Windows (unsigned, see
+below). The card image lets nobody log in over SSH; to administer a device, add your
+key on its persistent partition (ADR 0026). The free software inside the image and where its
+sources are: [docs/sources.md](docs/sources.md).
 
-## Code signing policy
+## Signing and privacy
 
-The Windows program (`sursum.exe`) is meant to be signed through the SignPath Foundation's
-programme for open-source projects; this has been applied for, and until it is granted the program
-is unsigned. Once it is:
+The Windows program (`sursum.exe`) is not code-signed: the application to the SignPath
+Foundation's programme for open-source projects was declined (2026-11-22). Windows warns once
+before running it; the operator guide shows how to get past the warning. Every release is built
+by this repository's GitHub Actions workflows from the tagged source code.
 
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
-
-- Committers and reviewers: [dpieczynski](https://github.com/dpieczynski) (the maintainer; changes
-  from anyone else come as pull requests the maintainer reviews)
-- Approvers: [dpieczynski](https://github.com/dpieczynski) (approves every signing request by hand)
-
-Only binaries built by this repository's GitHub Actions workflows from its own source code are
-signed; upstream libraries are not signed with this certificate.
+The Raspberry Pi image and its system updates are signed with the project's own update key
+(Ed25519, [docs/releasing.md](docs/releasing.md)); a device installs only updates signed with it.
 
 Privacy: this program will not transfer any information to other networked systems unless
 specifically requested by the user or the person installing or operating it. The church device
 serves its own pages and data only to the remotes on its local network, and the desktop program
 listens on this computer only (loopback); neither sends telemetry or contacts the internet.
-
-The Raspberry Pi image and its system updates are signed with the project's own update key
-(Ed25519, [docs/releasing.md](docs/releasing.md)), not with this certificate.
 
 ## Contributing
 

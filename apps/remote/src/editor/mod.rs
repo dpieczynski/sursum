@@ -58,9 +58,19 @@ pub fn Editor(
         });
     }
     let dirty = move || draft.with(|draft| saved.with(|saved| edited_fields(draft) != edited_fields(saved)));
+    // One save at a time: a double click or Ctrl+S pressed twice would otherwise create a new
+    // song twice, or report a conflict right after a successful save.
+    let saving = StoredValue::new(false);
+    let has_screen =
+        use_context::<sursum_protocol::Installation>() != Some(sursum_protocol::Installation::Library);
     let save = move |show_after: bool| {
+        if saving.get_value() {
+            return;
+        }
+        saving.set_value(true);
         leptos::task::spawn_local(async move {
             let outcome = post_json::<_, SaveOutcome>("/api/songs/save", &draft.get_untracked()).await;
+            saving.set_value(false);
             status.set(Some(save_message(outcome.as_ref())));
             if let Some(SaveOutcome::Saved { song_id, version }) = outcome {
                 draft.update(|draft| {
@@ -90,7 +100,8 @@ pub fn Editor(
                 event.prevent_default();
                 save(false);
             }
-            "Enter" if shortcut => {
+            // "Save and show" exists only where there is a screen.
+            "Enter" if shortcut && has_screen => {
                 event.prevent_default();
                 save(true);
             }

@@ -57,7 +57,8 @@ target, last, can_install }` on devices running the image, absent elsewhere; `la
 `committed { version }` or `rolled_back { failed, database_restored }`. `build` differs from
 `system.version` only while a developer's build runs (`just try`).
 `POST /api/assets/cleanup` takes `PictureCleanupRequest { dry_run }` and answers
-`PictureCleanup { pictures, bytes }`: what is (or would be) removed.
+`PictureCleanup { pictures, bytes }`: what is (or would be) removed. Pictures in any version of
+any set in the database stay (other churches' sets and sets in review too).
 
 JSON text frames (`serde_json` on both sides, readable in browser dev tools); serde enums tagged
 with `"t"`; default Rust (snake_case) field names, since no JavaScript consumes them.
@@ -102,7 +103,8 @@ Pong      { }
 ```
 
 `Rejected.code` is one of `not_found`, `no_active_set`, `forbidden`, `unsupported`,
-`invalid_profile`, `display_unreachable`, `display_busy`, `display_auth_failed`, `set_on_screen`;
+`invalid_profile`, `display_unreachable`, `display_busy`, `display_auth_failed`, `set_on_screen`,
+`invalid_date`, `storage_failed` (the change could not be stored, so nothing changed);
 the remote words them in Polish. There is no `Notice` message and no server or client time in
 the handshake. How text looks (font, colour, size range) is not on the wire: it is one fixed style
 in `sursum-slide` (`theme.rs`).

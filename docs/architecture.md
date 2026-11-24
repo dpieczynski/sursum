@@ -57,7 +57,10 @@ Shared wasm crates share data and drawing, never domain logic.
 Going live compiles a `Deck` and stores a **frozen copy** in `Program`. Set edits and song edits
 never touch it. Navigation inside the item uses the frozen deck; if the song changed meanwhile,
 the deck is rebuilt on the next navigation and the position is found by `SlideKey`. If the live
-item was removed, a *ghost position* remembers where it was, so next/previous still work.
+item was removed, a *ghost position* remembers its former neighbours (by id, so later set edits
+cannot shift it), so next/previous still work. Steps skip items with nothing to show (a song
+deleted from the library), so one broken item never stops "next". A rejected command leaves the
+program exactly as it was.
 
 ## Restart policy (ADR 0003)
 
