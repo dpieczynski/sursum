@@ -97,7 +97,10 @@ parts (sheet, toast, banner, hold button, PIN field) are in `ui/`.
 
 Chromium under cage is the engine, tamed by managed policies, a short command line, a transparent
 cursor theme, a localhost-only network for the kiosk unit and a session script that keeps the
-display at 1080p60 (`deploy/kiosk/`). The screen follows an API contract that WPE WebKit also
+display at 1080p60 (`deploy/kiosk/`). The browser starts on a black page on the system
+(`start.html`) that opens `/screen/` once the server answers, and the screen app reloads itself
+only when the server answers: a browser that reaches for a server that is down shows its own error
+page. The screen follows an API contract that WPE WebKit also
 supports, and the screen subset of the WebDriver tests runs blocking on WPE in CI. Whether WPE WebKit 2.54 on DRM (no compositor, our
 rebuild of Debian's source package, WebKit's own MiniBrowser as the launcher) replaces Chromium
 and cage is decided by a spike on the pilot Pi (ADR 0009 amendment of 2026-11-19); cog is legacy

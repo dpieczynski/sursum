@@ -89,13 +89,13 @@ An external review of main was checked claim by claim; what held up is fixed in 
   and written offer for GPL sources)
 - [ ] Protocol cleanup (slide part info, version views with number and order, import problem
   codes) and docs/CI hygiene
-- [ ] The screen shows Chromium's "This site can't be reached" page whenever the kiosk starts
-  while the server does not answer (seen during the failed trial on the pilot Pi; also after a
-  server crash or a slow boot) and keeps it until the kiosk restarts, against hard rule 3. Either
-  start the browser only once the server answers and restart it with the server, or open a local
-  black page that retries (a `file://` page with an inline black background that polls
-  `/healthz` and then replaces itself with `/screen/` works the same on Chromium and WPE); mind
-  ADR 0009 before adding to the cage setup
+- [x] The screen showed Chromium's "This site can't be reached" page whenever the kiosk started
+  while the server did not answer (seen during the failed trial on the pilot Pi; also after a
+  server crash or a slow boot), against hard rule 3. The kiosk now opens a black page on the
+  system (`deploy/kiosk/start.html`) that opens `/screen/` once `/healthz` answers, and the screen
+  app reloads only when the server answers. Checked on the pilot Pi (2026-11-24) with a
+  crash-looping server: the screen connected 0.5 s after the server came back. Not yet tried in
+  the WPE spike image
 - [x] A rollback left empty `-shm`/`-wal` files next to the database moved to `rolled-back/`;
   now only the database and a WAL with pending changes are moved
 - [x] The damaged-database restore failed on Windows (os error 5): the restored file was flushed

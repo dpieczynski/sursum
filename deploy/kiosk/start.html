@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The kiosk's first page (sursum-kiosk.service): black until the server answers, then the screen.
+  A browser sent straight to http://localhost/screen/ while the server is down (still starting,
+  restarting, or a system update failing its trial) shows its own error page and stays there;
+  the screen may show only content, black or the logo (CLAUDE.md, hard rule 3). This file is on
+  the read-only system, so it is there even when the server is not.
+-->
+<html lang="pl" translate="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="google" content="notranslate" />
+    <meta name="color-scheme" content="dark" />
+    <title>sursum – ekran</title>
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; background: #000; cursor: none; overflow: hidden; }
+    </style>
+    <script>
+      // A file:// page gets only an opaque response (no-cors): any answer at all means the
+      // server is up; a refused connection rejects the promise.
+      function openScreenWhenServerAnswers() {
+        fetch("http://localhost/healthz", { mode: "no-cors", cache: "no-store" }).then(
+          function () { location.replace("http://localhost/screen/"); },
+          function () { setTimeout(openScreenWhenServerAnswers, 500); }
+        );
+      }
+      openScreenWhenServerAnswers();
+    </script>
+  </head>
+  <body></body>
+</html>

@@ -25,10 +25,11 @@ Environment=WPE_PLATFORM=drm
 # The screen talks to the server on this machine only (CLAUDE.md rule 3: no network resources).
 IPAddressAllow=localhost
 IPAddressDeny=any
-# MiniBrowser's background is white unless told otherwise. To try another command or variable
+# It opens start.html, which waits for the server (see sursum-kiosk.service). MiniBrowser's
+# background is white unless told otherwise. To try another command or variable
 # without a new image (e.g. WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 if the web process's
 # bubblewrap sandbox fails), put it into /var/lib/sursum/kiosk.env.
-Environment="KIOSK_APP=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0/MiniBrowser --fullscreen --bg-color=black http://localhost/screen/"
+Environment="KIOSK_APP=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0/MiniBrowser --fullscreen --bg-color=black file:///usr/share/sursum/kiosk/start.html"
 EnvironmentFile=-/var/lib/sursum/kiosk.env
 # $KIOSK_APP (unbraced) is split into words by systemd; env runs the first one.
 ExecStart=/usr/bin/env $KIOSK_APP
