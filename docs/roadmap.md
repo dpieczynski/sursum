@@ -95,7 +95,9 @@ An external review of main was checked claim by claim; what held up is fixed in 
   system (`deploy/kiosk/start.html`) that opens `/screen/` once `/healthz` answers, and the screen
   app reloads only when the server answers. Checked on the pilot Pi (2026-11-24) with a
   crash-looping server: the screen connected 0.5 s after the server came back. Not yet tried in
-  the WPE spike image
+  the WPE spike image. The same test showed the live slide for a moment when the screen page
+  loaded under black (the first overlay faded in like any later one); the first snapshot's
+  overlay now appears at once
 - [x] A rollback left empty `-shm`/`-wal` files next to the database moved to `rolled-back/`;
   now only the database and a WAL with pending changes are moved
 - [x] The damaged-database restore failed on Windows (os error 5): the restored file was flushed

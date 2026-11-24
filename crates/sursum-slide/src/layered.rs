@@ -71,7 +71,19 @@ pub fn LayeredStage(#[prop(into)] state: Signal<Option<ScreenState>>) -> impl In
 
     let shown = move || layers[front.get()].get();
     let overlay = move || state.with(|state| state.as_ref().map(|state| state.overlay).unwrap_or_default());
-    let overlay_ms = move || state.with(|state| state.as_ref().map_or(0, |state| state.transition_ms));
+    // How many snapshots have arrived (counting stops at two) and how long the overlay fades for
+    // the current one. The first snapshot after the page loads (a kiosk restart, a boot) shows its
+    // overlay at once: fading it in would let the live slide under black or the logo show for a
+    // moment. The duration changes in the same render as the overlay, so no fade ever starts.
+    let overlay_fade = Memo::new(move |previous: Option<&(u8, u32)>| {
+        let seen = previous.map_or(0, |(seen, _)| *seen);
+        match state.with(|state| state.as_ref().map(|state| state.transition_ms)) {
+            None => (seen, 0),
+            Some(_) if seen == 0 => (1, 0),
+            Some(ms) => (2, ms),
+        }
+    });
+    let overlay_ms = move || overlay_fade.get().1;
     let masks = move || {
         state.with(|state| state.as_ref().map(|state| state.layout.masks.clone()).unwrap_or_default())
     };
