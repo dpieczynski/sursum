@@ -170,6 +170,13 @@ async fn a_screen_that_loads_under_black_never_shows_the_live_slide() -> anyhow:
             );
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
+        // The slide really is drawn underneath (its own fade ends after 3 s), and stays hidden.
+        wait_for_slide(driver, "v1#").await?;
+        let image = screenshot(driver).await?;
+        anyhow::ensure!(
+            is_black(&image, 0, 0, image.width(), image.height()),
+            "the live slide showed under black once drawn"
+        );
         Ok(())
     })
     .await

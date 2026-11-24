@@ -18,11 +18,14 @@
     </style>
     <script>
       // A file:// page gets only an opaque response (no-cors): any answer at all means the
-      // server is up; a refused connection rejects the promise.
+      // server is up; a refused connection rejects the promise. An answer that does not come
+      // within 2 s (a server that accepted and hangs) is given up, so the next try is on time.
       function openScreenWhenServerAnswers() {
-        fetch("http://localhost/healthz", { mode: "no-cors", cache: "no-store" }).then(
-          function () { location.replace("http://localhost/screen/"); },
-          function () { setTimeout(openScreenWhenServerAnswers, 500); }
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, 2000);
+        fetch("http://localhost/healthz", { mode: "no-cors", cache: "no-store", signal: controller.signal }).then(
+          function () { clearTimeout(timer); location.replace("http://localhost/screen/"); },
+          function () { clearTimeout(timer); setTimeout(openScreenWhenServerAnswers, 500); }
         );
       }
       openScreenWhenServerAnswers();
