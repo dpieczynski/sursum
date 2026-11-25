@@ -29,7 +29,7 @@ are made but not built yet. A device has one update path, the system update
 | `apps/screen`, `apps/remote` | Leptos CSR apps built with Trunk |
 | `e2e/` | WebDriver tests (thirtyfour) against the real binary |
 | `image/` | device image (rpi-image-gen config and layers; immutable A/B, ADR 0013) |
-| `deploy/` | units and kiosk files the image installs (`systemd/`, `kiosk/`); interim hand install (`pi-manual/`, goes with ADR 0022) |
+| `deploy/` | units and kiosk files the image installs (`systemd/`, `kiosk/`) |
 | `library/public-domain/` | starter library of public-domain hymns in OpenSong format (`just library-zip`) |
 | `assets/fonts/` | bundled OFL fonts with licenses |
 | `fixtures/` | public-domain or synthetic test data only |

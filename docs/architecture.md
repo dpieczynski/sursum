@@ -80,9 +80,10 @@ with the logo overlay; one tap shows the slide again. No dependency on the clock
 - One font size per song (`fit_group`): binary search over integer px, **no line wrapping**
   first (lines come from the server), wrapping only if the minimum size does not fit.
 - The remote preview uses the same `sursum-slide` Leptos components, CSS, fonts and stage. The
-  remotes no longer share one engine with the screen: Blink on Android, Windows and in the kiosk,
-  WebKit in the Linux desktop window (ADRs 0020, 0021). A cross-engine test keeps
-  the fitted font size within 1 px and the line count equal between WPE WebKit and Chromium.
+  remotes do not share one engine with the screen: the screen is WPE WebKit (ADR 0027), the
+  remotes Blink on Android and Windows, WebKit in the Linux desktop window (ADRs 0020, 0021). A
+  cross-engine test keeps the fitted font size within 1 px and the line count equal between WPE
+  WebKit and Chromium.
 
 ## The remote (ADR 0017)
 
