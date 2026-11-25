@@ -1,6 +1,7 @@
 # 0009 — Chromium under cage as the display engine
 
-Status: Accepted (2026-11-15)
+Status: Superseded by ADR 0027 (2026-11-25): WPE WebKit on DRM replaced Chromium under cage after
+the spike of the amendment of 2026-11-19. Accepted 2026-11-15.
 
 ## Context
 Candidates on Debian Trixie: Chromium (150), WPE WebKit 2.48.3 + cog 0.18.4, Firefox ESR 140, or

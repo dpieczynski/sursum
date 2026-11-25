@@ -2,7 +2,7 @@
 
 Offline church lyrics display. A Raspberry Pi 5 next to the projector runs one Rust binary
 (`sursum-server`) that holds all state and serves two embedded Leptos (CSR, WebAssembly) apps:
-the **screen** (Chromium kiosk under cage, read-only) and the **remote** (Android tablet,
+the **screen** (WPE WebKit kiosk on DRM, read-only; ADR 0027) and the **remote** (Android tablet,
 Linux/Windows PC). The same server also runs at home inside the desktop program `sursum`
 (Windows, Linux; ADR 0020) for preparing songs. Out of scope: iPad, macOS, a Windows PC driving
 the projector (ADR 0023). Everything is Rust; there is no Node/npm. Two churches of one parish are the
@@ -11,8 +11,7 @@ first users (Tulce, Gowarzewo). License: GPL-3.0-or-later.
 Start of every session: read [docs/roadmap.md](docs/roadmap.md) (where we are) and skim
 [docs/decisions/](docs/decisions/) (what is already decided — do not re-litigate without a
 strong reason; if you have one, propose a new ADR). The roadmap's section S1 lists decisions that
-are made but not built yet (the CI image build; the WPE-on-DRM spike, ADR 0009): do not extend
-what they would remove (cage workarounds). A device has one update path, the system update
+are made but not built yet. A device has one update path, the system update
 (ADR 0022); application bundles are gone and do not come back. The planning document (Polish) is
 [docs/plan-2026-11.md](docs/plan-2026-11.md); roadmap and ADRs win where they differ.
 

@@ -1,6 +1,8 @@
 # 0015 — Screen portability to WPE WebKit (cog), enforced by tests
 
-Status: Accepted (2026-11-16). Complements ADR 0009 (Chromium stays the default engine).
+Status: Accepted (2026-11-16). Complements ADR 0009 (Chromium stays the default engine). Since ADR
+0027 (2026-11-25) WPE WebKit is the shipped engine, so this contract now describes the device; the
+tests still start WPE 2.48 through cog.
 
 ## Context
 ADR 0009 keeps Chromium under cage but leaves WPE WebKit + cog as the most likely alternative

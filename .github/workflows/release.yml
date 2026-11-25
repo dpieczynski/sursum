@@ -48,9 +48,10 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: desktop-windows
     environment: release
-    # Only this job publishes the release.
+    # Only this job publishes the release; it reads the WPE WebKit packages from a workflow run.
     permissions:
       contents: write
+      actions: read
     timeout-minutes: 90
     steps:
       - name: Free disk space (preinstalled SDKs this project does not use)
@@ -68,6 +69,11 @@ jobs:
           tool: just@1.59.0,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
       - name: Podman
         run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      # Only a run on main started by a push or by hand: this job signs what it fetches.
+      - name: The rebuilt WPE WebKit packages (ADR 0027)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just wpe-debs
       - name: Build and sign the image and the system update
         env:
           SURSUM_BUNDLE_KEY: ${{ vars.SURSUM_BUNDLE_KEY }}

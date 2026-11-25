@@ -34,6 +34,7 @@ layer shows up before a release.
 ```sh
 set -a; . ~/.config/sursum/bundle-key.pub; set +a
 export SURSUM_BUNDLE_SIGNING_KEY=~/.config/sursum/bundle-signing.key
+just wpe-debs   # once: the rebuilt WPE WebKit packages (ADR 0027, main's build) into target/wpe-debs
 just image
 ```
 

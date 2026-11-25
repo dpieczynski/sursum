@@ -15,7 +15,7 @@
                                         │  (immutable A/B image, /persistent)       │
                                         └─────────▲─────────────────────────────────┘
                                                   │ ws://localhost (read-only)
-                                        cage + Chromium --kiosk → HDMI-A-1 (forced 1080p60)
+                                        WPE WebKit MiniBrowser on DRM → HDMI-A-1 (1080p60)
 ```
 
 **All logic lives on the server**: parsing, slide splitting, order, navigation, program and
@@ -93,18 +93,16 @@ on screen, slides, controls) never moves; narrow screens show a live strip in th
 Everything shown is derived from `RemoteState` (`live/info.rs` only puts it into words); shared
 parts (sheet, toast, banner, hold button, PIN field) are in `ui/`.
 
-## Display engine portability (ADRs 0009, 0015)
+## Display engine (ADRs 0027, 0015)
 
-Chromium under cage is the engine, tamed by managed policies, a short command line, a transparent
-cursor theme, a localhost-only network for the kiosk unit and a session script that keeps the
-display at 1080p60 (`deploy/kiosk/`). The browser starts on a black page on the system
-(`start.html`) that opens `/screen/` once the server answers, and the screen app reloads itself
-only when the server answers: a browser that reaches for a server that is down shows its own error
-page. The screen follows an API contract that WPE WebKit also
-supports, and the screen subset of the WebDriver tests runs blocking on WPE in CI. Whether WPE WebKit 2.54 on DRM (no compositor, our
-rebuild of Debian's source package, WebKit's own MiniBrowser as the launcher) replaces Chromium
-and cage is decided by a spike on the pilot Pi (ADR 0009 amendment of 2026-11-19); cog is legacy
-and not used on devices.
+The screen is WPE WebKit's MiniBrowser on the DRM platform, with no compositor: our trixie rebuild
+of Debian's 2.54 source package (`.github/workflows/wpewebkit.yml`), run by its own user with a
+localhost-only network (`deploy/kiosk/`). The display mode is the kernel's forced 1080p60. The
+kiosk unit starts the browser only once the server answers `/healthz` (`wait-for-server`), and the
+screen app reloads itself only when the server answers: a browser that reaches for a server that
+is down shows its own error page. Until the browser starts, nothing holds the display and it stays
+black. The screen follows an API contract that the WebDriver tests check on WPE in CI (still 2.48
+through cog). It replaced Chromium under cage after a spike on the pilot Pi (ADR 0027).
 
 ## Exclusion zones (ADR 0008)
 

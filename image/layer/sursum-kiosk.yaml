@@ -1,35 +1,59 @@
 # METABEGIN
 # X-Env-Layer-Name: sursum-kiosk
-# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Version: 0.2.0
 # X-Env-Layer-Category: app
-# X-Env-Layer-Desc: The screen (ADR 0009): Chromium in kiosk mode under cage on tty1, run by
-#  its own user, after the rpi-image-gen webkiosk example but without waiting for time sync.
-#  Chromium's managed policies, the transparent cursor themes and the unit (localhost-only
-#  network) come from ../deploy/kiosk, shared with the hand-installed pilot.
+# X-Env-Layer-Desc: The screen (ADR 0027): WebKit's MiniBrowser from our trixie rebuild of WPE
+#  WebKit 2.54 on the DRM platform, run by its own user, without a compositor. The kiosk unit
+#  starts the browser only once the server answers.
 # X-Env-Layer-Requires: sursum-device
+#
+# X-Env-VarPrefix: sursum
+#
+# X-Env-Var-wpe_debs:
+# X-Env-Var-wpe_debs-Desc: Folder with the rebuilt packages (the wpewebkit-debs artifact of
+#  .github/workflows/wpewebkit.yml, fetched by `just wpe-debs`); `just image` passes it.
+# X-Env-Var-wpe_debs-Required: y
+# X-Env-Var-wpe_debs-Valid: string
+# X-Env-Var-wpe_debs-Set: y
 # METAEND
 ---
 # SPDX-License-Identifier: GPL-3.0-or-later
 mmdebstrap:
-  packages:
-    - cage
-    - chromium
-    - seatd
-    # Sets the display mode through cage (kiosk-session).
-    - wlr-randr
   customize-hooks:
+    # The library package holds MiniBrowser; apt takes its dependencies from trixie. The package
+    # does not declare what MiniBrowser and the web process sandbox need at run time: the
+    # library libWPEBackend-fdo-1.0.so.1 (only suggested; the first spike image failed on the Pi
+    # without it), /usr/bin/bwrap and /usr/bin/xdg-dbus-proxy, which WebKit starts the web
+    # process with, and libGLESv2.so.2, which libepoxy loads at run time (the second spike image's
+    # web process died without it). They are named here, and the build fails if any of it is
+    # still missing.
+    - |
+      set -eu
+      debs="${IGconf_sursum_wpe_debs}"
+      ls "$debs"/libwpewebkit-2.0-1_*.deb >/dev/null
+      mkdir -p $1/tmp/wpe
+      cp "$debs"/libwpewebkit-2.0-1_*.deb $1/tmp/wpe/
+      chroot $1 sh -c 'apt-get update && apt-get install -y --no-install-recommends /tmp/wpe/*.deb libwpebackend-fdo-1.0-1 bubblewrap xdg-dbus-proxy libgles2'
+      rm -rf $1/tmp/wpe
+      webkit=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0
+      test -x $1/usr/bin/bwrap
+      test -x $1/usr/bin/xdg-dbus-proxy
+      test -e $1/usr/lib/aarch64-linux-gnu/libGLESv2.so.2
+      # The browser and the processes WebKit starts (ldd cannot see what is loaded at run time,
+      # like libGLESv2 above).
+      for program in MiniBrowser WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+        test -x $1$webkit/$program
+        if chroot $1 ldd $webkit/$program | grep 'not found'; then
+          echo "$program misses the libraries above" >&2
+          exit 1
+        fi
+      done
     - chroot $1 useradd --system --create-home --home-dir /var/lib/sursum-kiosk --shell /usr/sbin/nologin sursum-kiosk
-    # seatd hands the display to the video group; render and input for the GPU and devices.
-    - chroot $1 usermod -a -G video,render,input sursum-kiosk
-    - install -d -m 0755 $1/etc/chromium/policies/managed
-    - install -m 0644 ../deploy/kiosk/chromium-policies.json $1/etc/chromium/policies/managed/sursum.json
-    - sh ../deploy/kiosk/blank-cursors.sh $1
     - install -m 0644 ../deploy/kiosk/sursum-kiosk.service $1/etc/systemd/system/sursum-kiosk.service
-    - install -D -m 0755 ../deploy/kiosk/kiosk-session $1/usr/lib/sursum/kiosk-session
-    # The first page: black until the server answers (sursum-kiosk.service).
-    - install -D -m 0644 ../deploy/kiosk/start.html $1/usr/share/sursum/kiosk/start.html
+    # The kiosk starts the browser only once the server answers (sursum-kiosk.service).
+    - install -D -m 0755 ../deploy/kiosk/wait-for-server $1/usr/lib/sursum/wait-for-server
     # The screen guard's restart requests (see /etc/sursum/config.toml).
     - install -m 0644 ../deploy/kiosk/sursum-kiosk-restart.path ../deploy/kiosk/sursum-kiosk-restart.service $1/etc/systemd/system/
     # tty1 belongs to the screen: no login prompt there.
     - rm -f $1/etc/systemd/system/getty.target.wants/getty@tty1.service
-    - $BDEBSTRAP_HOOKS/enable-units "$1" seatd sursum-kiosk sursum-kiosk-restart.path
+    - $BDEBSTRAP_HOOKS/enable-units "$1" sursum-kiosk sursum-kiosk-restart.path

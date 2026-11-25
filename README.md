@@ -24,8 +24,8 @@ shows lyrics to the congregation, and a one-hand remote in a tablet or PC browse
 
 Everything is written in Rust. A single binary (`sursum-server`: axum, tokio, SQLite) holds all
 state and logic. It serves two web apps written with Leptos (client-side rendering, compiled to
-WebAssembly with Trunk) and embedded in the binary: the **screen** (Chromium kiosk under cage on
-the Pi, read-only) and the **remote** (tablet or PC browser). Server and apps share the protocol
+WebAssembly with Trunk) and embedded in the binary: the **screen** (WPE WebKit kiosk on the
+Pi, read-only) and the **remote** (tablet or PC browser). Server and apps share the protocol
 types (`sursum-protocol`) and the apps share the slide renderer (`sursum-slide`), so the remote
 preview is the same component as the screen. Details: [docs/architecture.md](docs/architecture.md).
 

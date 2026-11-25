@@ -2,9 +2,12 @@
 # At every boot: ends a system update's trial (ADR 0019). In the new slot it waits until the
 # server and the kiosk are healthy and makes the slot the default, or reboots, which starts the
 # old slot again (tryboot lasts one boot). A rollback is sursum-system-check's, before the server.
+# Ordered after the server only (its start job ends within its TimeoutStartSec), never after the
+# kiosk: the trial asks /healthz/trial, which needs the screen connected anyway, and its clock must
+# start even if the kiosk never gets going.
 [Unit]
 Description=Confirm or roll back a system update on trial
-After=sursum.service sursum-kiosk.service
+After=sursum.service
 
 [Service]
 Type=exec

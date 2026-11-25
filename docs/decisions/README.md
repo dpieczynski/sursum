@@ -14,7 +14,7 @@ supersedes the old one instead of editing it.
 | [0006](0006-in-memory-search.md) | In-memory search with explicit Polish folding, not FTS5 |
 | [0007](0007-http-first.md) | Plain HTTP in the MVP; optional device CA later |
 | [0008](0008-exclusion-zones.md) | Screen profile with exclusion zones (pillar in Tulce) |
-| [0009](0009-display-engine-chromium.md) | Chromium under cage as the display engine for now (amended: policies; cog and WebKitGTK under cage rejected; a WPE-on-DRM spike with a rebuilt 2.54 package and WebKit's own MiniBrowser decides the switch) |
+| [0009](0009-display-engine-chromium.md) | *Superseded by ADR 0027.* Chromium under cage as the display engine for now (amended: policies; cog and WebKitGTK under cage rejected; a WPE-on-DRM spike with a rebuilt 2.54 package and WebKit's own MiniBrowser decides the switch) |
 | [0010](0010-license-gpl3.md) | GPL-3.0-or-later and dependency license policy |
 | [0011](0011-github-and-dco.md) | GitHub hosting, DCO for contributions; public repository (amended 2026-11-19) |
 | [0012](0012-display-power-cec-pjlink.md) | Display power control via HDMI-CEC, PJLink fallback (both built) |
@@ -32,3 +32,4 @@ supersedes the old one instead of editing it.
 | [0024](0024-one-level-of-rights.md) | One level of rights: a paired remote may do everything; no admin mode, pairing stays |
 | [0025](0025-versioned-songs-and-sets.md) | Songs and sets keep their identity and get versions; more changes win, the other version waits for review; sets per church with a date; one `.sursum` file with sets and pictures; no migration (not built yet) |
 | [0026](0026-public-release-images.md) | Public release images: no administrator SSH key (owners add one on the persistent partition), a package list and a GPL sources offer with every release, pinned release actions |
+| [0027](0027-wpe-replaces-chromium.md) | WPE WebKit's MiniBrowser on DRM replaces Chromium under cage: no compositor, our trixie rebuild of 2.54, the kiosk starts once the server answers (supersedes ADR 0009's engine choice) |

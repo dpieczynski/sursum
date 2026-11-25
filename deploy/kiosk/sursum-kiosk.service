@@ -1,43 +1,44 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# The screen: Chromium in kiosk mode under cage on tty1 (ADR 0009), after the official
-# rpi-image-gen `examples/webkiosk` unit. Used by the device image (image/layer/sursum-kiosk.yaml).
-# Unlike the example, no wait for time sync: a church may have no internet at all.
+# The screen (ADR 0027): WebKit's own MiniBrowser from our trixie rebuild of WPE WebKit 2.54, on
+# the DRM platform, run by its own user, without a compositor. Installed by
+# image/layer/sursum-kiosk.yaml; the screen guard restarts it and the system update's trial waits
+# for it under this name.
 
 [Unit]
-Description=sursum screen (cage + Chromium kiosk)
-After=sursum.service seatd.service
-Wants=sursum.service seatd.service
+Description=sursum screen (WPE WebKit MiniBrowser on DRM)
+After=sursum.service
+Wants=sursum.service
 Conflicts=getty@tty1.service
 After=getty@tty1.service
 
 [Service]
 User=sursum-kiosk
+# The GPU (card and render node) and input devices, without a logind session: the first process
+# that opens the card becomes its DRM master.
+SupplementaryGroups=video render input
 TTYPath=/dev/tty1
 RuntimeDirectory=sursum-kiosk
 RuntimeDirectoryMode=0700
 Environment=XDG_RUNTIME_DIR=/run/sursum-kiosk
-# Transparent cursors only (blank-cursors.sh): cage cannot hide its own cursor, and Chromium sets
-# one after every page reload. The private path keeps other programs' cursors.
-Environment=XCURSOR_PATH=/usr/share/sursum/cursors
-Environment=XCURSOR_THEME=sursum-blank
+Environment=WPE_PLATFORM=drm
 # The screen talks to the server on this machine only (CLAUDE.md rule 3: no network resources).
-# Enforced by systemd for every process of the kiosk, whatever the browser tries: Debian's
-# Chromium ships Google API keys, and with them registers for push messaging in the background
-# despite --disable-background-networking.
 IPAddressAllow=localhost
 IPAddressDeny=any
-# The browser command. What Chromium must not do is set by managed policies
-# (chromium-policies.json); these flags cover only what no policy does. To try another command
-# without a new image, put KIOSK_APP=... into /var/lib/sursum/kiosk.env (it wins over this line).
-# It opens a black page on the system (start.html) that opens the screen once the server answers:
-# sent straight to the server while it is down, Chromium would show its error page and stay there.
-Environment="KIOSK_APP=/usr/bin/chromium --ozone-platform=wayland --kiosk --noerrdialogs --disable-session-crashed-bubble --hide-crash-restore-bubble --incognito --no-first-run --disable-background-networking --disable-pinch --overscroll-history-navigation=0 --password-store=basic --user-data-dir=/run/sursum-kiosk/chromium file:///usr/share/sursum/kiosk/start.html"
-# The display mode the kiosk session keeps (WIDTHxHEIGHT@HZ, or "native" for the display's own
-# preferred mode); cage alone would always take the preferred mode, e.g. 4K at 30 Hz on a TV.
-Environment=SURSUM_SCREEN_MODE=1920x1080@60
+# The browser starts only once the server answers: opened while the server is down, it would show
+# WebKit's error page (CLAUDE.md, hard rule 3). Until then nothing holds the display, so it stays
+# black, at boot and whenever the kiosk restarts (the screen guard, a crash). A local page that
+# asks the server first cannot do this: WebKit does not let a file:// page reach it. Once open, the
+# page stays when the server goes away and reconnects by itself. wait-for-server waits inside
+# ExecStart and then becomes the browser; in ExecStartPre the unit would stay "activating" while
+# the server is down and hold up whatever waits for it (see the script).
+# MiniBrowser's background is white unless told otherwise. To try another command or variable
+# without a new image (e.g. WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 if the web process's
+# bubblewrap sandbox fails), put it into /var/lib/sursum/kiosk.env.
+Environment="KIOSK_APP=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0/MiniBrowser --fullscreen --bg-color=black http://localhost/screen/"
 EnvironmentFile=-/var/lib/sursum/kiosk.env
-# $KIOSK_APP (unbraced) is split into words by systemd.
-ExecStart=/usr/bin/cage -- /usr/lib/sursum/kiosk-session $KIOSK_APP
+# $KIOSK_APP (unbraced) is split into words by systemd; env runs the first one. A KIOSK_APP
+# override keeps the wait.
+ExecStart=/usr/lib/sursum/wait-for-server /usr/bin/env $KIOSK_APP
 Restart=always
 RestartSec=1
 StandardError=journal

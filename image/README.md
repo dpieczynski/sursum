@@ -9,10 +9,10 @@ two layers of ours.
 |---|---|
 | `config/sursum.yaml` | the build config: Pi 5, partition sizes, host name `sursum`, admin user `admin` (SSH key only) |
 | `layer/sursum-device.yaml` | the server in the read-only system (ADR 0022), its user and unit, `/var/lib/sursum` shared by both slots, Avahi (`sursum.local`), nftables, hardware watchdog, 64M journal, silent black boot, Ethernet only |
-| `layer/sursum-kiosk.yaml` | cage + Chromium + seatd, the kiosk user and unit, Chromium managed policies, transparent cursors |
+| `layer/sursum-kiosk.yaml` | the screen (ADR 0027): WPE WebKit's MiniBrowser on DRM from our rebuilt packages (`just wpe-debs`), the kiosk user and unit, the wait for the server |
 | `build.Containerfile` | a Debian trixie build host with the pinned rpi-image-gen, for podman |
 
-Units, policies and the cursor generator are not copied here: the layers install them from
+Units and the kiosk's wait script are not copied here: the layers install them from
 `deploy/systemd/` and `deploy/kiosk/`, so there is one copy of each.
 
 ## Building
@@ -55,8 +55,8 @@ kernel for it).
   first remote that opens `http://sursum.local/` sets the PIN and names the church.
 - **Screen**: black from power-on (no rainbow, kernel logo, console or cursor) until the page shows
   the parish logo. The display runs at 1920×1080 at 60 Hz: `video=HDMI-A-1:1920x1080@60D` in the
-  kernel command line keeps HDMI0 on even without a display, and the kiosk session sets that mode
-  through cage (which would otherwise take a 4K TV's 30 Hz mode) and keeps it after a hotplug.
+  kernel command line keeps HDMI0 on even without a display, and the browser keeps that mode (it
+  draws on DRM directly, with no compositor), also after a hotplug.
 - **Network**: Ethernet with DHCP; Wi-Fi and Bluetooth are switched off in `config.txt`. The
   firewall accepts HTTP and SSH from private addresses only, plus mDNS, DHCP and ping. The kiosk
   itself may reach localhost only.
@@ -85,10 +85,11 @@ kernel for it).
 - **Read the journal from the card**: the journal is persistent, so it holds every boot that
   reached systemd. Put the card into a Linux laptop, mount the `persistent` partition read-only
   and run `journalctl -D <mount>/log/journal --list-boots`, then `-b -1` and so on.
-- **The WPE spike image**: `just image n wpe` replaces the Chromium kiosk with WebKit's
-  MiniBrowser on the DRM platform, without cage (layer `sursum-kiosk-wpe`, packages from
-  `.github/workflows/wpewebkit.yml` in `target/wpe-debs`, version suffix `+wpe`; ADR 0009
-  amendment of 2026-11-19). For the spike only; installing the normal update brings Chromium back.
+- **The WPE WebKit packages**: `just image` needs them in `target/wpe-debs`; `just wpe-debs`
+  fetches the latest successful build of `.github/workflows/wpewebkit.yml` on main started by a
+  push or by hand (`just wpe-debs any` also takes a pull request's, for a trial image;
+  `just wpe-debs <run id>` that run). The artifact expires after 90 days: run that workflow on
+  main again before then.
 - **A diagnostic image**: `just image y` builds an image that shows the firmware's rainbow
   screen and the kernel's and systemd's messages on the screen (until the kiosk takes it) instead
   of a black boot (layer variable `sursum.diagnostic_boot`). It is otherwise identical; never ship
