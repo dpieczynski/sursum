@@ -35,7 +35,7 @@ mod ui;
 use leptos::prelude::*;
 use messages::{Msg, pl};
 use shell::{CurrentView, View};
-use sursum_client::{Client, needs_reload};
+use sursum_client::{Client, server_change};
 use sursum_protocol::{ClientMsg, CmdOutcome, Command, RemoteState, Role, ServerMsg};
 
 fn main() {
@@ -110,7 +110,9 @@ fn App(info: sursum_protocol::SessionInfo) -> impl IntoView {
     provide_context(toasts);
 
     let client = Client::connect(Role::Remote, move |message| match message {
-        ServerMsg::Welcome { .. } if needs_reload(&message) => reload(),
+        // Unlike the screen, the remote reloads at once on either change: nobody but the
+        // operator sees it, and the server that just answered is up.
+        ServerMsg::Welcome { .. } if server_change(&message).is_some() => reload(),
         ServerMsg::Remote { state: snapshot } => state.set(Some(snapshot)),
         ServerMsg::CmdResult { outcome: CmdOutcome::Stale { .. }, .. } => {
             toasts.show(pl(Msg::AlreadyAdvanced));

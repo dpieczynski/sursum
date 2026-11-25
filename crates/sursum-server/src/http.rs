@@ -47,6 +47,7 @@ struct App {
     presence: crate::screen_guard::ScreenPresence,
     allow_public_clients: bool,
     wasm_delay_ms: u64,
+    protocol_version: u16,
     maintenance: Maintenance,
     installation: sursum_protocol::Installation,
 }
@@ -100,6 +101,7 @@ pub fn router(
         allowed_hosts: Arc::new(config.allowed_hosts.clone()),
         allow_public_clients: config.allow_public_clients,
         wasm_delay_ms: config.wasm_delay_ms,
+        protocol_version: config.protocol_version,
         maintenance,
         installation: config.installation,
     };
@@ -789,6 +791,7 @@ fn socket(
         power: app.power.clone(),
         presence: app.presence.clone(),
         local_peer,
+        protocol: app.protocol_version,
     };
     let limit = match role {
         Role::Screen => ws::MAX_SCREEN_MESSAGE,

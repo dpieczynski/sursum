@@ -205,8 +205,12 @@ restart after a server restart, so clients apply every snapshot instead of compa
 
 `Hello` → `Welcome` + full snapshot. The screen compares `deck.deck_id` and the slide key with what
 it shows; if equal, it redraws nothing (no transition). Backoff 250 ms → 5 s with jitter; ping
-every 5 s; no pong for 15 s → reconnect. A different `protocol` or `build_id` makes the page reload
-(the screen waits until it shows an overlay or the program changes).
+every 5 s; no pong for 15 s → reconnect. A different `protocol` or `build_id` in `Welcome` makes the
+page reload. With another `protocol` the server closes the socket right after `Welcome` and sends no
+snapshot, so the screen reloads at once (over the black background of its `index.html`, after
+`/healthz` answers). With the same `protocol` and another `build_id` snapshots keep coming, and the
+screen waits until nothing is visible to the congregation: no live slide, or black or the logo on
+top. The remote reloads at once in both cases.
 
 ## Type notes
 

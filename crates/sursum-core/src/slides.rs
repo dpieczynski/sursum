@@ -128,8 +128,9 @@ fn verse_slides(verse: &Verse, occurrence: usize, rules: SlideRules) -> Vec<Slid
 
 /// What the remote needs to name a verse: its kind, number and letter from the verse name
 /// (`v2` → verse 2, `c` → chorus, `v1a` → verse 1, letter a), or its own label. A name that does
-/// not follow that pattern (`x9z1`, possible only in hand-made files) is an "other" section
-/// labelled with the name, so nothing is lost.
+/// not follow that pattern (`x9z1`, possible only in hand-made files) or whose number does not
+/// fit a `u32` is an "other" section labelled with the name, so nothing is lost. A blank label
+/// (`[]` in OpenSong) counts as none, so the remote never shows an empty name.
 pub fn section_name(verse: &Verse) -> SectionName {
     let name = verse.name.0.as_str();
     let mut chars = name.chars();
@@ -146,18 +147,27 @@ pub fn section_name(verse: &Verse) -> SectionName {
     let rest = chars.as_str();
     let digits = rest.trim_end_matches(|c: char| c.is_ascii_alphabetic());
     let mut suffix = rest[digits.len()..].chars();
-    let parsed = (kind, digits.chars().all(|c| c.is_ascii_digit()), suffix.next(), suffix.next());
-    match parsed {
-        (Some(kind), true, letter, None) => {
-            SectionName { kind, number: digits.parse().ok(), suffix: letter, label: verse.label.clone() }
-        }
+    // `Some(None)`: no number (`c`); `None`: not a number we can keep (`x9`, an overflow).
+    let number = match digits {
+        "" => Some(None),
+        digits if digits.chars().all(|c| c.is_ascii_digit()) => digits.parse::<u32>().ok().map(Some),
+        _ => None,
+    };
+    let label = custom_label(verse);
+    match (kind, number, suffix.next(), suffix.next()) {
+        (Some(kind), Some(number), letter, None) => SectionName { kind, number, suffix: letter, label },
         _ => SectionName {
             kind: SectionKind::Other,
             number: None,
             suffix: None,
-            label: Some(verse.display_label()),
+            label: Some(label.unwrap_or_else(|| name.to_owned())),
         },
     }
+}
+
+/// The verse's own label, unless it is blank.
+fn custom_label(verse: &Verse) -> Option<String> {
+    verse.label.clone().filter(|label| !label.trim().is_empty())
 }
 
 /// Splits the lines of a verse into slide-sized chunks.
@@ -333,10 +343,14 @@ mod tests {
             label: None,
             blocks: vec![block(count, BreakKind::Optional), block(count, BreakKind::None)],
         };
+        let verse_one = SectionName { kind: SectionKind::Verse, number: Some(1), suffix: None, label: None };
+        let piece = |piece| SlidePart::Section { section: verse_one.clone(), piece };
         let short = compile_song(&song(vec![verse(2)], &[]), &ItemId::from("i"), None, SlideRules::default());
-        assert_eq!(short.slides.len(), 1);
+        let parts: Vec<&SlidePart> = short.slides.iter().map(|slide| &slide.part).collect();
+        assert_eq!(parts, [&piece(0)]);
         let long = compile_song(&song(vec![verse(4)], &[]), &ItemId::from("i"), None, SlideRules::default());
-        assert_eq!(long.slides.len(), 2);
+        let parts: Vec<&SlidePart> = long.slides.iter().map(|slide| &slide.part).collect();
+        assert_eq!(parts, [&piece(0), &piece(1)]);
     }
 
     #[test]
@@ -363,18 +377,15 @@ mod tests {
             label: None,
             blocks: vec![block(2, BreakKind::Forced), block(2, BreakKind::None)],
         };
-        let song = song(vec![Verse::simple("v2", &["a"]), long], &["v2", "c"]);
+        // The chorus comes twice: each time its pieces count from 0 again.
+        let song = song(vec![Verse::simple("v2", &["a"]), long], &["v2", "c", "c"]);
         let deck = compile_song(&song, &ItemId::from("i"), None, SlideRules::default());
+        assert_eq!(keys(&deck), ["v2#0@0", "c#0@0", "c#1@0", "c#0@1", "c#1@1"]);
         let parts: Vec<&SlidePart> = deck.slides.iter().map(|slide| &slide.part).collect();
         let section = |kind, number| SectionName { kind, number, suffix: None, label: None };
-        assert_eq!(
-            parts,
-            [
-                &SlidePart::Section { section: section(SectionKind::Verse, Some(2)), piece: 0 },
-                &SlidePart::Section { section: section(SectionKind::Chorus, None), piece: 0 },
-                &SlidePart::Section { section: section(SectionKind::Chorus, None), piece: 1 },
-            ]
-        );
+        let verse = |piece| SlidePart::Section { section: section(SectionKind::Verse, Some(2)), piece };
+        let chorus = |piece| SlidePart::Section { section: section(SectionKind::Chorus, None), piece };
+        assert_eq!(parts, [&verse(0), &chorus(0), &chorus(1), &chorus(0), &chorus(1)]);
     }
 
     #[test]
@@ -393,6 +404,39 @@ mod tests {
             SectionName { kind: SectionKind::Other, number: None, suffix: None, label: Some("x9z1".into()) },
             "an odd name is shown as written"
         );
+    }
+
+    #[test]
+    fn a_blank_custom_label_is_no_label() {
+        for blank in ["", "  "] {
+            let mut verse = Verse::simple("o1", &["a"]);
+            verse.label = Some(blank.to_owned());
+            assert_eq!(
+                section_name(&verse),
+                SectionName { kind: SectionKind::Other, number: Some(1), suffix: None, label: None },
+                "label {blank:?}"
+            );
+        }
+        let mut odd = Verse::simple("x9z1", &["a"]);
+        odd.label = Some(" ".to_owned());
+        assert_eq!(section_name(&odd).label.as_deref(), Some("x9z1"), "an odd name falls back to the name");
+    }
+
+    #[test]
+    fn a_number_too_big_to_keep_is_shown_as_written() {
+        let verse = Verse::simple("v12345678901", &["a"]);
+        assert_eq!(
+            section_name(&verse),
+            SectionName {
+                kind: SectionKind::Other,
+                number: None,
+                suffix: None,
+                label: Some("v12345678901".into())
+            }
+        );
+        let mut labelled = Verse::simple("v12345678901", &["a"]);
+        labelled.label = Some("Zwrotka długa".to_owned());
+        assert_eq!(section_name(&labelled).label.as_deref(), Some("Zwrotka długa"));
     }
 
     #[test]

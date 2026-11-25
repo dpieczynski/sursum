@@ -8,7 +8,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use leptos::prelude::*;
-use sursum_client::{Client, needs_reload};
+use sursum_client::{Client, ServerChange, server_change};
 use sursum_protocol::{Overlay, Role, ScreenState, ServerMsg};
 use sursum_slide::LayeredStage;
 
@@ -23,10 +23,16 @@ fn App() -> impl IntoView {
     let reload_pending = StoredValue::new(false);
 
     let client = Client::connect(Role::Screen, move |message| match message {
-        ServerMsg::Welcome { .. } if needs_reload(&message) => {
-            reload_pending.set_value(true);
-            reload_if_safe(state.get_untracked().as_ref());
-        }
+        ServerMsg::Welcome { .. } => match server_change(&message) {
+            // No snapshot follows on this connection, so there is no safer moment to wait for;
+            // the reload happens over the black background of `index.html`.
+            Some(ServerChange::Protocol) => reload(),
+            Some(ServerChange::Build) => {
+                reload_pending.set_value(true);
+                reload_if_safe(state.get_untracked().as_ref());
+            }
+            None => {}
+        },
         ServerMsg::Screen { state: snapshot } => {
             if reload_pending.get_value() {
                 // A new build is running: reload at a moment the congregation will not notice.

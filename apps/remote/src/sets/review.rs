@@ -123,11 +123,14 @@ fn item_row(item: SetVersionItem, added: RwSignal<BTreeSet<ItemId>>) -> impl Int
             </button>
         }
     });
-    let number = song_number(item.song_number.as_deref());
+    // No empty span: it would still take a gap in the row.
+    let number = Some(song_number(item.song_number.as_deref()))
+        .filter(|number| !number.is_empty())
+        .map(|number| view! { <span class="review-item-number">{number}</span> });
     view! {
         <li class="review-item" class:differs=item.missing_elsewhere>
             <span class="review-item-title">{item.title}</span>
-            <span class="review-item-number">{number}</span>
+            {number}
             {button}
         </li>
     }

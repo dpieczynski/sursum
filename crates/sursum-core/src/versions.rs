@@ -295,6 +295,29 @@ mod tests {
     }
 
     #[test]
+    fn the_review_puts_live_versions_before_a_deletion_and_breaks_ties_by_id() {
+        let common = Heads::of([Version::first(text("wspólna"))]);
+        let a = edit(&common, "a");
+        let b = edit(&common, "b");
+        // The deletion has more changes behind it, yet a live version still goes first.
+        let elsewhere = edit(&edit(&common, "c1"), "c2");
+        let deleted = elsewhere.with(elsewhere.delete().unwrap());
+        let merged = a.merge(&b).merge(&deleted);
+        let deletion = deleted.current().unwrap();
+        assert!(deletion.changes() > a.current().unwrap().changes());
+
+        let ranked = merged.ranked();
+        assert_eq!(ranked.len(), 3);
+        let (first, second) = (ranked[0], ranked[1]);
+        assert_eq!(first.changes(), second.changes(), "a tie in changes");
+        assert!(first.id() > second.id(), "the greater id goes first");
+        let live: BTreeSet<&[u8]> = [first, second].into_iter().filter_map(Version::live_body).collect();
+        assert_eq!(live, BTreeSet::from([b"a".as_slice(), b"b"]));
+        assert_eq!(ranked[2], deletion, "the deletion comes last");
+        assert_eq!(merged.ranked().first().copied(), merged.current());
+    }
+
+    #[test]
     fn an_ordinary_edit_keeps_the_other_live_version_but_absorbs_a_lost_deletion() {
         let common = Heads::of([Version::first(text("a"))]);
         let merged = edit(&edit(&common, "b"), "c").merge(&edit(&common, "d"));
@@ -400,6 +423,8 @@ mod tests {
             proptest::prop_assert_eq!(&a, &b);
             proptest::prop_assert_eq!(&a, &c);
             proptest::prop_assert_eq!(a.current().map(Version::id), c.current().map(Version::id));
+            proptest::prop_assert_eq!(a.ranked(), c.ranked());
+            proptest::prop_assert_eq!(a.ranked().first().copied(), a.current());
         }
 
         #[test]
