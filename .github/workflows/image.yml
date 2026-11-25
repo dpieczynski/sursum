@@ -41,6 +41,10 @@ jobs:
           tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
       - name: Podman
         run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      - name: The rebuilt WPE WebKit packages (ADR 0027)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just wpe-debs
       - name: A throwaway update key
         run: |
           cargo run -q -p sursum-server -- system keygen "$RUNNER_TEMP/trial.key" | tee -a "$GITHUB_ENV"

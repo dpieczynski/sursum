@@ -15,7 +15,8 @@ device:
 image:
   name: sursum
   boot_part_size: 128M
-  # cage, Wayland and Chromium need far more than the base image's 512M.
+  # The browser needs far more than the base image's 512M (the system is about 430M now; a slot
+  # cannot grow on a device once flashed, so it keeps room for later releases).
   system_part_size: 1500M
   # Small in the image: sursum-grow-persistent grows it to fill the card before its first mount
   # (rpi-image-gen itself does not). Holds the first release, the journal and both slots' /var.

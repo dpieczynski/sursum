@@ -70,8 +70,8 @@ started them another way).
   song, exclusion zones, set edits not affecting the screen), using classic WebDriver only (no
   CDP). The `wasm-bindgen-test` suite of `sursum-slide` runs on Chromium only. A cross-engine test
   compares the fitted font size and line count between WPE (screen) and Chromium (remote). The
-  tests start WPE 2.48 through cog, which is not what a device would ship (ADR 0009 amendment);
-  they guard the screen's API contract, not a launcher.
+  tests start WPE 2.48 through cog, while the device ships 2.54 with MiniBrowser (ADR 0027);
+  they guard the screen's API contract, not the launcher. Moving them to 2.54 is on the roadmap.
 - **The remote on WebKit (ADR 0021)**: the remote suites (`remote`, `remote_live`,
   `remote_sets`, `remote_library`) run **blocking** with `SURSUM_E2E_REMOTE_BROWSER=webkitgtk`:
   WebKitGTK's `WebKitWebDriver` and MiniBrowser under Xvfb (port 9517), the screen on Chromium.

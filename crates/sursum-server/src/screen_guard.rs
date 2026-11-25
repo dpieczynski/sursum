@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Watching the screen's connection (plan §11.3). The kiosk browser keeps one WebSocket open; if
-//! it is gone for longer than a grace period (a crashed renderer, a "sad tab", a stopped kiosk),
+//! it is gone for longer than a grace period (a crashed web process, a stopped kiosk),
 //! the server runs a configured command — on the device, restarting the kiosk unit. Remotes are
 //! told whether a screen is connected, so the operator knows the slide is really up there.
 //!
@@ -30,8 +30,8 @@ fn default_grace_s() -> u64 {
     15
 }
 
-/// After the server starts, the kiosk gets this long to connect for the first time (cage and
-/// Chromium may start well after the server).
+/// After the server starts, the kiosk gets this long to connect for the first time (the browser
+/// may start well after the server).
 const STARTUP_GRACE: Duration = Duration::from_secs(60);
 
 /// After running the command, wait this long before trying again (the kiosk needs time to start).

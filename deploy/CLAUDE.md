@@ -22,9 +22,9 @@ way to run the screen (ADR 0023).
 - **Silent boot**: from power-on the HDMI output may show only black, logo or content (black
   until the page draws; there is no splash image). Any change to `cmdline.txt`, `config.txt` or
   the kiosk unit must be verified on a real Pi (ideally with an HDMI capture) before merging.
-- HDMI mode is forced (`video=HDMI-A-1:1920x1080@60D`, decided 2026-11-17, ADR 0013 amendment);
-  cage ignores the kernel parameter for its own mode, so `deploy/kiosk/kiosk-session` sets and
-  keeps `SURSUM_SCREEN_MODE` with `wlr-randr`. Do not rely on hotplug or EDID. Native or another forced mode only if an installation needs it.
+- HDMI mode is forced (`video=HDMI-A-1:1920x1080@60D`, decided 2026-11-17, ADR 0013 amendment)
+  and the browser keeps the kernel's mode (WPE's DRM platform has no mode option). Do not rely on
+  hotplug or EDID. Another mode for an installation means another kernel command line.
 - The display is connected directly to the Pi's **HDMI0** port (`/dev/cec0` for HDMI-CEC power
   control, ADR 0012). The server unit reaches `/dev/cec0` (`root:video`) through
   `SupplementaryGroups=video`; the image turns CEC on in `/etc/sursum/config.toml`;
@@ -32,16 +32,15 @@ way to run the screen (ADR 0023).
 - After an OS reboot the screen starts with the logo and the set position restored; after a
   process restart the screen is fully restored (ADR 0003).
 - The kiosk's default command line lives in its unit (`deploy/kiosk/sursum-kiosk.service`);
-  `KIOSK_APP=` or `SURSUM_SCREEN_MODE=` in `/var/lib/sursum/kiosk.env` override it per device
-  without a new image (ADR 0009). The engine is Chromium under cage; what Chromium must not
-  do goes into **managed policies** (`/etc/chromium/policies/managed/`), the command line keeps
-  only what no policy covers, cage gets a transparent cursor theme, and the kiosk unit may reach
-  localhost only (`IPAddressAllow=localhost`, `IPAddressDeny=any`; all in `deploy/kiosk/`).
-  The browser opens `file:///usr/share/sursum/kiosk/start.html` (black, opens `/screen/` once
-  `/healthz` answers), never the server directly: a server that is down would leave the browser
-  on its error page. A `KIOSK_APP` override in `kiosk.env` should keep that page.
-  cog is legacy and not used on devices. A spike decides whether WPE WebKit 2.54 on DRM (our
-  rebuild of Debian's source package, WebKit's own MiniBrowser, no cage) replaces all of this
-  (ADR 0009 amendment of 2026-11-19).
+  `KIOSK_APP=` in `/var/lib/sursum/kiosk.env` overrides it per device without a new image. The
+  engine is WPE WebKit's MiniBrowser on the DRM platform, no compositor (ADR 0027), from our trixie
+  rebuild of Debian's 2.54 source package (`.github/workflows/wpewebkit.yml`; `just wpe-debs`
+  fetches it for `just image`). Debian's package does not declare everything it needs at run time,
+  so the layer names `libwpebackend-fdo-1.0-1`, `bubblewrap`, `xdg-dbus-proxy` and `libgles2` and
+  checks them at build time. The kiosk unit may reach localhost only (`IPAddressAllow=localhost`,
+  `IPAddressDeny=any`) and starts the browser only once `/healthz` answers
+  (`ExecStartPre=/usr/lib/sursum/wait-for-server`), then opens `/screen/` directly: a browser sent
+  to a server that is down shows its error page, and WebKit does not let a local page ask the
+  server first. A `KIOSK_APP` override keeps that wait (it is in the unit, not the command).
 - Pin the rpi-image-gen version. Never commit secrets (PINs, signing keys, certificates); the
   update signing key lives outside the repo (CI secret `SURSUM_BUNDLE_SIGNING_KEY`).

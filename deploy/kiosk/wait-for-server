@@ -1,0 +1,19 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Waits until the server on this machine answers GET /healthz with 200, asking every half second
+# (ExecStartPre of the WPE kiosk unit). A browser that opens the screen while the server is down
+# shows its own error page; until this returns, nothing holds the display and it stays black (the
+# kernel's empty console). The image has no curl, so this talks HTTP through bash's /dev/tcp.
+
+answers() {
+    exec 3<>/dev/tcp/127.0.0.1/80 || return 1
+    printf 'GET /healthz HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3
+    local status=""
+    IFS= read -r -t 2 status <&3
+    exec 3<&-
+    [[ $status == "HTTP/1."?" 200"* ]]
+}
+
+until answers 2>/dev/null; do
+    sleep 0.5
+done

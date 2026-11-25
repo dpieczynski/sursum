@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# WPE WebKit 2.54 for Debian 13 trixie on arm64, for the WPE-on-DRM spike (ADR 0009 amendment of
-# 2026-11-19): Debian's own source package from sid, rebuilt unchanged against trixie in a trixie
-# container on a native arm64 runner. Trixie itself stays at 2.48 (Debian never rebases it). The
-# packages are kept as this run's artifact `wpewebkit-debs`, which the spike image installs
-# (spike-wpe.yml). Runs when this file changes in a pull request, and by hand.
-name: WPE WebKit for trixie (spike)
+# WPE WebKit 2.54 for Debian 13 trixie on arm64, the screen's engine (ADR 0027): Debian's own
+# source package from sid, rebuilt unchanged against trixie in a trixie container on a native arm64
+# runner. Trixie itself stays at 2.48 (Debian never rebases it). The packages are kept as this
+# run's artifact `wpewebkit-debs`; every device image installs the latest successful run's
+# (`just wpe-debs`, image.yml, release.yml). Artifacts expire after 90 days, so run this again by
+# hand before then, and when sid has a new version. Runs when this file changes in a pull request.
+name: WPE WebKit for trixie
 
 on:
   pull_request:
@@ -58,7 +59,7 @@ jobs:
           cp /build/*.deb /build/out/
           ls -l /build/out
           dpkg-deb -c /build/out/libwpewebkit-2.0-1_*.deb | grep -E 'MiniBrowser|libWPEWebKit|WPEWebProcess'
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wpewebkit-debs
           path: /build/out/*.deb

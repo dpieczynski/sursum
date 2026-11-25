@@ -45,7 +45,7 @@ below comes before new features. Order: CI image build, one update path, engine 
   that restores the database
 - [ ] Reflash the pilot Pi with the new image and start clean (PIN, church, OpenSong import,
   calibration, logo; ADR 0022 amendment)
-- [ ] WPE-on-DRM spike (ADR 0009 amendment of 2026-11-19): rebuild sid's `wpewebkit` 2.54 for
+- [x] WPE-on-DRM spike (ADR 0009 amendment of 2026-11-19): rebuild sid's `wpewebkit` 2.54 for
   trixie arm64 in CI; spike image with `WPE_PLATFORM=drm MiniBrowser --fullscreen
   --bg-color=black` and no cage, sent to the pilot Pi as a system update; check start without a
   compositor, forced 1080p60 after a late TV and a replug, no cursor, web process death, boot to
@@ -55,8 +55,32 @@ below comes before new features. Order: CI image build, one update path, engine 
   Built so far (2026-11-20): `wpewebkit.yml` rebuilds sid's source package for trixie arm64
   (artifact `wpewebkit-debs`); `just image n wpe` swaps the kiosk layer for
   `sursum-kiosk-wpe` (MiniBrowser, `WPE_PLATFORM=drm`, no cage, version suffix `+wpe`);
-  `spike-wpe.yml` (by hand on main) builds it signed as a system update for the pilot Pi. The
-  checks on the Pi are still to do
+  `spike-wpe.yml` (by hand on main) builds it signed as a system update for the pilot Pi.
+  On the pilot Pi (2026-11-25, a local `just image n wpe` of v0.3.0, against the v0.3.0 release
+  with Chromium): the package does not declare what MiniBrowser and the web process need at run
+  time (`libwpebackend-fdo-1.0-1`, `bubblewrap`, `xdg-dbus-proxy`, `libgles2`; two trials rolled
+  back by themselves before the layer named them and checks them at build time). Then WPE on DRM
+  ran without cage, seatd or a cursor theme and passed the trial. Measured: system image 429 MB
+  (Chromium 549 MB), kiosk 241 MB PSS (Chromium 524 MB), screen connected ≈ 10.5 s after the
+  kernel started (Chromium ≈ 13 s), boot black → logo without Chromium's gray frame, 1080p60 kept
+  from the kernel (cage first switched to the TV's 4K30), smooth crossfades, logo, no cursor,
+  display off/on and HDMI replug fine. A killed web process is not restarted by MiniBrowser: the
+  screen showed the logo or black until the screen guard restarted the kiosk (15.5 s). WebKit
+  does not let a local `file://` page ask the server, so Chromium's `start.html` cannot keep the
+  screen black here; the WPE unit instead starts the browser only once `/healthz` answers
+  (`wait-for-server`) and opens `/screen/` directly: with the server crash-looping the screen
+  stayed black and came back 0.5 s after the server did. Still open: RAM after 8 h (never
+  measured for Chromium either), then the ADR
+- [x] Switch to WPE (ADR 0027, 2026-11-25): MiniBrowser on DRM is the screen; cage, seatd,
+  `wlr-randr`, `kiosk-session`, the cursor theme, Chromium's policies and kiosk unit and
+  `start.html` removed; `just image` always builds it (`just wpe-debs`, image.yml and
+  release.yml fetch the packages); `spike-wpe.yml` removed
+- [ ] After the switch: memory after 8 h on the pilot Pi (never measured for Chromium either);
+  the WebDriver screen tests on WPE 2.54 with MiniBrowser instead of 2.48 through cog (or
+  drop cog); keep the rebuilt packages somewhere durable (the artifact of 2026-11-20 expires
+  around 2027-02-18; rerun `wpewebkit.yml` before then) and rebuild when sid has a new
+  version; consider a shorter screen guard grace, since MiniBrowser does not restart a dead
+  web process (15.5 s of black or logo on the Pi)
 - [x] Smaller findings of the audit (2026-11-20): `ImageFit` and `Deck.background` removed
   (pictures always whole, layers black in `slide.css`); the Windows build is `just desktop-windows`
   in both workflows (one build id from the justfile); `OpenForDevelopment` and `LocalOwner` are
@@ -97,7 +121,8 @@ An external review of main was checked claim by claim; what held up is fixed in 
   crash-looping server: the screen connected 0.5 s after the server came back. Not yet tried in
   the WPE spike image. The same test showed the live slide for a moment when the screen page
   loaded under black (the first overlay faded in like any later one); the first snapshot's
-  overlay now appears at once
+  overlay now appears at once. (Since ADR 0027 the WPE kiosk waits for the server instead of
+  `start.html`.)
 - [x] A rollback left empty `-shm`/`-wal` files next to the database moved to `rolled-back/`;
   now only the database and a WAL with pending changes are moved
 - [x] The damaged-database restore failed on Windows (os error 5): the restored file was flushed
@@ -194,7 +219,7 @@ test passes in Chromium and WPE; CI is green.
 - [x] `sursum-client`: WebSocket with reconnect (backoff + jitter), heartbeat, Hello/Welcome, build-id reload. No stale-`rev` dropping: messages arrive in order per connection and server revisions restart after a server restart, so clients apply every snapshot
 - [x] remote: current/next preview, next/prev, item prev/next, section chips (now slide tiles, ADR 0017), set list, BLACK/LOGO, pedal keys (PgDn/PgUp/arrows/space/B). UI texts via a compile-time message enum (`apps/remote/src/messages.rs`); `leptos_i18n` deferred until a second language is needed
 - [ ] On-site display power spike: `cec-ctl` on both displays (on / standby / power status), projector LAN (PJLink) and RS-232 check in Tulce; record result in ADR 0012
-- [ ] Hardware spike on a Pi 5: cage + Chromium ran on the pilot Pi 5 (2026-11-17, see M4: flags and policies ✓, cursor ✓ transparent theme, forced 1080p60 ✓; first boot showed black, then the logo). Still open: white flash ⚠, a brief gray frame at boot before the logo ⚠ (seen 2026-11-24 after the firmware and kernel's black; also with the kiosk opening `/screen/` directly, but not on kiosk restarts, which do the same 4K30 → 1080p60 mode change) and crossfade smoothness, checked with an HDMI capture, and a first look at the Tulce pillar. The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)
+- [ ] Hardware spike on a Pi 5: cage + Chromium ran on the pilot Pi 5 (2026-11-17, see M4: flags and policies ✓, cursor ✓ transparent theme, forced 1080p60 ✓; first boot showed black, then the logo). Still open: white flash ⚠, a brief gray frame at boot before the logo under Chromium (gone with WPE, which boots black → logo; seen 2026-11-24 after the firmware and kernel's black; also with the kiosk opening `/screen/` directly, but not on kiosk restarts, which do the same 4K30 → 1080p60 mode change) and crossfade smoothness, checked with an HDMI capture, and a first look at the Tulce pillar. The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)
 - [x] Screen WebDriver tests pass on WPE locally; cross-engine fit test (WPE screen vs Chromium remote) passes. Blocking in CI once CI runs
 
 **Done when:** WebDriver tests pass (black first frame; last slide stays on disconnect; reconnect
