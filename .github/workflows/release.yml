@@ -69,6 +69,7 @@ jobs:
           tool: just@1.59.0,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
       - name: Podman
         run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      # Only a run on main started by a push or by hand: this job signs what it fetches.
       - name: The rebuilt WPE WebKit packages (ADR 0027)
         env:
           GH_TOKEN: ${{ github.token }}

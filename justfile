@@ -138,13 +138,24 @@ update-keys:
     @test -n "${SURSUM_BUNDLE_KEY:-}" || { echo "set SURSUM_BUNDLE_KEY (public update key, see docs/releasing.md)" >&2; exit 1; }
     @test -f "${SURSUM_BUNDLE_SIGNING_KEY:-}" || { echo "set SURSUM_BUNDLE_SIGNING_KEY (path of the secret key file)" >&2; exit 1; }
 
-# The rebuilt WPE WebKit packages the image installs (ADR 0027): the `wpewebkit-debs` artifact of
-# the latest successful run of .github/workflows/wpewebkit.yml, into target/wpe-debs.
-wpe-debs:
+# The rebuilt WPE WebKit packages the image installs (ADR 0027): the `wpewebkit-debs` artifact of a
+# successful run of .github/workflows/wpewebkit.yml, into target/wpe-debs. By default the latest
+# run on main started by a push or by hand: a pull request's run (a fork's branch may be called
+# main too) must never reach a release, which signs whatever this fetches. `just wpe-debs any`
+# takes the latest successful run of any branch (trial images, which a throwaway key signs);
+# `just wpe-debs <run id>` takes that run.
+wpe-debs from="main":
     #!/usr/bin/env bash
     set -euo pipefail
-    run=$(gh run list --workflow wpewebkit.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-    test -n "$run" || { echo "no successful wpewebkit.yml run" >&2; exit 1; }
+    case "{{from}}" in
+        main) pick='select(.headBranch == "main" and (.event == "push" or .event == "workflow_dispatch"))' ;;
+        any) pick='.' ;;
+        *[!0-9]* | "") echo "wpe-debs: main, any or a run id, not '{{from}}'" >&2; exit 1 ;;
+        *) pick="select(.databaseId == {{from}})" ;;
+    esac
+    run=$(gh run list --workflow wpewebkit.yml --status success --limit 100 \
+        --json databaseId,headBranch,event --jq "[.[] | $pick][0].databaseId // empty")
+    test -n "$run" || { echo "no successful wpewebkit.yml run for '{{from}}'" >&2; exit 1; }
     rm -rf target/wpe-debs
     gh run download "$run" --name wpewebkit-debs --dir target/wpe-debs
     ls target/wpe-debs

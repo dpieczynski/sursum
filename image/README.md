@@ -86,8 +86,10 @@ kernel for it).
   reached systemd. Put the card into a Linux laptop, mount the `persistent` partition read-only
   and run `journalctl -D <mount>/log/journal --list-boots`, then `-b -1` and so on.
 - **The WPE WebKit packages**: `just image` needs them in `target/wpe-debs`; `just wpe-debs`
-  fetches the latest successful build of `.github/workflows/wpewebkit.yml` (an artifact that
-  expires after 90 days: run that workflow again before then).
+  fetches the latest successful build of `.github/workflows/wpewebkit.yml` on main started by a
+  push or by hand (`just wpe-debs any` also takes a pull request's, for a trial image;
+  `just wpe-debs <run id>` that run). The artifact expires after 90 days: run that workflow on
+  main again before then.
 - **A diagnostic image**: `just image y` builds an image that shows the firmware's rainbow
   screen and the kernel's and systemd's messages on the screen (until the kiosk takes it) instead
   of a black boot (layer variable `sursum.diagnostic_boot`). It is otherwise identical; never ship

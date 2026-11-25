@@ -39,8 +39,11 @@ way to run the screen (ADR 0023).
   so the layer names `libwpebackend-fdo-1.0-1`, `bubblewrap`, `xdg-dbus-proxy` and `libgles2` and
   checks them at build time. The kiosk unit may reach localhost only (`IPAddressAllow=localhost`,
   `IPAddressDeny=any`) and starts the browser only once `/healthz` answers
-  (`ExecStartPre=/usr/lib/sursum/wait-for-server`), then opens `/screen/` directly: a browser sent
-  to a server that is down shows its error page, and WebKit does not let a local page ask the
-  server first. A `KIOSK_APP` override keeps that wait (it is in the unit, not the command).
+  (`ExecStart=/usr/lib/sursum/wait-for-server /usr/bin/env $KIOSK_APP`; the script waits, then
+  becomes the browser), then opens `/screen/` directly: a browser sent to a server that is down
+  shows its error page, and WebKit does not let a local page ask the server first. A `KIOSK_APP`
+  override keeps that wait. Never wait in `ExecStartPre`: the unit would stay "activating" while
+  the server is down and hold up every unit ordered after it. The system update's trial is
+  ordered after the server only, never after the kiosk, so its rollback always runs.
 - Pin the rpi-image-gen version. Never commit secrets (PINs, signing keys, certificates); the
   update signing key lives outside the repo (CI secret `SURSUM_BUNDLE_SIGNING_KEY`).

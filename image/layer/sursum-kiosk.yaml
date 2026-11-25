@@ -35,15 +35,19 @@ mmdebstrap:
       cp "$debs"/libwpewebkit-2.0-1_*.deb $1/tmp/wpe/
       chroot $1 sh -c 'apt-get update && apt-get install -y --no-install-recommends /tmp/wpe/*.deb libwpebackend-fdo-1.0-1 bubblewrap xdg-dbus-proxy libgles2'
       rm -rf $1/tmp/wpe
-      browser=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0/MiniBrowser
-      test -x $1$browser
+      webkit=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0
       test -x $1/usr/bin/bwrap
       test -x $1/usr/bin/xdg-dbus-proxy
       test -e $1/usr/lib/aarch64-linux-gnu/libGLESv2.so.2
-      if chroot $1 ldd $browser | grep 'not found'; then
-        echo "MiniBrowser misses the libraries above" >&2
-        exit 1
-      fi
+      # The browser and the processes WebKit starts (ldd cannot see what is loaded at run time,
+      # like libGLESv2 above).
+      for program in MiniBrowser WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+        test -x $1$webkit/$program
+        if chroot $1 ldd $webkit/$program | grep 'not found'; then
+          echo "$program misses the libraries above" >&2
+          exit 1
+        fi
+      done
     - chroot $1 useradd --system --create-home --home-dir /var/lib/sursum-kiosk --shell /usr/sbin/nologin sursum-kiosk
     - install -m 0644 ../deploy/kiosk/sursum-kiosk.service $1/etc/systemd/system/sursum-kiosk.service
     # The kiosk starts the browser only once the server answers (sursum-kiosk.service).

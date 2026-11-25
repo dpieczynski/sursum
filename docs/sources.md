@@ -16,9 +16,10 @@ Every release lists them:
 ## Where the sources are
 
 - **sursum** itself: this repository, at the release's tag (GPL-3.0-or-later).
-- **Debian packages** (versions without `+rpt` or `+rpi`): `apt-get source <package>=<version>`
-  on Debian 13, or from [snapshot.debian.org](https://snapshot.debian.org), which keeps every
-  version Debian has published.
+- **Debian packages** (versions without `+rpt`, `+rpi` or `~deb13sursum`):
+  `apt-get source <package>=<version>` on Debian 13, or from
+  [snapshot.debian.org](https://snapshot.debian.org), which keeps every version Debian has
+  published.
 - **WPE WebKit** (versions with `~deb13sursum`): Debian's own `wpewebkit` source package from sid,
   rebuilt unchanged for trixie by `.github/workflows/wpewebkit.yml` (its `VERSION` names the
   Debian version); the source is that Debian version, from snapshot.debian.org.

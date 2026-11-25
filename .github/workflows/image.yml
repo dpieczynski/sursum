@@ -41,10 +41,12 @@ jobs:
           tool: just,trunk@0.22.1,wasm-bindgen-cli@0.2.130,cargo-zigbuild@0.24.1
       - name: Podman
         run: command -v podman || (sudo apt-get update && sudo apt-get install -y --no-install-recommends podman)
+      # A trial image may take a pull request's packages (it is signed with a throwaway key), so a
+      # change to wpewebkit.yml is tried before it reaches main; release.yml takes main's only.
       - name: The rebuilt WPE WebKit packages (ADR 0027)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: just wpe-debs
+        run: just wpe-debs any
       - name: A throwaway update key
         run: |
           cargo run -q -p sursum-server -- system keygen "$RUNNER_TEMP/trial.key" | tee -a "$GITHUB_ENV"

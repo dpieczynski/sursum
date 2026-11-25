@@ -28,16 +28,17 @@ IPAddressDeny=any
 # WebKit's error page (CLAUDE.md, hard rule 3). Until then nothing holds the display, so it stays
 # black, at boot and whenever the kiosk restarts (the screen guard, a crash). A local page that
 # asks the server first cannot do this: WebKit does not let a file:// page reach it. Once open, the
-# page stays when the server goes away and reconnects by itself.
-ExecStartPre=/usr/lib/sursum/wait-for-server
-TimeoutStartSec=infinity
+# page stays when the server goes away and reconnects by itself. wait-for-server waits inside
+# ExecStart and then becomes the browser; in ExecStartPre the unit would stay "activating" while
+# the server is down and hold up whatever waits for it (see the script).
 # MiniBrowser's background is white unless told otherwise. To try another command or variable
 # without a new image (e.g. WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 if the web process's
 # bubblewrap sandbox fails), put it into /var/lib/sursum/kiosk.env.
 Environment="KIOSK_APP=/usr/lib/aarch64-linux-gnu/wpe-webkit-2.0/MiniBrowser --fullscreen --bg-color=black http://localhost/screen/"
 EnvironmentFile=-/var/lib/sursum/kiosk.env
-# $KIOSK_APP (unbraced) is split into words by systemd; env runs the first one.
-ExecStart=/usr/bin/env $KIOSK_APP
+# $KIOSK_APP (unbraced) is split into words by systemd; env runs the first one. A KIOSK_APP
+# override keeps the wait.
+ExecStart=/usr/lib/sursum/wait-for-server /usr/bin/env $KIOSK_APP
 Restart=always
 RestartSec=1
 StandardError=journal

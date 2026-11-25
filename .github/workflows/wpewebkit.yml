@@ -2,13 +2,19 @@
 # WPE WebKit 2.54 for Debian 13 trixie on arm64, the screen's engine (ADR 0027): Debian's own
 # source package from sid, rebuilt unchanged against trixie in a trixie container on a native arm64
 # runner. Trixie itself stays at 2.48 (Debian never rebases it). The packages are kept as this
-# run's artifact `wpewebkit-debs`; every device image installs the latest successful run's
-# (`just wpe-debs`, image.yml, release.yml). Artifacts expire after 90 days, so run this again by
-# hand before then, and when sid has a new version. Runs when this file changes in a pull request.
+# run's artifact `wpewebkit-debs`. A release installs only those of the latest run on main started
+# by a push or by hand (`just wpe-debs`, release.yml); a pull request's run serves its trial image
+# (image.yml) only. Runs when this file changes, in a pull request and again on main once merged.
+# Artifacts expire after 90 days, so run this by hand on main before then, and when sid has a new
+# version.
 name: WPE WebKit for trixie
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/wpewebkit.yml"
+  push:
+    branches: [main]
     paths:
       - ".github/workflows/wpewebkit.yml"
   workflow_dispatch:
@@ -16,6 +22,9 @@ on:
       version:
         description: "Debian source version of wpewebkit in sid"
         default: "2.54.3-1"
+
+permissions:
+  contents: read
 
 env:
   VERSION: ${{ inputs.version || '2.54.3-1' }}
@@ -42,7 +51,7 @@ jobs:
           cd src
           # Marks the packages as a local trixie rebuild (lower than any official 2.54.3-1).
           DEBEMAIL=sursum@localhost DEBFULLNAME="sursum CI" \
-            dch --local '~deb13sursum' --distribution trixie "Rebuilt for trixie arm64 (sursum WPE spike)."
+            dch --local '~deb13sursum' --distribution trixie "Rebuilt for trixie arm64 (sursum screen, ADR 0027)."
           apt-get build-dep -y --no-install-recommends -Pnodoc .
       - name: Build (architecture-dependent packages, no docs, no tests)
         working-directory: /build/src

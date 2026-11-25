@@ -47,7 +47,12 @@ managed policies, Chromium's kiosk unit and `start.html`.
   live as a workflow artifact, which expires after 90 days: rebuild before then (or keep them
   somewhere durable; roadmap).
 - Every image build needs the packages (`just wpe-debs`, and a step in image.yml and
-  release.yml).
+  release.yml). A release takes only a build on main started by a push or by hand, never a pull
+  request's, because the release job signs what it installs.
+- The wait for the server runs inside the kiosk's `ExecStart` and then becomes the browser. In
+  `ExecStartPre` the unit would stay "activating" while the server is down, and the system
+  update's trial, then ordered after the kiosk, would never start its clock or roll back; the trial
+  is now ordered after the server only.
 - A dead web process is not restarted by MiniBrowser; the screen guard's grace (15 s) decides how
   long the screen shows black or the logo. Shortening it is a separate question.
 - The WebDriver screen tests still run WPE 2.48 through cog (ADR 0015), not 2.54 with

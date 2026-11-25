@@ -74,12 +74,16 @@ below comes before new features. Order: CI image build, one update path, engine 
 - [x] Switch to WPE (ADR 0027, 2026-11-25): MiniBrowser on DRM is the screen; cage, seatd,
   `wlr-randr`, `kiosk-session`, the cursor theme, Chromium's policies and kiosk unit and
   `start.html` removed; `just image` always builds it (`just wpe-debs`, image.yml and
-  release.yml fetch the packages); `spike-wpe.yml` removed
+  release.yml fetch the packages); `spike-wpe.yml` removed. The wait for the server runs
+  inside the kiosk's `ExecStart` and the trial is ordered after the server only (in
+  `ExecStartPre` a server that never answered held the trial and its rollback forever); checked
+  on the Pi 2026-11-25: a release whose server never starts stayed black and rolled back after
+  3 min, a kiosk restart with the server down returns at once and stays black
 - [ ] After the switch: memory after 8 h on the pilot Pi (never measured for Chromium either);
   the WebDriver screen tests on WPE 2.54 with MiniBrowser instead of 2.48 through cog (or
-  drop cog); keep the rebuilt packages somewhere durable (the artifact of 2026-11-20 expires
-  around 2027-02-18; rerun `wpewebkit.yml` before then) and rebuild when sid has a new
-  version; consider a shorter screen guard grace, since MiniBrowser does not restart a dead
+  drop cog); keep the rebuilt packages somewhere durable, ideally a release asset whose SHA-256
+  `just wpe-debs` checks (a release takes main's build only; each artifact expires after 90
+  days, so run `wpewebkit.yml` on main before then) and rebuild when sid has a new version; consider a shorter screen guard grace, since MiniBrowser does not restart a dead
   web process (15.5 s of black or logo on the Pi)
 - [x] Smaller findings of the audit (2026-11-20): `ImageFit` and `Deck.background` removed
   (pictures always whole, layers black in `slide.css`); the Windows build is `just desktop-windows`

@@ -1,9 +1,13 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Waits until the server on this machine answers GET /healthz with 200, asking every half second
-# (ExecStartPre of the WPE kiosk unit). A browser that opens the screen while the server is down
-# shows its own error page; until this returns, nothing holds the display and it stays black (the
-# kernel's empty console). The image has no curl, so this talks HTTP through bash's /dev/tcp.
+# Runs its arguments (the browser) once the server on this machine answers GET /healthz with 200,
+# asking every half second; ExecStart of the kiosk unit. A browser that opens the screen while the
+# server is down shows its own error page; until then nothing holds the display and it stays black
+# (the kernel's empty console). This waits inside ExecStart, not in ExecStartPre: a unit stays
+# "activating" until its ExecStartPre exits, so with a server that never answers, everything
+# ordered after the kiosk (the system update's trial and its rollback once did) and every
+# `systemctl restart` of it (the screen guard's) would wait forever. The image has no curl, so
+# this talks HTTP through bash's /dev/tcp.
 
 answers() {
     exec 3<>/dev/tcp/127.0.0.1/80 || return 1
@@ -17,3 +21,5 @@ answers() {
 until answers 2>/dev/null; do
     sleep 0.5
 done
+# The browser takes this process's place, so systemd watches it directly (Restart=always).
+exec "$@"
