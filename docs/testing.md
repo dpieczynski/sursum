@@ -14,12 +14,13 @@ All tests are Rust; no Node or Python is needed.
 
 ## WebDriver servers
 
-The browsers run in a podman image with host networking, bound to localhost:
+The browsers run in podman images with host networking, bound to localhost:
 
 ```sh
 just browsers-image   # once: sursum-browsers (trixie: Chromium + chromedriver, WebKitGTK + its WebDriver,
                       # Xvfb, Mesa) and sursum-wpe (forky: WPE WebKit 2.54 + MiniBrowser + WPEWebDriver)
 just browsers         # chromedriver on :9515, WPEWebDriver on :9516, WebKitGTK's WebDriver on :9517
+                      # (run it again after a rebuild: it replaces the running containers)
 just e2e
 just browsers-stop
 ```

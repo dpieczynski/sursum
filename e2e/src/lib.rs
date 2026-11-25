@@ -456,7 +456,18 @@ impl Browser {
     /// Opens a browser window of the given size.
     pub async fn open(self, width: u32, height: u32) -> anyhow::Result<WebDriver> {
         let driver = WebDriver::new(self.webdriver_url(), self.capabilities(width, height)).await?;
-        // The launch flags set the size; ask through WebDriver as well (MiniBrowser on WPE ignores it).
+        if self == Browser::Wpe {
+            // MiniBrowser takes its size only from `--size`; check it took, so the screen tests
+            // never fall back to a smaller view unnoticed.
+            let inner: (u32, u32) =
+                driver.execute("return [innerWidth, innerHeight]", Vec::new()).await?.convert()?;
+            anyhow::ensure!(
+                inner == (width, height),
+                "MiniBrowser opened at {inner:?}, not {width}x{height}"
+            );
+            return Ok(driver);
+        }
+        // The launch flags set the size; ask through WebDriver as well.
         let _ = driver.set_window_rect(0, 0, width, height).await;
         if self == Browser::WebKitGtk {
             // The size WebDriver sets includes the window's frame: grow it by the difference.

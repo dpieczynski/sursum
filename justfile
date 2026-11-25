@@ -71,9 +71,9 @@ browsers-image:
 # `--init` reaps finished browser processes; without it they pile up as zombies until new
 # sessions fail ("Timed out receiving message from renderer").
 browsers:
-    podman run -d --rm --init --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
-    podman run -d --rm --init --name sursum-wpedriver --network host localhost/sursum-wpe WPEWebDriver --port=9516
-    podman run -d --rm --init --name sursum-webkitgtkdriver --network host localhost/sursum-browsers webkitgtk-webdriver 9517
+    podman run -d --rm --init --replace --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
+    podman run -d --rm --init --replace --name sursum-wpedriver --network host localhost/sursum-wpe WPEWebDriver --port=9516
+    podman run -d --rm --init --replace --name sursum-webkitgtkdriver --network host localhost/sursum-browsers webkitgtk-webdriver 9517
 
 # Stop the WebDriver containers.
 browsers-stop:

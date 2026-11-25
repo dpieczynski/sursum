@@ -193,7 +193,7 @@ async fn text_stays_out_of_exclusion_zones_and_zones_are_black() -> anyhow::Resu
         organist.command(Command::Next).await?;
         wait_for_slide(driver, "v1#").await?;
         // Convert client coordinates to scene coordinates through the stage's real scale: the
-        // browser window may be smaller than 1920×1080 (e.g. headless WPE).
+        // browser window may be smaller than 1920×1080.
         let measured = driver.execute(MEASURE_LINES, Vec::new()).await?;
         let measured = measured.json();
         let lefts: Vec<f64> = serde_json::from_value(measured["lefts"].clone())?;

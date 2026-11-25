@@ -30,7 +30,7 @@ is our own axum app, not a Leptos SSR server). No Node, npm or TypeScript. Appli
   and CI checks it on WPE 2.54 with headless MiniBrowser. Allowed: WebAssembly, WebSocket, Web Animations, `document.fonts`, `img.decode()`,
   WOFF2 fonts, CSS transforms/opacity/flexbox/grid, `white-space: pre`, CSS variables,
   `ResizeObserver`. Forbidden on the screen: `requestIdleCallback` (use `setTimeout` chunks),
-  `scheduler.postTask`, `navigator.userAgentData`, CSS features missing in WebKit 2.48 (unless a
+  `scheduler.postTask`, `navigator.userAgentData`, CSS features missing in WebKit 2.54 (unless a
   pure enhancement), any Chromium/kiosk-only API. Feature-detect optional features with a
   fallback. Screen tests use classic WebDriver only (no CDP).
 - Test hooks for WebDriver are `data-*` attributes (`data-deck-id`, `data-slide-key`,

@@ -61,6 +61,10 @@ tests move to the shipped combination (Debian forky and sid carry WPE WebKit 2.5
 `binary` ⚠ not yet tried), and cog leaves the browsers image; if the spike fails, the WPE tests
 and cog are removed and the contract is checked by the WebKitGTK tests of ADR 0021 alone.
 
+The compatibility report of point 1 ("the screen sends a compatibility report to the server
+log") was never built; its message, `ClientMsg::Log`, had no sender and was removed on
+2026-11-19. Problems on the screen show in the kiosk's journal.
+
 ## Amendment (2026-11-25): the tests on 2.54 with MiniBrowser, cog removed
 WPE on DRM became the engine (ADR 0027), so the WPE tests moved to it. WPEWebDriver starts WebKit's
 own MiniBrowser, the device's browser, with `--automation --headless --bg-color=black
@@ -74,11 +78,8 @@ The engine comes from Debian forky's amd64 packages of the same `wpewebkit` sour
 (`e2e/wpe.Containerfile`): forky's packages need forky's libc, so they cannot join the trixie image
 with Chromium and WebKitGTK. Rejected: an amd64 rebuild in `wpewebkit.yml` (hours per build, and
 every e2e run would then depend on a workflow artifact that expires after 90 days). The cost:
-forky follows sid, so when sid moves past the device's version the tests run the newer one until
-the device is rebuilt too (which ADR 0027 wants anyway for security fixes), and a broken forky can
-break the image build. MiniBrowser needs `libwpebackend-fdo-1.0-1`, which the package does not
+forky follows sid, so when sid moves past the device's series the image refuses to build (it checks
+for 2.54) until the device's packages are rebuilt from the new version and the check is raised with
+them (which ADR 0027 wants anyway for security fixes); a broken forky can break the image build
+too. MiniBrowser needs `libwpebackend-fdo-1.0-1`, which the package does not
 declare, here as on the device. WebKit disables its bubblewrap sandbox inside the container.
-
-The compatibility report of point 1 ("the screen sends a compatibility report to the server
-log") was never built; its message, `ClientMsg::Log`, had no sender and was removed on
-2026-11-19. Problems on the screen show in the kiosk's journal.
