@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-11-16). Complements ADR 0009 (Chromium stays the default engine). Since ADR
 0027 (2026-11-25) WPE WebKit is the shipped engine, so this contract now describes the device; the
-tests still start WPE 2.48 through cog.
+tests run WPE 2.54 with MiniBrowser since the same day, and cog is gone (amendment below).
 
 ## Context
 ADR 0009 keeps Chromium under cage but leaves WPE WebKit + cog as the most likely alternative
@@ -64,3 +64,22 @@ and cog are removed and the contract is checked by the WebKitGTK tests of ADR 00
 The compatibility report of point 1 ("the screen sends a compatibility report to the server
 log") was never built; its message, `ClientMsg::Log`, had no sender and was removed on
 2026-11-19. Problems on the screen show in the kiosk's journal.
+
+## Amendment (2026-11-25): the tests on 2.54 with MiniBrowser, cog removed
+WPE on DRM became the engine (ADR 0027), so the WPE tests moved to it. WPEWebDriver starts WebKit's
+own MiniBrowser, the device's browser, with `--automation --headless --bg-color=black
+--size=<width>x<height>` (WPEPlatform's headless platform; tried on the real packages). WebDriver
+cannot resize it (`setWindowRect` is false), so the size comes from `--size`: the screen tests now
+run at 1920×1080, where cog's headless view was fixed at 800×600. cog and trixie's WPE 2.48 left
+the browsers image.
+
+The engine comes from Debian forky's amd64 packages of the same `wpewebkit` source that
+`wpewebkit.yml` rebuilds for the device (2.54.3-1 on both today), in a forky image of its own
+(`e2e/wpe.Containerfile`): forky's packages need forky's libc, so they cannot join the trixie image
+with Chromium and WebKitGTK. Rejected: an amd64 rebuild in `wpewebkit.yml` (hours per build, and
+every e2e run would then depend on a workflow artifact that expires after 90 days). The cost:
+forky follows sid, so when sid moves past the device's series the image refuses to build (it checks
+for 2.54) until the device's packages are rebuilt from the new version and the check is raised with
+them (which ADR 0027 wants anyway for security fixes); a broken forky can break the image build
+too. MiniBrowser needs `libwpebackend-fdo-1.0-1`, which the package does not
+declare, here as on the device. WebKit disables its bubblewrap sandbox inside the container.

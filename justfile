@@ -60,18 +60,20 @@ test:
     cargo test --workspace
     cargo test -p sursum-slide -p sursum-client -p sursum-remote
 
-# Build the image with browsers and WebDriver servers for the end-to-end tests.
+# Build the images with browsers and WebDriver servers for the end-to-end tests: Chromium and
+# WebKitGTK on trixie, WPE WebKit 2.54 with MiniBrowser on forky (the device's engine, ADR 0027).
 browsers-image:
     podman build -t localhost/sursum-browsers -f e2e/browsers.Containerfile e2e
+    podman build -t localhost/sursum-wpe -f e2e/wpe.Containerfile e2e
 
 # Start chromedriver (:9515), WPEWebDriver (:9516) and WebKitGTK's WebDriver (:9517) in the
 # background, on localhost only.
 # `--init` reaps finished browser processes; without it they pile up as zombies until new
 # sessions fail ("Timed out receiving message from renderer").
 browsers:
-    podman run -d --rm --init --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
-    podman run -d --rm --init --name sursum-wpedriver --network host localhost/sursum-browsers WPEWebDriver --port=9516
-    podman run -d --rm --init --name sursum-webkitgtkdriver --network host localhost/sursum-browsers webkitgtk-webdriver 9517
+    podman run -d --rm --init --replace --name sursum-chromedriver --network host localhost/sursum-browsers chromedriver --port=9515
+    podman run -d --rm --init --replace --name sursum-wpedriver --network host localhost/sursum-wpe WPEWebDriver --port=9516
+    podman run -d --rm --init --replace --name sursum-webkitgtkdriver --network host localhost/sursum-browsers webkitgtk-webdriver 9517
 
 # Stop the WebDriver containers.
 browsers-stop:
@@ -82,7 +84,7 @@ test-wasm:
     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CHROMEDRIVER_REMOTE=http://127.0.0.1:9515 \
         cargo test -p sursum-slide --target wasm32-unknown-unknown --test dom
 
-# End-to-end tests: everything on Chromium, then the screen tests on WPE WebKit (ADR 0015), then
+# End-to-end tests: everything on Chromium, then the screen on WPE WebKit (MiniBrowser, ADR 0015), then
 # the remote on WebKitGTK with the screen on Chromium (ADR 0021: the Linux window is WebKit).
 e2e: build-web
     cargo build -p sursum-server --features e2e-hooks

@@ -14,11 +14,13 @@ All tests are Rust; no Node or Python is needed.
 
 ## WebDriver servers
 
-The browsers run in a podman image with host networking, bound to localhost:
+The browsers run in podman images with host networking, bound to localhost:
 
 ```sh
-just browsers-image   # once: Chromium + chromedriver, cog + WPEWebDriver, WebKitGTK + its WebDriver, Xvfb, Mesa
+just browsers-image   # once: sursum-browsers (trixie: Chromium + chromedriver, WebKitGTK + its WebDriver,
+                      # Xvfb, Mesa) and sursum-wpe (forky: WPE WebKit 2.54 + MiniBrowser + WPEWebDriver)
 just browsers         # chromedriver on :9515, WPEWebDriver on :9516, WebKitGTK's WebDriver on :9517
+                      # (run it again after a rebuild: it replaces the running containers)
 just e2e
 just browsers-stop
 ```
@@ -64,18 +66,21 @@ started them another way).
   song; preview matches screen; black in one tap; hold-to-delete + undo; pedal keys via WebDriver
   key actions; two remotes in sync; text never enters an exclusion zone; display power with the
   fake backend.
-- **Second screen engine (ADR 0015)**: the screen subset of the WebDriver suite also runs
-  **blocking** on WPE WebKit via `WPEWebDriver` + `cog --automation --platform=headless`
+- **The screen's engine (ADR 0015, ADR 0027)**: the screen subset of the WebDriver suite also
+  runs **blocking** on WPE WebKit 2.54 with WebKit's own MiniBrowser, the device's browser:
+  `WPEWebDriver` starts `MiniBrowser --automation --headless --bg-color=black --size=1920x1080`
   (black first frame, crossfade/no crossfade on reconnect, last slide kept, one font size per
   song, exclusion zones, set edits not affecting the screen), using classic WebDriver only (no
-  CDP). The `wasm-bindgen-test` suite of `sursum-slide` runs on Chromium only. A cross-engine test
-  compares the fitted font size and line count between WPE (screen) and Chromium (remote). The
-  tests start WPE 2.48 through cog, while the device ships 2.54 with MiniBrowser (ADR 0027);
-  they guard the screen's API contract, not the launcher. Moving them to 2.54 is on the roadmap.
+  CDP). MiniBrowser takes its size only from `--size`; WebDriver cannot resize it. The
+  `wasm-bindgen-test` suite of `sursum-slide` runs on Chromium only. A cross-engine test compares
+  the fitted font size and line count between WPE (screen) and Chromium (remote). The engine is
+  Debian forky's amd64 build of the same source package the device rebuilds for trixie
+  (`e2e/wpe.Containerfile`, its own image: forky's packages need forky's libc); forky follows sid,
+  so these tests can run a newer WPE than the device until the device is rebuilt.
 - **The remote on WebKit (ADR 0021)**: the remote suites (`remote`, `remote_live`,
   `remote_sets`, `remote_library`) run **blocking** with `SURSUM_E2E_REMOTE_BROWSER=webkitgtk`:
   WebKitGTK's `WebKitWebDriver` and MiniBrowser under Xvfb (port 9517), the screen on Chromium.
-  Headless WPE cannot do this (its view is fixed at 800×600). WebKit's driver returns "" as the
+  WebKit's driver returns "" as the
   text of anything with `overflow: hidden` and types nothing for "\n": read text with
   `shown_text` and type lines with `typed`. The reason is the desktop program's Linux window,
   which is WebKitGTK; the iPad is out of scope (ADR 0023).

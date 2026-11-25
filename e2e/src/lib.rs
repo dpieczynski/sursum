@@ -7,14 +7,14 @@
 //!   `--features e2e-hooks` for the first-frame test);
 //! - `SURSUM_E2E_BROWSER`: `chromium` (default) or `wpe`, the engine under test (the screen's);
 //! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default) or `webkitgtk`, the remotes' engine (the
-//!   remote on WebKit, ADR 0021: the desktop program's Linux window is WebKitGTK; headless WPE
-//!   cannot stand in, its view is fixed at 800×600);
+//!   remote on WebKit, ADR 0021: the desktop program's Linux window is WebKitGTK);
 //! - `SURSUM_CHROMIUM_BINARY`: Chromium or Chrome (default `/usr/bin/chromium`, as in the
 //!   browsers image);
 //! - `SURSUM_WEBDRIVER_URL`: WebDriver server (default `http://127.0.0.1:9515` for Chromium,
 //!   `http://127.0.0.1:9516` for WPE, `http://127.0.0.1:9517` for WebKitGTK).
 //!
-//! The browsers run in the `sursum-browsers` container with host networking (`just browsers`).
+//! The browsers run in the `sursum-browsers` and `sursum-wpe` containers with host networking
+//! (`just browsers`).
 
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
@@ -386,7 +386,7 @@ pub fn profile_with_zone(margin: u32, zone: sursum_protocol::Rect) -> Command {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Browser {
     Chromium,
-    /// WPE WebKit through cog (ADR 0015).
+    /// WPE WebKit's MiniBrowser, headless: the screen's engine and browser (ADR 0015, ADR 0027).
     Wpe,
     /// WebKitGTK's MiniBrowser: WebKit in a window whose size can be set, for the remote
     /// (ADR 0021).
@@ -433,10 +433,13 @@ impl Browser {
                     ],
                 },
             }),
+            // MiniBrowser takes its size only from `--size` (WebDriver cannot set it).
             Browser::Wpe => serde_json::json!({
                 "wpe:browserOptions": {
-                    "binary": "cog",
-                    "args": ["--automation", "--platform=headless", "--bg-color=black"],
+                    "binary": "/usr/lib/x86_64-linux-gnu/wpe-webkit-2.0/MiniBrowser",
+                    "args": [
+                        "--automation", "--headless", "--bg-color=black", format!("--size={width}x{height}"),
+                    ],
                 },
             }),
             Browser::WebKitGtk => serde_json::json!({
@@ -453,7 +456,18 @@ impl Browser {
     /// Opens a browser window of the given size.
     pub async fn open(self, width: u32, height: u32) -> anyhow::Result<WebDriver> {
         let driver = WebDriver::new(self.webdriver_url(), self.capabilities(width, height)).await?;
-        // WPE headless ignores the window-size flag; ask through WebDriver as well.
+        if self == Browser::Wpe {
+            // MiniBrowser takes its size only from `--size`; check it took, so the screen tests
+            // never fall back to a smaller view unnoticed.
+            let inner: (u32, u32) =
+                driver.execute("return [innerWidth, innerHeight]", Vec::new()).await?.convert()?;
+            anyhow::ensure!(
+                inner == (width, height),
+                "MiniBrowser opened at {inner:?}, not {width}x{height}"
+            );
+            return Ok(driver);
+        }
+        // The launch flags set the size; ask through WebDriver as well.
         let _ = driver.set_window_rect(0, 0, width, height).await;
         if self == Browser::WebKitGtk {
             // The size WebDriver sets includes the window's frame: grow it by the difference.

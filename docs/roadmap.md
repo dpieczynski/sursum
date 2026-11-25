@@ -88,11 +88,13 @@ below comes before new features. Order: CI image build, one update path, engine 
   cache or a leak is open (a second burst would tell: a plateau near 270–280 MB is cache);
   even as a leak it is ~3 MB per service against 3.6 GB free, and the kiosk restarts at every
   reboot and system update
-- [ ] After the switch: the WebDriver screen tests on WPE 2.54 with MiniBrowser instead of 2.48
-  through cog (or drop cog); keep the rebuilt packages somewhere durable, ideally a release
-  asset whose SHA-256 `just wpe-debs` checks (a release takes main's build only; each artifact
-  expires after 90 days, so run `wpewebkit.yml` on main before then) and rebuild when sid has
-  a new version; consider a shorter screen guard grace, since MiniBrowser does not restart a
+- [ ] After the switch: ~~the WebDriver screen tests on WPE 2.54 with MiniBrowser instead of 2.48
+  through cog~~ (done 2026-11-25: headless MiniBrowser from Debian forky's 2.54.3-1, the same
+  source as the device's rebuild, in its own image `e2e/wpe.Containerfile`; cog removed; the
+  screen tests now run at 1920×1080; ADR 0015 amendment); still open: keep the rebuilt packages
+  somewhere durable, ideally a release asset whose SHA-256 `just wpe-debs` checks (a release
+  takes main's build only; each artifact expires after 90 days, so run `wpewebkit.yml` on main
+  before then) and rebuild when sid has a new version; consider a shorter screen guard grace, since MiniBrowser does not restart a
   dead web process (15.5 s of black or logo on the Pi)
 - [x] Smaller findings of the audit (2026-11-20): `ImageFit` and `Deck.background` removed
   (pictures always whole, layers black in `slide.css`); the Windows build is `just desktop-windows`

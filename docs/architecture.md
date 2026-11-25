@@ -102,8 +102,8 @@ localhost-only network (`deploy/kiosk/`). The display mode is the kernel's force
 kiosk unit starts the browser only once the server answers `/healthz` (`wait-for-server`), and the
 screen app reloads itself only when the server answers: a browser that reaches for a server that
 is down shows its own error page. Until the browser starts, nothing holds the display and it stays
-black. The screen follows an API contract that the WebDriver tests check on WPE in CI (still 2.48
-through cog). It replaced Chromium under cage after a spike on the pilot Pi (ADR 0027).
+black. The screen follows an API contract that the WebDriver tests check in CI on WPE 2.54 with
+headless MiniBrowser. It replaced Chromium under cage after a spike on the pilot Pi (ADR 0027).
 
 ## Exclusion zones (ADR 0008)
 

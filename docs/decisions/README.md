@@ -20,7 +20,7 @@ supersedes the old one instead of editing it.
 | [0012](0012-display-power-cec-pjlink.md) | Display power control via HDMI-CEC, PJLink fallback (both built) |
 | [0013](0013-immutable-ab-image.md) | Immutable A/B device image (rpi-image-gen), the image stands; its signed app bundles are superseded by ADR 0022, its cage and Chromium kiosk by ADR 0027 |
 | [0014](0014-rust-frontend-leptos.md) | Rust frontend: Leptos 0.8 CSR, Trunk, shared protocol/slide crates, WebDriver tests; no Dioxus |
-| [0015](0015-screen-engine-portability.md) | Screen portability to WPE WebKit: API contract and blocking WPE tests (still started through cog; their future follows the WPE spike); the cog image variant was withdrawn |
+| [0015](0015-screen-engine-portability.md) | Screen portability to WPE WebKit: API contract and blocking WPE tests (since 2026-11-25 on 2.54 with headless MiniBrowser from Debian forky; cog removed); the cog image variant was withdrawn |
 | [0016](0016-operator-and-admin-mode.md) | Rights by pairing with the PIN, revocation, hardening (its admin mode is superseded by ADR 0024) |
 | [0017](0017-remote-three-views.md) | The remote: three views (Msza, Zestaw, Ustawienia) around a fixed live area |
 | [0018](0018-whole-device-backup.md) | Whole-device backup (`.sursum-backup`) and restore from the remote, credentials stay on the device |
