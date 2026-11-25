@@ -621,15 +621,7 @@ impl AppState {
                 Ok(false) => Err(ErrorCode::NotFound),
                 Err(error) => stored(Err(error), "a song's deletion").map(|()| None),
             },
-            Command::SetLogo { asset_id } => {
-                if asset_id.as_ref().is_some_and(|id| !crate::assets::exists(&self.data_dir, id)) {
-                    return (CmdOutcome::Rejected { code: ErrorCode::NotFound }, false);
-                }
-                stored(self.database.set_setting(LOGO_KEY, asset_id), "the logo").map(|()| {
-                    self.logo.clone_from(asset_id);
-                    None
-                })
-            }
+            Command::SetLogo { asset_id } => self.set_logo(asset_id.as_ref()),
             Command::Calibrate { on } => {
                 self.calibrating_by = on.then(|| actor.clone());
                 Ok(None)
@@ -671,6 +663,26 @@ impl AppState {
             }
             Err(code) => (CmdOutcome::Rejected { code }, false),
         }
+    }
+
+    /// Sets or (with `None`) removes the parish logo. A removed picture stays stored until the
+    /// next clean-up of unused pictures, so the remote's "undo" can set it again.
+    fn set_logo(
+        &mut self,
+        asset_id: Option<&sursum_protocol::AssetId>,
+    ) -> Result<Option<ServiceSet>, ErrorCode> {
+        if asset_id.is_some_and(|id| !crate::assets::exists(&self.data_dir, id)) {
+            return Err(ErrorCode::NotFound);
+        }
+        stored(self.database.set_setting(LOGO_KEY, &asset_id), "the logo")?;
+        self.logo = asset_id.cloned();
+        // The logo cover without a logo already shows black; calling it black keeps a logo
+        // uploaded later from appearing on screen without anyone pressing LOGO.
+        if self.logo.is_none() && self.program.overlay == Overlay::Logo {
+            self.program.overlay = Overlay::Black;
+            self.save_program();
+        }
+        Ok(None)
     }
 
     /// Fits a new screen profile to the stage, validates, applies and stores it.

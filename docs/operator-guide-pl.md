@@ -63,7 +63,7 @@ tekstu.
 | konkretną zwrotkę lub refren | jej kafelek („Zwrotka 2”, „Refren”) pod podglądem |
 | konkretną pozycję zestawu | jej wiersz na liście |
 | wygasić ekran | **Wygaś ekran**; z powrotem: **Pokaż tekst** |
-| pokazać logo parafii | **Pokaż logo**; z powrotem: **Pokaż tekst**. Napis **Brak logo** znaczy, że logo nie wgrano (Ustawienia → Ekran) |
+| pokazać logo parafii | **Pokaż logo**; z powrotem: **Pokaż tekst**. Napis **Brak logo** znaczy, że logo nie wgrano albo je usunięto (Ustawienia → Ekran) |
 | szybko pokazać pieśń spoza zestawu | **Szukaj**, potem **Pokaż teraz** |
 
 - Napis pod **Dalej ▶** mówi, co się stanie. Żółty podpis („→ 2. Barka”) oznacza, że następne
@@ -235,6 +235,11 @@ spróbuj za chwilę”). To normalne.
 - **Kościół**: nazwa kościoła tego urządzenia (zestawy urządzenia należą do niego) i, jeśli
   inne urządzenie wpisało tę nazwę inaczej, wybór kościoła znanego z pliku.
 - **Ekran**: zasilanie projektora lub monitora, **Logo parafii**, **Kalibracja ekranu**.
+  **Wgraj logo** ustawia logo (PNG, JPEG albo WebP) i zastępuje poprzednie. **Usuń logo** trzeba
+  przytrzymać; zaraz potem można je przywrócić przyciskiem **Cofnij** w dymku na dole. Bez logo
+  przycisk na pilocie mówi **Brak logo** i jest nieaktywny. Jeśli logo było właśnie na ekranie,
+  ekran zostaje wygaszony (czarny), a nie pokaże samo z siebie logo wgrane później. Usunięty
+  plik zostaje na urządzeniu do najbliższego **Usuń nieużywane obrazy**.
 - **Wyświetlanie**: czy po ostatnim slajdzie pieśni najpierw jest pusty ekran (domyślnie), czy od
   razu następna pozycja. Dotyczy wszystkich pilotów.
 - **To urządzenie**: strona przycisków (prawa lub lewa), wibracja, **Pełny ekran** (chowa paski

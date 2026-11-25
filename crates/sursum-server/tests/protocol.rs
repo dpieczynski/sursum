@@ -1132,6 +1132,71 @@ async fn the_parish_logo_is_stored_and_reaches_the_screen_after_a_restart() {
 }
 
 #[tokio::test]
+async fn removing_the_logo_turns_its_cover_black_and_leaves_the_picture_to_the_clean_up() {
+    use sursum_protocol::{AssetId, PictureCleanup, PictureCleanupRequest};
+    let dir = tempfile::tempdir().unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let png = b"\x89PNG\r\n\x1a\nsynthetic logo to remove";
+    let id: AssetId = serde_json::from_str(&http_post_bytes(&server, "/api/assets", png).await).unwrap();
+    let mut remote = connect(&server, Role::Remote, "admin").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    let set = Command::SetLogo { asset_id: Some(id.clone()) };
+    assert!(matches!(command(&mut remote, 1, Rev(0), set).await, CmdOutcome::Applied { .. }));
+    let show = Command::SetOverlay { overlay: Overlay::Logo };
+    assert!(matches!(command(&mut remote, 2, Rev(u32::MAX), show).await, CmdOutcome::Applied { .. }));
+    let mut state = next_screen_state(&mut screen).await;
+    while state.overlay != Overlay::Logo || state.logo.is_none() {
+        state = next_screen_state(&mut screen).await;
+    }
+
+    // Removed while it is on screen: the screen goes black, never to an empty logo cover a
+    // later upload would fill without anyone pressing LOGO.
+    let remove = Command::SetLogo { asset_id: None };
+    assert!(matches!(command(&mut remote, 3, Rev(0), remove).await, CmdOutcome::Applied { .. }));
+    let mut state = next_screen_state(&mut screen).await;
+    while state.logo.is_some() {
+        state = next_screen_state(&mut screen).await;
+    }
+    assert_eq!(state.overlay, Overlay::Black);
+    let mut remote_state = next_remote_state(&mut remote).await;
+    while remote_state.program.logo.is_some() {
+        remote_state = next_remote_state(&mut remote).await;
+    }
+    assert_eq!(remote_state.program.overlay, Overlay::Black);
+
+    // The picture stays (so "undo" can set it again) until the next clean-up of unused pictures.
+    assert!(sursum_server::assets::exists(dir.path(), &id));
+    let (path, _) = sursum_server::assets::locate(dir.path(), id.as_str()).unwrap();
+    let an_hour_ago = std::time::SystemTime::now() - Duration::from_secs(3600);
+    std::fs::File::options().write(true).open(path).unwrap().set_modified(an_hour_ago).unwrap();
+    let undo = Command::SetLogo { asset_id: Some(id.clone()) };
+    assert!(matches!(command(&mut remote, 4, Rev(0), undo).await, CmdOutcome::Applied { .. }));
+    let remove = Command::SetLogo { asset_id: None };
+    assert!(matches!(command(&mut remote, 5, Rev(0), remove).await, CmdOutcome::Applied { .. }));
+    let body = serde_json::to_string(&PictureCleanupRequest { dry_run: false }).unwrap();
+    let response = http_raw(
+        &server,
+        &format!(
+            "POST /api/assets/cleanup HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    )
+    .await;
+    let (_, cleaned) = response.split_once("\r\n\r\n").unwrap();
+    let cleanup: PictureCleanup = serde_json::from_str(cleaned).unwrap_or_else(|_| panic!("{response}"));
+    assert_eq!(cleanup.pictures, 1);
+    assert!(!sursum_server::assets::exists(dir.path(), &id));
+    drop((remote, screen));
+    server.stop().await.unwrap();
+
+    let server = start(dir.path(), "boot-1").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    let state = next_screen_state(&mut screen).await;
+    assert_eq!((state.logo, state.overlay), (None, Overlay::Black), "stored, not only in memory");
+    server.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn foreign_pages_cannot_upload_and_foreign_host_names_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let server = start(dir.path(), "boot-1").await;

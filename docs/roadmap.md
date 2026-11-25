@@ -343,9 +343,11 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] ~~Admin mode counts down in the remote~~ (removed with admin mode, ADR 0024)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
 - [x] Review of the running remote (2026-11-18, ADR 0017 amendment): sheets leave the controls tappable and focus their field, the live strip fits one row on phones, the next-slide preview fits again after the tablet turns, green only for what is on screen, "Brak logo" without a logo, back gesture between views, editor actions always in view, local pairing dates and device-type names, equal admin rows, contrast of filled green and blue (e2e: `remote_live.rs`)
-- [ ] Removing the logo in Ustawienia → Ekran: the server already takes `SetLogo` without a
-  picture, but the remote can only set one (`picture.rs`), so a wrong or test logo stays until
-  another one is uploaded. Then "Brak logo" again and the logo button disabled
+- [x] Removing the logo in Ustawienia → Ekran: **Usuń logo** (hold, then undo in the toast)
+  sends `SetLogo` without a picture; "Brak logo" again and the logo button disabled. A logo
+  removed while on screen leaves black (the server turns the logo cover into black, so a later
+  upload never appears by itself); the picture stays until the next clean-up of unused pictures
+  (e2e: `remote_live.rs`, `screen.rs`)
 
 ## M7 — Offline system updates
 

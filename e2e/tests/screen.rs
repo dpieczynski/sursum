@@ -303,6 +303,17 @@ async fn the_logo_button_shows_the_parish_logo() -> anyhow::Result<()> {
         let shot = screenshot(driver).await?;
         let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
         anyhow::ensure!(centre[..3].iter().all(|channel| *channel < 10), "black shows the logo: {centre:?}");
+        // Removing the logo while it is up leaves black behind.
+        remote.command(Command::SetOverlay { overlay: Overlay::Logo }).await?;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let shot = screenshot(driver).await?;
+        let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
+        anyhow::ensure!(centre[2] > 150, "the logo is not back: {centre:?}");
+        remote.command(Command::SetLogo { asset_id: None }).await?;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let shot = screenshot(driver).await?;
+        let centre = shot.get_pixel(shot.width() / 2, shot.height() / 2).0;
+        anyhow::ensure!(centre[..3].iter().all(|channel| *channel < 10), "a removed logo stays: {centre:?}");
         Ok(())
     })
     .await
