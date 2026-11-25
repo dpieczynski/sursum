@@ -69,8 +69,8 @@ below comes before new features. Order: CI image build, one update path, engine 
   does not let a local `file://` page ask the server, so Chromium's `start.html` cannot keep the
   screen black here; the WPE unit instead starts the browser only once `/healthz` answers
   (`wait-for-server`) and opens `/screen/` directly: with the server crash-looping the screen
-  stayed black and came back 0.5 s after the server did. Still open: RAM after 8 h (never
-  measured for Chromium either), then the ADR
+  stayed black and came back 0.5 s after the server did. Memory over time: a burst of slide
+  changes instead of 8 idle hours (below)
 - [x] Switch to WPE (ADR 0027, 2026-11-25): MiniBrowser on DRM is the screen; cage, seatd,
   `wlr-randr`, `kiosk-session`, the cursor theme, Chromium's policies and kiosk unit and
   `start.html` removed; `just image` always builds it (`just wpe-debs`, image.yml and
@@ -79,12 +79,21 @@ below comes before new features. Order: CI image build, one update path, engine 
   `ExecStartPre` a server that never answered held the trial and its rollback forever); checked
   on the Pi 2026-11-25: a release whose server never starts stayed black and rolled back after
   3 min, a kiosk restart with the server down returns at once and stays black
-- [ ] After the switch: memory after 8 h on the pilot Pi (never measured for Chromium either);
-  the WebDriver screen tests on WPE 2.54 with MiniBrowser instead of 2.48 through cog (or
-  drop cog); keep the rebuilt packages somewhere durable, ideally a release asset whose SHA-256
-  `just wpe-debs` checks (a release takes main's build only; each artifact expires after 90
-  days, so run `wpewebkit.yml` on main before then) and rebuild when sid has a new version; consider a shorter screen guard grace, since MiniBrowser does not restart a dead
-  web process (15.5 s of black or logo on the Pi)
+- [x] Kiosk memory over time (pilot Pi, 2026-11-25; never measured for Chromium): an idle screen
+  does not grow, so instead of 8 idle hours a driver paired like a tablet sent 2,000 slide
+  changes over 7 items (one per 0.7 s, crossfade 0.25 s) with 27 black and logo rounds, more
+  than a month of services. Kiosk PSS: 228 MB before; +20 MB in the first 30 s; then about
+  +1 MB per 100 changes in the web process (158 → 184 MB); 269 MB from 30 s after the burst,
+  flat for 53 min. The browser and network processes stayed flat. Whether the kept ~40 MB is
+  cache or a leak is open (a second burst would tell: a plateau near 270–280 MB is cache);
+  even as a leak it is ~3 MB per service against 3.6 GB free, and the kiosk restarts at every
+  reboot and system update
+- [ ] After the switch: the WebDriver screen tests on WPE 2.54 with MiniBrowser instead of 2.48
+  through cog (or drop cog); keep the rebuilt packages somewhere durable, ideally a release
+  asset whose SHA-256 `just wpe-debs` checks (a release takes main's build only; each artifact
+  expires after 90 days, so run `wpewebkit.yml` on main before then) and rebuild when sid has
+  a new version; consider a shorter screen guard grace, since MiniBrowser does not restart a
+  dead web process (15.5 s of black or logo on the Pi)
 - [x] Smaller findings of the audit (2026-11-20): `ImageFit` and `Deck.background` removed
   (pictures always whole, layers black in `slide.css`); the Windows build is `just desktop-windows`
   in both workflows (one build id from the justfile); `OpenForDevelopment` and `LocalOwner` are
