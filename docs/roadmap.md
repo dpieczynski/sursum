@@ -131,8 +131,9 @@ An external review of main was checked claim by claim; what held up is fixed in 
   server crash or a slow boot), against hard rule 3. The kiosk now opens a black page on the
   system (`deploy/kiosk/start.html`) that opens `/screen/` once `/healthz` answers, and the screen
   app reloads only when the server answers. Checked on the pilot Pi (2026-11-24) with a
-  crash-looping server: the screen connected 0.5 s after the server came back. Not yet tried in
-  the WPE spike image. The same test showed the live slide for a moment when the screen page
+  crash-looping server: the screen connected 0.5 s after the server came back. ~~Not yet tried in
+  the WPE spike image.~~ (Cannot work on WebKit, which keeps a `file://` page from asking the
+  server; see S1.) The same test showed the live slide for a moment when the screen page
   loaded under black (the first overlay faded in like any later one); the first snapshot's
   overlay now appears at once. (Since ADR 0027 the WPE kiosk waits for the server instead of
   `start.html`.)
