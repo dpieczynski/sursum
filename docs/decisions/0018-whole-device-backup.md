@@ -47,7 +47,8 @@ asked for a full backup (2026-11-17).
 ## Amendment (2026-11-17): removing unused pictures on request
 Pictures are never removed automatically (the maintainer's choice). In admin mode,
 `POST /api/assets/cleanup { dry_run }` counts, then removes, stored pictures that are not the
-logo, not in any set (including a set whose deletion can still be undone) and not on screen in
+logo (nor a removed logo that can still be brought back), not in any set (including a set whose
+deletion can still be undone) and not on screen in
 the frozen live deck, and that were uploaded more than 10 minutes ago (an upload is added to a
 set right after it arrives). The remote shows the count and size first and removes only after a
 hold. Older database copies in `backups/` may still name removed pictures; after restoring one

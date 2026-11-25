@@ -696,10 +696,14 @@ impl AppState {
     /// Brings back the logo removed last. The cover stays as it is: removing the logo turned a
     /// logo cover black, and undo does not put the logo back on screen by itself.
     fn undo_remove_logo(&mut self) -> Result<Option<ServiceSet>, ErrorCode> {
-        // A picture gone meanwhile (say, with a restored backup) is refused by `set_logo` with
-        // `NotFound`, and undo is over.
+        // A picture whose file is gone is refused by `set_logo` with `NotFound`, and undo is
+        // over; a storage failure keeps undo possible, so the operator can try again.
         let removed = self.removed_logo.take().ok_or(ErrorCode::NotFound)?;
-        self.set_logo(Some(&removed))
+        let result = self.set_logo(Some(&removed));
+        if matches!(result, Err(ErrorCode::StorageFailed)) {
+            self.removed_logo = Some(removed);
+        }
+        result
     }
 
     /// Fits a new screen profile to the stage, validates, applies and stores it.
@@ -1156,8 +1160,17 @@ impl AppState {
         let Some(record) = record else { return };
         let same_boot = self.boot_id.is_some() && record.boot_id == self.boot_id;
         self.program.overlay = if same_boot { record.program.overlay } else { Overlay::Logo };
-        self.program.settle_cover(self.logo.as_ref());
+        let settled = self.program.settle_cover(self.logo.as_ref());
         let saved = record.program;
+        if !same_boot || settled {
+            // Store the cover this boot starts with: a restart later in the same boot must not
+            // take it for a reboot, nor bring back a logo cover that was settled to black (a logo
+            // uploaded meanwhile would then appear on screen without anyone pressing LOGO).
+            let now = SavedProgram { overlay: self.program.overlay, ..saved.clone() };
+            if let Err(error) = self.database.save_runtime(&now, self.boot_id.as_deref()) {
+                tracing::error!(?error, "could not save the restored cover");
+            }
+        }
         // The live item belongs to the set that was active when it went live.
         let item = saved.set_id.as_ref().and_then(|set_id| self.sets.get(set_id)).and_then(|set| {
             let item_id = saved.item_id.as_ref()?;

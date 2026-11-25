@@ -191,6 +191,16 @@ async fn reboot_without_a_logo_restores_the_position_under_black() {
     assert!(matches!(command(&mut remote, 1, Rev(0), set).await, CmdOutcome::Applied { .. }));
     let state = screen_state_with(&mut screen, |state| state.logo.is_some()).await;
     assert_eq!(state.overlay, Overlay::Black);
+    drop((remote, screen));
+    server.stop().await.unwrap();
+
+    // A restart later in the same boot is not taken for another reboot: still black.
+    let server = start(dir.path(), "boot-2").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    let state = next_screen_state(&mut screen).await;
+    assert!(state.logo.is_some());
+    assert_eq!(state.overlay, Overlay::Black);
+    assert_eq!(state.live.unwrap().deck.title, "Pieśń przykładowa z refrenem");
     server.stop().await.unwrap();
 }
 
@@ -1231,6 +1241,15 @@ async fn removing_the_logo_turns_its_cover_black_and_undo_brings_back_only_that_
     let state = screen_state_with(&mut screen, |state| state.logo.is_some()).await;
     assert_eq!((state.logo, state.overlay), (Some(first.clone()), Overlay::Black), "back, but not on screen");
 
+    // The black cover is stored: a restart in the same boot does not bring the logo back on screen.
+    drop((remote, screen));
+    server.stop().await.unwrap();
+    let server = start(dir.path(), "boot-1").await;
+    let mut remote = connect(&server, Role::Remote, "admin").await;
+    let mut screen = connect(&server, Role::Screen, "screen").await;
+    let state = next_screen_state(&mut screen).await;
+    assert_eq!((state.logo, state.overlay), (Some(first.clone()), Overlay::Black), "after a restart");
+
     // A logo set after the removal is never replaced by undo, and the old one may go.
     let remove = Command::SetLogo { asset_id: None };
     assert!(matches!(command(&mut remote, 5, Rev(0), remove).await, CmdOutcome::Applied { .. }));
@@ -1242,7 +1261,7 @@ async fn removing_the_logo_turns_its_cover_black_and_undo_brings_back_only_that_
     assert_eq!(clean_up_pictures(&server).await.pictures, 1);
     assert!(!sursum_server::assets::exists(dir.path(), &first));
 
-    // A removed picture gone meanwhile (say, with a restored backup) cannot come back.
+    // A removed picture whose file is gone meanwhile cannot come back.
     let remove = Command::SetLogo { asset_id: None };
     assert!(matches!(command(&mut remote, 8, Rev(0), remove).await, CmdOutcome::Applied { .. }));
     let (path, _) = sursum_server::assets::locate(dir.path(), second.as_str()).unwrap();
