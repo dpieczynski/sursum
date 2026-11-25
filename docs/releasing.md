@@ -64,7 +64,7 @@ choose the `.sursum-system` file. Then:
    the trial are gone.
 
 There is no USB stick path (ADR 0013, amendment of 2026-11-17) and no smaller "application only"
-update any more (ADR 0022): an update is about 600 MB and takes a few minutes.
+update any more (ADR 0022): an update is under 500 MB and takes a few minutes.
 
 ## Trying a server build on a device (developers)
 

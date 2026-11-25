@@ -41,8 +41,8 @@ below comes before new features. Order: CI image build, one update path, engine 
   `bundle …`, `releases/`, `POST /api/update`, the program half of the remote's update views,
   `just app-bundle`, `just deploy`, `deploy/pi-manual/`; developers use `just try <host>` (binary
   in `/run`, runtime drop-in, ADR 0022 amendment); `docs/releasing.md` and the guide rewritten.
-  ⚠ Not yet on hardware: the image with the server in the system, `just try`, and a rollback
-  that restores the database
+  ⚠ Not yet on hardware: `just try`. The image with the server in the system and a rollback
+  that restores the database ran on the pilot Pi on 2026-11-24 (R1, "System update safety")
 - [ ] Reflash the pilot Pi with the new image and start clean (PIN, church, OpenSong import,
   calibration, logo; ADR 0022 amendment)
 - [x] WPE-on-DRM spike (ADR 0009 amendment of 2026-11-19): rebuild sid's `wpewebkit` 2.54 for
@@ -131,8 +131,9 @@ An external review of main was checked claim by claim; what held up is fixed in 
   server crash or a slow boot), against hard rule 3. The kiosk now opens a black page on the
   system (`deploy/kiosk/start.html`) that opens `/screen/` once `/healthz` answers, and the screen
   app reloads only when the server answers. Checked on the pilot Pi (2026-11-24) with a
-  crash-looping server: the screen connected 0.5 s after the server came back. Not yet tried in
-  the WPE spike image. The same test showed the live slide for a moment when the screen page
+  crash-looping server: the screen connected 0.5 s after the server came back. ~~Not yet tried in
+  the WPE spike image.~~ (Cannot work on WebKit, which keeps a `file://` page from asking the
+  server; see S1.) The same test showed the live slide for a moment when the screen page
   loaded under black (the first overlay faded in like any later one); the first snapshot's
   overlay now appears at once. (Since ADR 0027 the WPE kiosk waits for the server instead of
   `start.html`.)
@@ -232,7 +233,7 @@ test passes in Chromium and WPE; CI is green.
 - [x] `sursum-client`: WebSocket with reconnect (backoff + jitter), heartbeat, Hello/Welcome, build-id reload. No stale-`rev` dropping: messages arrive in order per connection and server revisions restart after a server restart, so clients apply every snapshot
 - [x] remote: current/next preview, next/prev, item prev/next, section chips (now slide tiles, ADR 0017), set list, BLACK/LOGO, pedal keys (PgDn/PgUp/arrows/space/B). UI texts via a compile-time message enum (`apps/remote/src/messages.rs`); `leptos_i18n` deferred until a second language is needed
 - [ ] On-site display power spike: `cec-ctl` on both displays (on / standby / power status), projector LAN (PJLink) and RS-232 check in Tulce; record result in ADR 0012
-- [ ] Hardware spike on a Pi 5: cage + Chromium ran on the pilot Pi 5 (2026-11-17, see M4: flags and policies ✓, cursor ✓ transparent theme, forced 1080p60 ✓; first boot showed black, then the logo). Still open: white flash ⚠, a brief gray frame at boot before the logo under Chromium (gone with WPE, which boots black → logo; seen 2026-11-24 after the firmware and kernel's black; also with the kiosk opening `/screen/` directly, but not on kiosk restarts, which do the same 4K30 → 1080p60 mode change) and crossfade smoothness, checked with an HDMI capture, and a first look at the Tulce pillar. The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)
+- [ ] Hardware spike on a Pi 5: cage + Chromium (replaced by WPE on DRM, ADR 0027) ran on the pilot Pi 5 (2026-11-17, see M4: flags and policies ✓, cursor ✓ transparent theme, forced 1080p60 ✓; first boot showed black, then the logo). Still open: white flash ⚠, a brief gray frame at boot before the logo under Chromium (gone with WPE, which boots black → logo; seen 2026-11-24 after the firmware and kernel's black; also with the kiosk opening `/screen/` directly, but not on kiosk restarts, which do the same 4K30 → 1080p60 mode change) and crossfade smoothness, checked with an HDMI capture, and a first look at the Tulce pillar. ~~The WPE comparison waits for a WPEPlatform launcher (cog is legacy, ADR 0009 amendment)~~ (done 2026-11-25 with WebKit's MiniBrowser on DRM, S1; WPE replaced Chromium, ADR 0027)
 - [x] Screen WebDriver tests pass on WPE locally; cross-engine fit test (WPE screen vs Chromium remote) passes. Blocking in CI once CI runs
 
 **Done when:** WebDriver tests pass (black first frame; last slide stays on disconnect; reconnect
@@ -290,15 +291,15 @@ never run on Windows) is removed.
 - [x] Screen guard on the device: `/etc/sursum/config.toml` sets `restart_command = ["touch", "/run/sursum/restart-kiosk"]`; `sursum-kiosk-restart.path` restarts the kiosk as root (no polkit or sudo in the image; the server stays unprivileged). The server reads the image's `/etc/sursum/config.toml` (`SURSUM_SYSTEM_CONFIG`) before the data directory's `config.toml` checked on the Pi (2026-11-17): renderer killed, the guard asked 15 s later and the kiosk restarted
 - [x] Server side of the systemd watchdog: `Type=notify` readiness and `WATCHDOG=1` pings only while the state actor answers (checked under systemd on a desktop); `deploy/systemd/sursum.service` is the unit the image installs
 - [x] In the image (first item above, booted on the Pi 5): systemd units, silent black boot (no splash image, decided 2026-11-17), forced HDMI mode (instead of a fallback EDID file), nftables, Avahi, the screen guard as the kiosk watchdog, hardware and systemd watchdogs
-- [x] Screen resolution, decided 2026-11-17 (ADR 0013 amendment): HDMI0 forced to 1080p60 (`video=HDMI-A-1:1920x1080@60D` in the kernel command line keeps the connector on; cage ignores it for its mode, so `deploy/kiosk/kiosk-session` sets and keeps `SURSUM_SCREEN_MODE=1920x1080@60` with `wlr-randr`; checked on the Pi with an LG 4K TV: runtime switch from 3840×2160@30 to 1920×1080@60 works). Image v0.1.0-36: cage sets the TV's 4K30 at start and kiosk-session switches to 1080p60 before Chromium starts (the page only ever shows in 1080p) checked on the Pi with the LG TV (2026-11-17): 1920×1080@60 stays after the TV is switched off and on and after an HDMI replug (cage kept the mode; kiosk-session is the safety net), CEC comes back too
+- [x] Screen resolution, decided 2026-11-17 (ADR 0013 amendment): HDMI0 forced to 1080p60 (`video=HDMI-A-1:1920x1080@60D` in the kernel command line keeps the connector on; cage ignores it for its mode, so `deploy/kiosk/kiosk-session` sets and keeps `SURSUM_SCREEN_MODE=1920x1080@60` with `wlr-randr`; checked on the Pi with an LG 4K TV: runtime switch from 3840×2160@30 to 1920×1080@60 works). Image v0.1.0-36: cage sets the TV's 4K30 at start and kiosk-session switches to 1080p60 before Chromium starts (the page only ever shows in 1080p) checked on the Pi with the LG TV (2026-11-17): 1920×1080@60 stays after the TV is switched off and on and after an HDMI replug (cage kept the mode; kiosk-session is the safety net), CEC comes back too. (Since ADR 0027 cage, `kiosk-session`, `wlr-randr` and `SURSUM_SCREEN_MODE` are gone: WPE on DRM keeps the kernel's mode)
 - [x] Release workflow for `v*` tags (`.github/workflows/release.yml`, [releasing.md](releasing.md)): card image and signed system update built on arm64, Windows binary, GitHub release (v0.1.0 with a bundle; v0.2.0 with the image, ADR 0022)
 - [x] Image build in CI on arm64 (`ubuntu-24.04-arm`, `sudo podman` privileged, 11 minutes); artifacts `.img.zst` and `.sursum-system` (ADR 0019; rpi-image-gen's `.update.tar.zst` is not used)
 - [x] ~~Signed application bundles~~ (removed 2026-11-20, ADR 0022), core (ADR 0013 amendment): `.sursum-app` ZIP with Ed25519-signed manifest, `bundle keygen/create/install/rollback`, DB backup before switching, atomic `current`/`previous` symlinks, `just app-bundle`
 - [x] ~~Bundles on the device~~ (removed 2026-11-20, ADR 0022), server side (ADR 0013 second amendment): trial with a start-counting guard run from the previous release (`ExecStartPre`), automatic rollback incl. the database copy when the schema changed, self-commit after 30 s healthy, upload from the remote (admin, "O programie") with restart into the new release, outcome shown in the remote, `just deploy <host> <version>`; checked with a systemd user unit (crash and hang both roll back)
-- [x] Interim hand install for a pilot Pi 5 on Raspberry Pi OS Lite ([deploy/pi-manual](../deploy/pi-manual/README.md)): script, kiosk unit after the rpi-image-gen `webkiosk` example; run on the pilot Pi 5 (2026-11-17). Kiosk unit, policies and cursor generator are shared with the image in `deploy/kiosk/`
-- [x] Kiosk cursor: cage (0.3.1 on Raspberry Pi OS) draws its cursor in the middle of the screen even without a mouse and has no option to hide it; and Chromium sets its own cursor after every page reload (from the default/Adwaita theme, e.g. `progress`); the pilot gives the kiosk a private `XCURSOR_PATH` whose `sursum-blank`, `default` and `Adwaita` themes hold one transparent pixel under every cursor name; confirmed on the pilot Pi 5 (no cursor after kiosk start and after two page reloads, 2026-11-17). The `sursum-kiosk` image layer runs the same generator (`deploy/kiosk/blank-cursors.sh`). The black overlay is composited from page load (`will-change: opacity`); the one-frame flash of full-brightness text at the first black did not recur on the Pi afterwards
-- [x] `sursum-kiosk` layer (`image/layer/sursum-kiosk.yaml`): Chromium managed policies, short command line, transparent cursor theme, localhost-only network for the kiosk unit (as in `deploy/pi-manual/`; all confirmed on the pilot Pi 5, 2026-11-17: no push-messaging requests after the block, screen and remote work, no cursor or browser UI)
-- Moved to S1 (ADR 0009 amendment of 2026-11-19): the WPE-on-DRM spike with a rebuilt 2.54 package and WebKit's own MiniBrowser, without waiting for Debian 14; a Rust launcher only if MiniBrowser is unsuitable
+- [x] ~~Interim hand install~~ (removed 2026-11-20, ADR 0022) for a pilot Pi 5 on Raspberry Pi OS Lite (`deploy/pi-manual/`): script, kiosk unit after the rpi-image-gen `webkiosk` example; run on the pilot Pi 5 (2026-11-17). Kiosk unit, policies and cursor generator are shared with the image in `deploy/kiosk/`
+- [x] Kiosk cursor: cage (0.3.1 on Raspberry Pi OS) draws its cursor in the middle of the screen even without a mouse and has no option to hide it; and Chromium sets its own cursor after every page reload (from the default/Adwaita theme, e.g. `progress`); the pilot gives the kiosk a private `XCURSOR_PATH` whose `sursum-blank`, `default` and `Adwaita` themes hold one transparent pixel under every cursor name; confirmed on the pilot Pi 5 (no cursor after kiosk start and after two page reloads, 2026-11-17). The `sursum-kiosk` image layer runs the same generator (`deploy/kiosk/blank-cursors.sh`). The black overlay is composited from page load (`will-change: opacity`); the one-frame flash of full-brightness text at the first black did not recur on the Pi afterwards. (Since ADR 0027 there is no cage and no Chromium; WPE on DRM draws no cursor, and the cursor themes and `blank-cursors.sh` are removed)
+- [x] `sursum-kiosk` layer (`image/layer/sursum-kiosk.yaml`): Chromium managed policies, short command line, transparent cursor theme, localhost-only network for the kiosk unit (as in `deploy/pi-manual/`; all confirmed on the pilot Pi 5, 2026-11-17: no push-messaging requests after the block, screen and remote work, no cursor or browser UI). Since ADR 0027 the layer installs WPE's MiniBrowser on DRM instead; Chromium, its policies and the cursor theme are removed
+- Moved to S1 (ADR 0009 amendment of 2026-11-19): the WPE-on-DRM spike with a rebuilt 2.54 package and WebKit's own MiniBrowser, without waiting for Debian 14; a Rust launcher only if MiniBrowser is unsuitable (done: MiniBrowser on DRM is the screen, ADR 0027)
 - [ ] PoE evaluation
 - [x] Display power, PJLink part (ADR 0012 amendment): codec checked against the JBMIA 1.04 example, background task with polling, state indicator, "on" tap and 1.5 s standby hold in the remote, tested against a fake projector (integration + e2e)
 - [x] Display power, CEC part (ADR 0012 amendment of 2026-11-17; both churches' own displays are the open M1 item): `CecDisplay` on `cec_linux` (Image View On + Active Source, Standby, Give Device Power Status), `backend = "cec"` on by default in the image's `/etc/sursum/config.toml`, `/dev/cec0` through `SupplementaryGroups=video` checked on an LG 4K TV (2026-11-17): power state read, on from standby with input switch, standby
@@ -308,10 +309,14 @@ address, screen profile) and `apt install` on it fails (read-only root); updates
 work, a deliberately broken update rolls back by itself with the matching database, and an
 update with a bad signature is rejected; power-on shows only black/logo then content (HDMI
 capture); 100 power cuts without DB damage, logo + position after each boot; late projector power-on and HDMI replug pass; killed
-Chromium/server recovers in < 5 s; Tulce pillar zone calibrated on site and text readable from the
+browser/server recovers in < 5 s; Tulce pillar zone calibrated on site and text readable from the
 last pew; in both churches the display turns on and to standby from the operator position and the
 reported state matches reality in 20 consecutive tries (or a documented "unavailable" reason with
 a hardware plan).
+
+Status 2026-11-25: a release that raised the schema rolled back by itself with the database
+restored on the pilot Pi (2026-11-24, R1). A killed WPE web process is not restarted by
+MiniBrowser; the screen guard restarts the kiosk after 15.5 s (S1).
 
 ## M5 — Pedal and keyboard shortcuts
 
@@ -342,15 +347,16 @@ away everywhere, and plain-text song entry (ADR 0017).
 
 ## M7 — Offline system updates
 
-Since ADR 0022 (built 2026-11-20) this is the only update path: the server, the kiosk unit,
-Chromium and its policies, cage and the kernel are all part of the read-only system and change
-together with one `.sursum-system` file.
+Since ADR 0022 (built 2026-11-20) this is the only update path: the server, the kiosk unit, the
+browser (WPE WebKit's MiniBrowser since ADR 0027) and the kernel are all part of the read-only
+system and change together with one `.sursum-system` file.
 
 - [x] Mechanism decided and built (ADR 0019): own updater on the firmware's tryboot and rpi-image-gen's by-slot links; `.sursum-system` (signed ZIP of the raw boot and system images, `just image` writes it), upload from the remote (O programie, admin), root units with the read-only system's verifier write the other slot and reboot with `0 tryboot`, `finish-trial` commits after 30 s of healthy server and kiosk or reboots into the old slot; `panic=10`; unit and integration tests with fake slots; run on the Pi 5 (v0.1.0-36 → v0.1.0-37 committed; the tryboot restart needed `--reboot-argument`, fixed); the remote follows program and system updates in one locked sheet over every view; on the Pi 2026-11-18 a fully automatic update (v39 → v40) committed and a deliberately broken system (kiosk `/bin/false`) rolled back to v40 by itself
 - [x] State shared by both slots (`/var/lib/sursum`) stays readable by the older slot after a
   rollback (rpi-image-gen warns about this): the database copy taken when the update was staged
   goes back if the failed system raised the schema (ADR 0022 amendment; unit test with fake
-  slots, ⚠ not yet on the Pi)
+  slots; on the pilot Pi 2026-11-24 a release that raised the schema and exited rolled back with
+  the database restored, R1)
 - [x] `just image` also writes the matching `.sursum-system` (and verifies it)
 - [x] The release workflow attaches it (first for v0.2.0)
 

@@ -18,18 +18,18 @@ supersedes the old one instead of editing it.
 | [0010](0010-license-gpl3.md) | GPL-3.0-or-later and dependency license policy |
 | [0011](0011-github-and-dco.md) | GitHub hosting, DCO for contributions; public repository (amended 2026-11-19) |
 | [0012](0012-display-power-cec-pjlink.md) | Display power control via HDMI-CEC, PJLink fallback (both built) |
-| [0013](0013-immutable-ab-image.md) | Immutable A/B device image (rpi-image-gen), the image stands; its signed app bundles are superseded by ADR 0022 |
+| [0013](0013-immutable-ab-image.md) | Immutable A/B device image (rpi-image-gen), the image stands; its signed app bundles are superseded by ADR 0022, its cage and Chromium kiosk by ADR 0027 |
 | [0014](0014-rust-frontend-leptos.md) | Rust frontend: Leptos 0.8 CSR, Trunk, shared protocol/slide crates, WebDriver tests; no Dioxus |
 | [0015](0015-screen-engine-portability.md) | Screen portability to WPE WebKit: API contract and blocking WPE tests (still started through cog; their future follows the WPE spike); the cog image variant was withdrawn |
 | [0016](0016-operator-and-admin-mode.md) | Rights by pairing with the PIN, revocation, hardening (its admin mode is superseded by ADR 0024) |
 | [0017](0017-remote-three-views.md) | The remote: three views (Msza, Zestaw, Ustawienia) around a fixed live area |
 | [0018](0018-whole-device-backup.md) | Whole-device backup (`.sursum-backup`) and restore from the remote, credentials stay on the device |
-| [0019](0019-offline-system-updates.md) | Offline system updates: signed `.sursum-system` from the remote, written to the other A/B slot, trial through the firmware's tryboot; the only update path once ADR 0022 is built |
+| [0019](0019-offline-system-updates.md) | Offline system updates: signed `.sursum-system` from the remote, written to the other A/B slot, trial through the firmware's tryboot; the only update path since ADR 0022 |
 | [0020](0020-desktop-program.md) | Desktop program `sursum`: the same server on loopback in a window of its own (WebView2 on Windows, WebKitGTK 6.0 on Linux); the window has no features; Windows supported, Linux best effort |
 | [0021](0021-remote-on-webkit.md) | The remote on WebKit: ADR 0015's API contract extended to the remote, blocking remote tests on WebKitGTK (the iPad parts are superseded by ADR 0023) |
-| [0022](0022-one-update-path.md) | One update path: the server ships inside the system image, `.sursum-system` is the only update file, application bundles are removed (not built yet) |
+| [0022](0022-one-update-path.md) | One update path: the server ships inside the system image, `.sursum-system` is the only update file, application bundles are removed (built 2026-11-20) |
 | [0023](0023-platform-scope.md) | Platform scope: no iPad, no macOS program, no Windows parish PC; remote in Blink browsers, desktop program on Windows and Linux, screen on the Pi image only |
 | [0024](0024-one-level-of-rights.md) | One level of rights: a paired remote may do everything; no admin mode, pairing stays |
-| [0025](0025-versioned-songs-and-sets.md) | Songs and sets keep their identity and get versions; more changes win, the other version waits for review; sets per church with a date; one `.sursum` file with sets and pictures; no migration (not built yet) |
+| [0025](0025-versioned-songs-and-sets.md) | Songs and sets keep their identity and get versions; more changes win, the other version waits for review; sets per church with a date; one `.sursum` file with sets and pictures; no migration (built 2026-11-20, roadmap Y1) |
 | [0026](0026-public-release-images.md) | Public release images: no administrator SSH key (owners add one on the persistent partition), a package list and a GPL sources offer with every release, pinned release actions |
 | [0027](0027-wpe-replaces-chromium.md) | WPE WebKit's MiniBrowser on DRM replaces Chromium under cage: no compositor, our trixie rebuild of 2.54, the kiosk starts once the server answers (supersedes ADR 0009's engine choice) |

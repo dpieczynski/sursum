@@ -2,8 +2,10 @@
 
 Status: Accepted as the preliminary direction (2026-11-16); revisit only with a new ADR.
 The application bundles (update level 1 and the amendments about bundles and their trial) are
-superseded by ADR 0022 (2026-11-19, not built yet); the image itself stands.
+superseded by ADR 0022 (2026-11-19, built 2026-11-20); the image itself stands.
 Release images carry no administrator SSH key (ADR 0026, 2026-11-22).
+The kiosk layer's cage, Chromium and `kiosk-session` (with `SURSUM_SCREEN_MODE`) are replaced by
+WPE WebKit on DRM, which keeps the kernel's forced mode (ADR 0027, 2026-11-25).
 
 ## Context
 The device must survive sudden power loss and accept updates, at least of our own software.

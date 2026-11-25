@@ -22,14 +22,14 @@ are made but not built yet. A device has one update path, the system update
 | `crates/sursum-protocol` | **shared** serde types (WS messages, snapshots, `Deck`/`Slide`, `ScreenLayout`, REST DTOs); data only; native + wasm32 |
 | `crates/sursum-core` | pure domain (server only): song model, slide compiler, program state machine, set ops, search, layout |
 | `crates/sursum-formats` | OpenSong import (songs and sets) and the editor's plain-text form; OpenLyrics export is not built |
-| `crates/sursum-server` | binary and library: axum, WebSocket, SQLite, auth, embedded frontend, display power, app and system updates, backups, platform |
+| `crates/sursum-server` | binary and library: axum, WebSocket, SQLite, auth, embedded frontend, display power, system updates, backups, platform |
 | `crates/sursum-desktop` | binary `sursum` (ADR 0020): the server library on loopback plus one window (WebView2 through `tao`/`wry` on Windows, `gtk4`/`webkit6` on Linux); the window has no features |
 | `crates/sursum-slide` | **shared** Leptos slide rendering for screen and remote preview (`Stage`, `LayeredStage`, `fit_deck`, the fixed text style `THEME`) |
 | `crates/sursum-client` | **shared** Leptos WebSocket client (reconnect, heartbeat, status signal); the apps keep their own state |
 | `apps/screen`, `apps/remote` | Leptos CSR apps built with Trunk |
 | `e2e/` | WebDriver tests (thirtyfour) against the real binary |
 | `image/` | device image (rpi-image-gen config and layers; immutable A/B, ADR 0013) |
-| `deploy/` | units and kiosk files the image installs (`systemd/`, `kiosk/`); interim hand install (`pi-manual/`, goes with ADR 0022) |
+| `deploy/` | units and kiosk files the image installs (`systemd/`, `kiosk/`) |
 | `library/public-domain/` | starter library of public-domain hymns in OpenSong format (`just library-zip`) |
 | `assets/fonts/` | bundled OFL fonts with licenses |
 | `fixtures/` | public-domain or synthetic test data only |

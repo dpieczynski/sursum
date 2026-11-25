@@ -1,6 +1,6 @@
 # 0025 — Songs and sets keep their identity and get versions; more changes win
 
-Status: Accepted (2026-11-19); not built yet, see the roadmap section Y1 and
+Status: Accepted (2026-11-19); built 2026-11-20, see the roadmap section Y1 and
 [plan-sync.md](../plan-sync.md). Supersedes the merge rules of the `.sursum` file (roadmap M3,
 `library.rs`): conflict copies, the list of known hashes and the songs-only file.
 
