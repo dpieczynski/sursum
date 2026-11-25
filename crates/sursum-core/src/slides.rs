@@ -130,7 +130,7 @@ fn verse_slides(verse: &Verse, occurrence: usize, rules: SlideRules) -> Vec<Slid
 /// (`v2` → verse 2, `c` → chorus, `v1a` → verse 1, letter a), or its own label. A name that does
 /// not follow that pattern (`x9z1`, possible only in hand-made files) or whose number does not
 /// fit a `u32` is an "other" section labelled with the name, so nothing is lost. A blank label
-/// (`[]` in OpenSong) counts as none, so the remote never shows an empty name.
+/// (`[]` in OpenSong) or a blank name counts as none, so the remote never shows an empty name.
 pub fn section_name(verse: &Verse) -> SectionName {
     let name = verse.name.0.as_str();
     let mut chars = name.chars();
@@ -160,7 +160,7 @@ pub fn section_name(verse: &Verse) -> SectionName {
             kind: SectionKind::Other,
             number: None,
             suffix: None,
-            label: Some(label.unwrap_or_else(|| name.to_owned())),
+            label: label.or_else(|| Some(name.trim().to_owned()).filter(|name| !name.is_empty())),
         },
     }
 }
@@ -420,6 +420,13 @@ mod tests {
         let mut odd = Verse::simple("x9z1", &["a"]);
         odd.label = Some(" ".to_owned());
         assert_eq!(section_name(&odd).label.as_deref(), Some("x9z1"), "an odd name falls back to the name");
+        for blank in ["", "  "] {
+            assert_eq!(
+                section_name(&Verse::simple(blank, &["a"])),
+                SectionName { kind: SectionKind::Other, number: None, suffix: None, label: None },
+                "name {blank:?}"
+            );
+        }
     }
 
     #[test]

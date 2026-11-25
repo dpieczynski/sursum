@@ -127,10 +127,12 @@ the remote words them in Polish. There is no `Notice` message and no server or c
 the handshake. How text looks (font, colour, size range) is not on the wire: it is one fixed style
 in `sursum-slide` (`theme.rs`).
 
-**Changing the snapshot types** (removing a field, or adding one without `#[serde(default)]`): a
-screen page from the previous build cannot read the new snapshots, keeps its last slide and,
-because it reloads only at a moment with no text on screen, never notices. On a device the
-kiosk must restart once after such an update (a system update or a reboot does it). Removed on
+**Changing the snapshot types** (removing a field, or adding one without `#[serde(default)]`)
+raises `PROTOCOL_VERSION`: a screen page from the previous build cannot read the new snapshots,
+and the other version in `Welcome` makes it reload at once (see Reconnect). Without the raise it
+would keep its last slide and never notice. Pages from before `PROTOCOL_VERSION` 2 waited for a
+moment with no text on screen even then, so a device whose screen page is older needs one kiosk
+restart after the update (a system update or a reboot does it). Removed on
 2026-11-19: `ScreenState.theme`, `RemoteState.sections`, `ClientMsg::Log`; on 2026-11-20:
 `Deck.background` and the image `fit` (pictures are always whole, on black); on 2026-11-25:
 `Slide.label` (a section code the remote had to parse) became `Slide.part`, with

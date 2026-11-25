@@ -102,17 +102,20 @@ async fn a_server_with_another_protocol_reloads_the_screen_even_with_a_slide_liv
 
         let other = (sursum_protocol::PROTOCOL_VERSION + 1).to_string();
         server.restart_with(&["--protocol-version", &other]).await?;
-        // Reloading drops the mark. (A script may fail while a page is loading; ask again.)
+        // Reloading drops the mark, onto the screen page itself and not a browser error page.
+        // (A script may fail while a page is loading; ask again.)
         let reloaded = wait_until(Duration::from_secs(15), || async {
-            let mark = driver.execute("return window.sursumBeforeChange === true;", Vec::new()).await;
-            mark.is_ok_and(|mark| mark.json().as_bool() == Some(false))
+            let script = "return window.sursumBeforeChange !== true && location.pathname === '/screen/' \
+                          && document.querySelector('.sursum-screen') !== null;";
+            let mark = driver.execute(script, Vec::new()).await;
+            mark.is_ok_and(|mark| mark.json().as_bool() == Some(true))
         })
         .await;
         anyhow::ensure!(reloaded.is_ok(), "the screen kept the live slide instead of reloading");
-        // Not checked: switching back to this release's protocol. The page now reloads as fast
-        // as the server answers, and killing the server between `/healthz` and the reload
-        // leaves the browser on its own error page (on a device the screen guard restarts the
-        // kiosk then). A real update serves pages of its own protocol, so there is no loop.
+        // Not checked: switching back to this release's protocol. The page keeps reloading (at
+        // most every 5 s) while the server disagrees, and killing the server between `/healthz`
+        // and a reload leaves the browser on its own error page (on a device the screen guard
+        // restarts the kiosk then). A real update serves pages of its own protocol.
         Ok(())
     })
     .await

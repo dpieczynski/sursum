@@ -59,11 +59,14 @@ fn reload_if_safe(state: Option<&ScreenState>) {
 /// Plain JavaScript (a panicked WebAssembly module cannot run Rust code any more): reloads once
 /// `/healthz` answers, asking again every half second until then. Runs once per page however
 /// often it is called (a new build asks on `Welcome` and again on the next snapshot), and gives
-/// up on an answer after 2 s, so a server that accepts but hangs is asked again on time.
+/// up on an answer after 2 s, so a server that accepts but hangs is asked again on time. A page
+/// younger than 5 s first waits until it is 5 s old: a page that keeps disagreeing with its
+/// server (a stale frontend in a development build, a panic at start) reloads at most every 5 s
+/// instead of as fast as the server answers, while an update still reloads at once.
 const RELOAD_WHEN_SERVER_ANSWERS: &str = "(function () { \
     if (window.sursumReloading) { return; } \
     window.sursumReloading = true; \
-    (function ask() { \
+    setTimeout(function ask() { \
         var controller = new AbortController(); \
         var timer = setTimeout(function () { controller.abort(); }, 2000); \
         fetch('/healthz', { cache: 'no-store', signal: controller.signal }).then( \
@@ -72,7 +75,7 @@ const RELOAD_WHEN_SERVER_ANSWERS: &str = "(function () { \
                 if (response.ok) { location.reload(); } else { setTimeout(ask, 500); } \
             }, \
             function () { clearTimeout(timer); setTimeout(ask, 500); }); \
-    })(); })()";
+    }, Math.max(0, 5000 - performance.now())); })()";
 
 fn reload() {
     let _ = js_sys::Function::new_no_args(RELOAD_WHEN_SERVER_ANSWERS).call0(&wasm_bindgen::JsValue::NULL);

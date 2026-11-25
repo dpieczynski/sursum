@@ -45,6 +45,7 @@ struct Args {
     wasm_delay_ms: u64,
     /// Test-only: speak another protocol version on the WebSocket, like a server from another
     /// release (needs the `e2e-hooks` feature).
+    #[cfg(feature = "e2e-hooks")]
     #[arg(long, hide = true)]
     protocol_version: Option<u16>,
     #[command(subcommand)]
@@ -158,7 +159,8 @@ async fn main() -> anyhow::Result<()> {
     }
     config.allowed_origins.extend(args.allow_origins);
     config.wasm_delay_ms = args.wasm_delay_ms;
-    if let Some(protocol) = args.protocol_version.filter(|_| cfg!(feature = "e2e-hooks")) {
+    #[cfg(feature = "e2e-hooks")]
+    if let Some(protocol) = args.protocol_version {
         config.protocol_version = protocol;
     }
     if args.open_without_pin {

@@ -86,8 +86,10 @@ pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role, guar
     if role != endpoint {
         return;
     }
-    let welcome = ServerMsg::Welcome { protocol: guard.protocol, build_id: BUILD_ID.to_owned() };
-    if send(&mut sender, &welcome).await.is_err() || protocol != guard.protocol {
+    // Only a browser-test build may speak another version than its own.
+    let own = if cfg!(feature = "e2e-hooks") { guard.protocol } else { sursum_protocol::PROTOCOL_VERSION };
+    let welcome = ServerMsg::Welcome { protocol: own, build_id: BUILD_ID.to_owned() };
+    if send(&mut sender, &welcome).await.is_err() || protocol != own {
         // A client with another protocol version reloads itself at once after reading
         // `Welcome`: no snapshot follows, the socket closes here.
         return;
