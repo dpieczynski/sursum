@@ -798,19 +798,18 @@ impl AppState {
         Ok(Some(self.sets.add(copy).clone()))
     }
 
-    /// The live versions of a set and the set each holds, the shown one first.
+    /// The live versions of a set and the set each holds, best first (the shown one first).
     fn set_version_bodies(&self, set_id: &SetId) -> Option<Vec<(VersionId, bool, ServiceSet)>> {
         let heads = self.database.set_heads(set_id).ok()?;
         let shown = heads.current()?.id().clone();
-        let mut versions: Vec<(VersionId, bool, ServiceSet)> = heads
-            .versions()
-            .iter()
+        let versions = heads
+            .ranked()
+            .into_iter()
             .filter_map(|version| {
                 let set = crate::db::set_from_body(set_id, version.live_body()?).ok()?;
                 Some((version.id().clone(), version.id() == &shown, set))
             })
             .collect();
-        versions.sort_by_key(|(_, shown, _)| !shown);
         Some(versions)
     }
 
@@ -831,6 +830,7 @@ impl AppState {
                         item_id: item.id.clone(),
                         title: self.item_title(item),
                         kind: self.item_kind(item),
+                        song_number: self.item_song_number(item),
                         missing_elsewhere,
                     })
                     .collect();
@@ -1053,7 +1053,13 @@ impl AppState {
                 report
             }
             Err(error) => {
-                sursum_protocol::ImportReport { problems: vec![error.to_string()], ..Default::default() }
+                tracing::error!(?error, "could not store the import");
+                let problem = sursum_protocol::ImportProblem {
+                    file: String::new(),
+                    line: None,
+                    code: sursum_protocol::ImportProblemCode::StorageFailed,
+                };
+                sursum_protocol::ImportReport { problems: vec![problem], ..Default::default() }
             }
         };
         self.reload_library();
@@ -1107,13 +1113,14 @@ impl AppState {
         songs
     }
 
-    /// Every live version of a song, the shown one first, in the editor's text form.
+    /// Every live version of a song, best first (the shown one first), in the editor's text
+    /// form.
     fn song_versions(&self, song_id: &SongId) -> Option<sursum_protocol::SongVersions> {
         let heads = self.database.song_heads(song_id).ok()?;
         let shown = heads.current()?.id().clone();
-        let mut versions: Vec<sursum_protocol::SongVersionView> = heads
-            .versions()
-            .iter()
+        let versions = heads
+            .ranked()
+            .into_iter()
             .filter_map(|version| {
                 let song = crate::db::song_from_body(song_id, version.live_body()?).ok()?;
                 let draft = editor::draft_of(&song, version.id());
@@ -1121,11 +1128,12 @@ impl AppState {
                     version: version.id().as_str().to_owned(),
                     shown: version.id() == &shown,
                     title: draft.title,
+                    number: draft.number,
+                    presentation: draft.presentation,
                     lyrics: draft.lyrics,
                 })
             })
             .collect();
-        versions.sort_by_key(|version| !version.shown);
         Some(sursum_protocol::SongVersions { song_id: song_id.clone(), versions })
     }
 
@@ -1262,14 +1270,7 @@ impl AppState {
                     ItemKind::Song { song_id, .. } => Some(song_id.clone()),
                     _ => None,
                 },
-                song_number: match &item.kind {
-                    ItemKind::Song { song_id, .. } => self
-                        .songs
-                        .get(song_id)
-                        .and_then(|song| song.songbooks.first())
-                        .map(|entry| entry.entry.clone()),
-                    _ => None,
-                },
+                song_number: self.item_song_number(item),
             })
             .collect();
         SetView {
@@ -1290,6 +1291,12 @@ impl AppState {
             ItemKind::Image { .. } => SetItemKind::Image,
             ItemKind::Blank { .. } => SetItemKind::Pause,
         }
+    }
+
+    /// The songbook number of a song item's song, if it has one.
+    fn item_song_number(&self, item: &SetItem) -> Option<String> {
+        let ItemKind::Song { song_id, .. } = &item.kind else { return None };
+        self.songs.get(song_id)?.songbooks.first().map(|entry| entry.entry.clone())
     }
 
     fn item_title(&self, item: &SetItem) -> String {

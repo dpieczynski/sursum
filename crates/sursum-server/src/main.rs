@@ -130,8 +130,9 @@ async fn main() -> anyhow::Result<()> {
         let mut database = sursum_server::db::Database::open(&args.data_dir)?;
         database.backup(&args.data_dir, "before-import")?;
         let report = sursum_server::import::import_opensong(&mut database, songs_dir, songbook)?;
-        for line in &report.problems {
-            eprintln!("{line}");
+        // The remote words the problems in Polish; the command line shows the codes as JSON.
+        for problem in &report.problems {
+            eprintln!("{}", serde_json::to_string(problem)?);
         }
         println!(
             "imported: {} new, {} updated, {} unchanged, {} failed, {} sets",

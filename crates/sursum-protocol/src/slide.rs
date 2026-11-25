@@ -24,10 +24,61 @@ pub struct Deck {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Slide {
     pub key: SlideKey,
-    /// Label code for jump buttons, e.g. `v1`, `c`, or a custom section name; the remote
-    /// localizes codes.
-    pub label: String,
+    /// Which part of its item this slide shows. The remote names tiles and the live position
+    /// from it ("Zwrotka 2 (2)", "Slajd 3"), so it never reads keys or section codes.
+    pub part: SlidePart,
     pub body: SlideBody,
+}
+
+/// Which part of its item a slide shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SlidePart {
+    /// A slide of a song section. A section too long for one slide is split; `piece` counts
+    /// its slides from 0, so the remote can tell the second slide of a verse from the first.
+    Section { section: SectionName, piece: u32 },
+    /// Page `number` (from 1) of a text item, e.g. an announcement.
+    Page { number: u32 },
+    /// The one slide of a picture item.
+    Picture,
+    /// An empty slide: a pause item, or the gap after an item's last slide.
+    Pause,
+}
+
+/// A song section as the server read it from the markup (`[V2]`, `[C]`, `[Alleluja]`). The
+/// remote words it in its language.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SectionName {
+    pub kind: SectionKind,
+    /// The number after the kind (`2` in `V2`), if any.
+    pub number: Option<u32>,
+    /// A letter after the number (`a` in OpenSong's `V1a`), if any.
+    #[serde(default)]
+    pub suffix: Option<char>,
+    /// A section with a name of its own (`[Alleluja]`): shown as written, instead of kind and
+    /// number.
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+/// What kind of section a song section is (OpenLyrics names, OpenSong headers).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SectionKind {
+    /// `v`, OpenSong `[V1]`.
+    Verse,
+    /// `c`, OpenSong `[C]` (or the Polish `[R]`).
+    Chorus,
+    /// `b`, OpenSong `[B]`.
+    Bridge,
+    /// `p`, OpenSong `[P]`.
+    PreChorus,
+    /// `e`, OpenSong `[T]` (tag) or `[E]`.
+    Ending,
+    /// `i`, OpenSong `[I]`.
+    Intro,
+    /// `o`, any other section, usually one with a name of its own.
+    Other,
 }
 
 /// What a slide contains.

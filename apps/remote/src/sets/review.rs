@@ -11,7 +11,7 @@ use sursum_protocol::{Command, ItemId, RemoteState, SetId, SetVersionItem, SetVe
 
 use crate::Commands;
 use crate::api::get_json;
-use crate::messages::{Msg, pl, set_date_label};
+use crate::messages::{Msg, pl, set_date_label, song_number};
 use crate::ui::Sheet;
 
 /// "Zestaw zmieniony w dwóch miejscach", shown only while the active set waits for review.
@@ -123,9 +123,11 @@ fn item_row(item: SetVersionItem, added: RwSignal<BTreeSet<ItemId>>) -> impl Int
             </button>
         }
     });
+    let number = song_number(item.song_number.as_deref());
     view! {
         <li class="review-item" class:differs=item.missing_elsewhere>
             <span class="review-item-title">{item.title}</span>
+            <span class="review-item-number">{number}</span>
             {button}
         </li>
     }

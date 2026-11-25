@@ -8,7 +8,7 @@ use crate::layout::ScreenProfile;
 use crate::state::{EndOfItem, Overlay, RemoteState, ScreenState};
 
 /// Bumped on any incompatible change; a client with another version reloads itself.
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 
 /// Which kind of client is connecting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

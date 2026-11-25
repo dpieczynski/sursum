@@ -170,7 +170,16 @@ impl Heads {
     /// elsewhere without knowing of it), then more changes, then the greater id. `None` only
     /// when nothing is known.
     pub fn current(&self) -> Option<&Version> {
-        self.0.iter().max_by(|a, b| (a.is_live(), a.changes(), &a.id).cmp(&(b.is_live(), b.changes(), &b.id)))
+        self.0.iter().max_by(|a, b| precedence(a, b))
+    }
+
+    /// The heads best first, by the rule of [`Heads::current`]: the review lists versions in
+    /// this order, so the shown one comes first and the others follow in a fixed order on every
+    /// device (not by id, which says nothing to a person).
+    pub fn ranked(&self) -> Vec<&Version> {
+        let mut versions: Vec<&Version> = self.0.iter().collect();
+        versions.sort_by(|a, b| precedence(b, a));
+        versions
     }
 
     /// True if the document is live (its current version is not a deletion).
@@ -210,6 +219,12 @@ impl Heads {
     fn replaced_by_all(&self) -> BTreeSet<VersionId> {
         self.0.iter().flat_map(Version::lineage).cloned().collect()
     }
+}
+
+/// Which of two heads goes first: a live one before a deletion, then more changes, then the
+/// greater id.
+fn precedence(a: &Version, b: &Version) -> std::cmp::Ordering {
+    (a.is_live(), a.changes(), &a.id).cmp(&(b.is_live(), b.changes(), &b.id))
 }
 
 #[cfg(test)]
@@ -265,6 +280,18 @@ mod tests {
         let reviewed = merged.with(merged.resolve(text("razem")));
         assert!(!reviewed.needs_review());
         assert_eq!(current_text(&church.merge(&reviewed)).as_deref(), Some("razem"));
+    }
+
+    #[test]
+    fn the_review_lists_versions_best_first() {
+        let common = Heads::of([Version::first(text("wspólna"))]);
+        let three = edit(&edit(&edit(&common, "a1"), "a2"), "a3");
+        let two = edit(&edit(&common, "b1"), "b2");
+        let one = edit(&common, "c1");
+        let merged = one.merge(&three).merge(&two);
+        let bodies: Vec<&[u8]> = merged.ranked().into_iter().filter_map(Version::live_body).collect();
+        assert_eq!(bodies, [b"a3".as_slice(), b"b2", b"c1"]);
+        assert_eq!(merged.ranked().first().copied(), merged.current());
     }
 
     #[test]

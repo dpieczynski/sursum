@@ -116,6 +116,13 @@ pub enum Msg {
     ButtonsLeft,
     Vibration,
     SlideN,
+    PartVerse,
+    PartChorus,
+    PartBridge,
+    PartPreChorus,
+    PartEnding,
+    PartIntro,
+    PartOther,
     Items,
     Next,
     Prev,
@@ -165,6 +172,7 @@ pub enum Msg {
     CompareTitle,
     VersionShown,
     VersionOther,
+    VersionOrder,
     KeepThis,
     VersionKept,
     ToReview,
@@ -434,6 +442,13 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::ButtonsLeft => "Po lewej",
         Msg::Vibration => "Wibracja przy dotknięciu",
         Msg::SlideN => "Slajd",
+        Msg::PartVerse => "Zwrotka",
+        Msg::PartChorus => "Refren",
+        Msg::PartBridge => "Most",
+        Msg::PartPreChorus => "Przedrefren",
+        Msg::PartEnding => "Zakończenie",
+        Msg::PartIntro => "Wstęp",
+        Msg::PartOther => "Część",
         Msg::Items => "poz.",
         Msg::Next => "Dalej",
         Msg::Prev => "Wstecz",
@@ -494,6 +509,7 @@ pub fn pl(msg: Msg) -> &'static str {
         Msg::CompareTitle => "Porównaj wersje",
         Msg::VersionShown => "Pokazywana teraz",
         Msg::VersionOther => "Druga wersja",
+        Msg::VersionOrder => "kolejność:",
         Msg::KeepThis => "Zostaw tę",
         Msg::VersionKept => "Zostawiono wybraną wersję",
         Msg::ToReview => "do przejrzenia",
@@ -719,6 +735,19 @@ pub fn paired_on(date: [u32; 5]) -> String {
     format!("sparowano {day}.{month:02}.{year}, {hour}:{minute:02}")
 }
 
+/// "nr 12 · kolejność: V1 C V2 C" under a song version's title in the review: the fields that
+/// are not in the lyrics, so versions that differ only there do not look the same. Empty when
+/// the version has neither.
+pub fn song_version_details(number: Option<&str>, presentation: &str) -> String {
+    let order = presentation.trim();
+    let order = (!order.is_empty()).then(|| format!("{} {order}", pl(Msg::VersionOrder)));
+    [Some(song_number(number)).filter(|number| !number.is_empty()), order]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
 /// "nr 12" for a song's number in the hymnal (so it is not mistaken for a count); empty without.
 pub fn song_number(number: Option<&str>) -> String {
     number
@@ -816,8 +845,51 @@ pub fn import_lines(report: &sursum_protocol::ImportReport) -> Vec<String> {
             report.to_review.join(", ")
         ));
     }
-    lines.extend(report.problems.iter().map(|problem| format!("Uwaga: {problem}")));
+    lines.extend(report.problems.iter().map(|problem| format!("Uwaga: {}", import_problem(problem))));
     lines
+}
+
+/// One import problem in Polish, after the file (and line) it is in, e.g.
+/// "Barka, linia 3: sekcja [V1] występuje dwa razy – połączono".
+pub fn import_problem(problem: &sursum_protocol::ImportProblem) -> String {
+    use sursum_protocol::ImportProblemCode as Code;
+    let what = match &problem.code {
+        Code::LinesBeforeFirstSection => pl(Msg::WarnLinesBefore).to_owned(),
+        Code::UnexpectedLineStart { character } => {
+            format!("linia zaczyna się od „{character}” zamiast spacji – zostaje jako tekst")
+        }
+        Code::DuplicateSection { section } => {
+            format!("{} [{section}] {}", pl(Msg::WarnSection), pl(Msg::WarnTwice))
+        }
+        Code::UnknownSectionInOrder { section } => {
+            format!("{} „{section}” – pominięto", pl(Msg::WarnUnknownInOrder))
+        }
+        Code::AssumedWindows1250 => "plik nie jest w UTF-8 – odczytano go jako Windows-1250".to_owned(),
+        Code::InvalidBytes => "nieczytelne znaki w pliku zastąpiono znakiem „\u{fffd}”".to_owned(),
+        Code::RepeatedElement { element } => format!("<{element}> występuje kilka razy – użyto pierwszego"),
+        Code::TitleFromFileName => "brak tytułu – użyto nazwy pliku".to_owned(),
+        Code::NoLyrics => "pieśń nie ma tekstu".to_owned(),
+        Code::NotOpenSong => "to nie jest pieśń ani zestaw OpenSong – pominięto".to_owned(),
+        Code::InvalidXml { detail } => format!("uszkodzony plik (błąd XML: {detail}) – pominięto"),
+        Code::Unreadable { detail } => format!("nie udało się odczytać pliku ({detail}) – pominięto"),
+        Code::EmptyGroup { group } => format!("pozycja „{group}” nie ma slajdów – pominięto"),
+        Code::UnsupportedGroup { group, group_type } => {
+            format!("pozycji „{group}” (typ {group_type}) nie da się wczytać – pominięto")
+        }
+        Code::SongNotFound { song } => format!("pieśni „{song}” nie ma w bibliotece – pominięto"),
+        Code::AmbiguousSong { song, count, used } => {
+            format!("pieśni o nazwie „{song}”: {count} – użyto {used}")
+        }
+        Code::UnknownSectionInSetOrder { song, section } => {
+            format!("kolejność pieśni „{song}” zawiera nieznaną sekcję „{section}” – pominięto")
+        }
+        Code::StorageFailed => "nie udało się zapisać – import niczego nie zmienił".to_owned(),
+    };
+    match (problem.file.as_str(), problem.line) {
+        ("", _) => what,
+        (file, Some(line)) => format!("{file}, {} {line}: {what}", pl(Msg::Line).to_lowercase()),
+        (file, None) => format!("{file}: {what}"),
+    }
 }
 
 /// The merge report, one line per number; songs changed in two places are listed by title,
@@ -892,19 +964,25 @@ pub fn locked_for(seconds: u32) -> String {
     format!("Za dużo prób – spróbuj ponownie za {seconds} s")
 }
 
-/// Full section name for headings: `v1` → "Zwrotka 1", `c` → "Refren", `c2` → "Refren 2".
-pub fn section_title(code: &str) -> String {
-    let split = code.find(|c: char| c.is_ascii_digit()).unwrap_or(code.len());
-    let (kind, number) = code.split_at(split);
-    let word = match kind {
-        "v" => "Zwrotka",
-        "c" => "Refren",
-        "b" => "Most",
-        "p" => "Przedrefren",
-        "e" => "Zakończenie",
-        _ => return code.to_owned(),
-    };
-    if number.is_empty() { word.to_owned() } else { format!("{word} {number}") }
+/// Full section name for headings: verse 1 → "Zwrotka 1", chorus → "Refren", verse 1a →
+/// "Zwrotka 1a"; a section with a name of its own keeps it ("Alleluja").
+pub fn section_title(section: &sursum_protocol::SectionName) -> String {
+    use sursum_protocol::SectionKind;
+    if let Some(label) = &section.label {
+        return label.clone();
+    }
+    let word = pl(match section.kind {
+        SectionKind::Verse => Msg::PartVerse,
+        SectionKind::Chorus => Msg::PartChorus,
+        SectionKind::Bridge => Msg::PartBridge,
+        SectionKind::PreChorus => Msg::PartPreChorus,
+        SectionKind::Ending => Msg::PartEnding,
+        SectionKind::Intro => Msg::PartIntro,
+        SectionKind::Other => Msg::PartOther,
+    });
+    let number = section.number.map(|number| number.to_string()).unwrap_or_default();
+    let suffix = section.suffix.map(String::from).unwrap_or_default();
+    if number.is_empty() && suffix.is_empty() { word.to_owned() } else { format!("{word} {number}{suffix}") }
 }
 
 #[cfg(test)]
@@ -912,11 +990,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn section_codes_become_polish_titles() {
-        assert_eq!(section_title("v1"), "Zwrotka 1");
-        assert_eq!(section_title("c"), "Refren");
-        assert_eq!(section_title("c2"), "Refren 2");
-        assert_eq!(section_title("Alleluja"), "Alleluja");
+    fn sections_become_polish_titles() {
+        use sursum_protocol::{SectionKind, SectionName};
+        let title = |kind, number, suffix, label: Option<&str>| {
+            section_title(&SectionName { kind, number, suffix, label: label.map(str::to_owned) })
+        };
+        assert_eq!(title(SectionKind::Verse, Some(1), None, None), "Zwrotka 1");
+        assert_eq!(title(SectionKind::Chorus, None, None, None), "Refren");
+        assert_eq!(title(SectionKind::Chorus, Some(2), None, None), "Refren 2");
+        assert_eq!(title(SectionKind::Verse, Some(1), Some('a'), None), "Zwrotka 1a");
+        assert_eq!(title(SectionKind::Other, Some(1), None, Some("Alleluja")), "Alleluja");
+    }
+
+    #[test]
+    fn import_problems_name_the_file_and_line_in_polish() {
+        use sursum_protocol::{ImportProblem, ImportProblemCode};
+        let duplicate = ImportProblem {
+            file: "Barka".into(),
+            line: Some(3),
+            code: ImportProblemCode::DuplicateSection { section: "V1".into() },
+        };
+        assert_eq!(import_problem(&duplicate), "Barka, linia 3: sekcja [V1] występuje dwa razy – połączono");
+        let missing = ImportProblem {
+            file: "Sets/Niedziela".into(),
+            line: None,
+            code: ImportProblemCode::SongNotFound { song: "Pieśń".into() },
+        };
+        assert_eq!(
+            import_problem(&missing),
+            "Sets/Niedziela: pieśni „Pieśń” nie ma w bibliotece – pominięto"
+        );
+        let failed =
+            ImportProblem { file: String::new(), line: None, code: ImportProblemCode::StorageFailed };
+        assert_eq!(import_problem(&failed), "nie udało się zapisać – import niczego nie zmienił");
+    }
+
+    #[test]
+    fn a_song_version_names_its_number_and_order() {
+        assert_eq!(song_version_details(Some("12"), "V1 C V2 C"), "nr 12 · kolejność: V1 C V2 C");
+        assert_eq!(song_version_details(None, "V1 C"), "kolejność: V1 C");
+        assert_eq!(song_version_details(Some(" "), ""), "");
     }
 
     #[test]

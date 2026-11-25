@@ -221,6 +221,23 @@
   gap: 8px;
   min-height: 40px;
 }
+.review-item-title {
+  flex: 1;
+}
+.review-item-number {
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+/* The songbook number and the order of a song version: not in its lyrics. */
+.review-details {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.review-details:empty {
+  display: none;
+}
 .review-item.differs .review-item-title {
   color: var(--warn);
   font-weight: 700;

@@ -8,7 +8,9 @@
 //!   equally long chunks (never a lonely last line).
 
 use sha2::{Digest, Sha256};
-use sursum_protocol::{AssetId, Deck, DeckId, ItemId, Slide, SlideBody, SlideKey, SongId};
+use sursum_protocol::{
+    AssetId, Deck, DeckId, ItemId, SectionKind, SectionName, Slide, SlideBody, SlideKey, SlidePart, SongId,
+};
 
 #[cfg(test)]
 use crate::model::Line;
@@ -55,7 +57,7 @@ pub fn compile_text(item_id: &ItemId, title: &str, pages: &[String]) -> Deck {
         .enumerate()
         .map(|(index, page)| Slide {
             key: SlideKey(format!("t#{index}")),
-            label: (index + 1).to_string(),
+            part: SlidePart::Page { number: u32::try_from(index + 1).unwrap_or(u32::MAX) },
             body: SlideBody::Text { title: None, lines: page.lines().map(str::to_owned).collect() },
         })
         .collect();
@@ -82,7 +84,7 @@ pub fn compile_item<'a>(
 pub fn compile_image(item_id: &ItemId, title: &str, asset_id: &AssetId) -> Deck {
     let slide = Slide {
         key: SlideKey("img#0".to_owned()),
-        label: "1".to_owned(),
+        part: SlidePart::Picture,
         body: SlideBody::Image { asset_id: asset_id.clone() },
     };
     build_deck(item_id, title, vec![slide])
@@ -92,7 +94,7 @@ pub fn compile_image(item_id: &ItemId, title: &str, asset_id: &AssetId) -> Deck 
 pub fn compile_blank(item_id: &ItemId, title: &str) -> Deck {
     let slide = Slide {
         key: SlideKey("blank#0".to_owned()),
-        label: "–".to_owned(),
+        part: SlidePart::Pause,
         body: SlideBody::Text { title: None, lines: Vec::new() },
     };
     build_deck(item_id, title, vec![slide])
@@ -109,16 +111,53 @@ fn presentation_order(song: &Song, order_override: Option<&[VerseName]>) -> Vec<
 
 /// Slides for one occurrence of a verse in the presentation order.
 fn verse_slides(verse: &Verse, occurrence: usize, rules: SlideRules) -> Vec<Slide> {
-    let label = verse.display_label();
+    let section = section_name(verse);
     split_verse(&verse.blocks, rules.max_lines)
         .into_iter()
         .enumerate()
         .map(|(chunk, lines)| Slide {
             key: SlideKey(format!("{}#{chunk}@{occurrence}", verse.name.0)),
-            label: label.clone(),
+            part: SlidePart::Section {
+                section: section.clone(),
+                piece: u32::try_from(chunk).unwrap_or(u32::MAX),
+            },
             body: SlideBody::Lyrics { lines },
         })
         .collect()
+}
+
+/// What the remote needs to name a verse: its kind, number and letter from the verse name
+/// (`v2` → verse 2, `c` → chorus, `v1a` → verse 1, letter a), or its own label. A name that does
+/// not follow that pattern (`x9z1`, possible only in hand-made files) is an "other" section
+/// labelled with the name, so nothing is lost.
+pub fn section_name(verse: &Verse) -> SectionName {
+    let name = verse.name.0.as_str();
+    let mut chars = name.chars();
+    let kind = match chars.next() {
+        Some('v') => Some(SectionKind::Verse),
+        Some('c') => Some(SectionKind::Chorus),
+        Some('b') => Some(SectionKind::Bridge),
+        Some('p') => Some(SectionKind::PreChorus),
+        Some('e') => Some(SectionKind::Ending),
+        Some('i') => Some(SectionKind::Intro),
+        Some('o') => Some(SectionKind::Other),
+        _ => None,
+    };
+    let rest = chars.as_str();
+    let digits = rest.trim_end_matches(|c: char| c.is_ascii_alphabetic());
+    let mut suffix = rest[digits.len()..].chars();
+    let parsed = (kind, digits.chars().all(|c| c.is_ascii_digit()), suffix.next(), suffix.next());
+    match parsed {
+        (Some(kind), true, letter, None) => {
+            SectionName { kind, number: digits.parse().ok(), suffix: letter, label: verse.label.clone() }
+        }
+        _ => SectionName {
+            kind: SectionKind::Other,
+            number: None,
+            suffix: None,
+            label: Some(verse.display_label()),
+        },
+    }
 }
 
 /// Splits the lines of a verse into slide-sized chunks.
@@ -318,6 +357,45 @@ mod tests {
     }
 
     #[test]
+    fn every_slide_says_which_section_and_piece_it_is() {
+        let long = Verse {
+            name: VerseName::new("c"),
+            label: None,
+            blocks: vec![block(2, BreakKind::Forced), block(2, BreakKind::None)],
+        };
+        let song = song(vec![Verse::simple("v2", &["a"]), long], &["v2", "c"]);
+        let deck = compile_song(&song, &ItemId::from("i"), None, SlideRules::default());
+        let parts: Vec<&SlidePart> = deck.slides.iter().map(|slide| &slide.part).collect();
+        let section = |kind, number| SectionName { kind, number, suffix: None, label: None };
+        assert_eq!(
+            parts,
+            [
+                &SlidePart::Section { section: section(SectionKind::Verse, Some(2)), piece: 0 },
+                &SlidePart::Section { section: section(SectionKind::Chorus, None), piece: 0 },
+                &SlidePart::Section { section: section(SectionKind::Chorus, None), piece: 1 },
+            ]
+        );
+    }
+
+    #[test]
+    fn section_names_keep_letters_and_custom_labels() {
+        let name = |verse: &str| section_name(&Verse::simple(verse, &["a"]));
+        assert_eq!(
+            name("v1a"),
+            SectionName { kind: SectionKind::Verse, number: Some(1), suffix: Some('a'), label: None }
+        );
+        assert_eq!(name("e").kind, SectionKind::Ending);
+        let mut custom = Verse::simple("o1", &["a"]);
+        custom.label = Some("Alleluja".to_owned());
+        assert_eq!(section_name(&custom).label.as_deref(), Some("Alleluja"));
+        assert_eq!(
+            name("x9z1"),
+            SectionName { kind: SectionKind::Other, number: None, suffix: None, label: Some("x9z1".into()) },
+            "an odd name is shown as written"
+        );
+    }
+
+    #[test]
     fn text_items_become_one_slide_per_page() {
         let deck = compile_text(
             &ItemId::from("t"),
@@ -325,6 +403,7 @@ mod tests {
             &["Pierwsza\nlinia".to_owned(), "Druga".to_owned()],
         );
         assert_eq!(keys(&deck), ["t#0", "t#1"]);
+        assert_eq!(deck.slides[1].part, SlidePart::Page { number: 2 });
         assert_eq!(
             deck.slides[0].body,
             SlideBody::Text { title: None, lines: vec!["Pierwsza".to_owned(), "linia".to_owned()] }
@@ -360,5 +439,6 @@ mod tests {
         assert_ne!(poster.deck_id, other.deck_id, "the screen must redraw when the picture changes");
         let blank = compile_blank(&item, "Homilia");
         assert!(matches!(&blank.slides[0].body, SlideBody::Text { lines, .. } if lines.is_empty()));
+        assert_eq!((&poster.slides[0].part, &blank.slides[0].part), (&SlidePart::Picture, &SlidePart::Pause));
     }
 }

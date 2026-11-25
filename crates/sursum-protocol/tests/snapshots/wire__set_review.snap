@@ -15,6 +15,7 @@ expression: versions
           "item_id": "item-1",
           "title": "Pieśń",
           "kind": "song",
+          "song_number": "12",
           "missing_elsewhere": true
         }
       ]

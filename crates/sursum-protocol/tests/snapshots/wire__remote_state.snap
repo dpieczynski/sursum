@@ -15,12 +15,75 @@ expression: state
         "slides": [
           {
             "key": "v1#0@0",
-            "label": "v1",
+            "part": {
+              "kind": "section",
+              "section": {
+                "kind": "verse",
+                "number": 1,
+                "suffix": null,
+                "label": null
+              },
+              "piece": 0
+            },
             "body": {
               "kind": "lyrics",
               "lines": [
                 "Kiedy ranne wstają zorze,"
               ]
+            }
+          },
+          {
+            "key": "o1#1@0",
+            "part": {
+              "kind": "section",
+              "section": {
+                "kind": "other",
+                "number": 1,
+                "suffix": null,
+                "label": "Alleluja"
+              },
+              "piece": 1
+            },
+            "body": {
+              "kind": "lyrics",
+              "lines": [
+                "Alleluja"
+              ]
+            }
+          },
+          {
+            "key": "t#0",
+            "part": {
+              "kind": "page",
+              "number": 1
+            },
+            "body": {
+              "kind": "text",
+              "title": null,
+              "lines": [
+                "Ogłoszenie"
+              ]
+            }
+          },
+          {
+            "key": "img#0",
+            "part": {
+              "kind": "picture"
+            },
+            "body": {
+              "kind": "image",
+              "asset_id": "0f0f.png"
+            }
+          },
+          {
+            "key": "blank#0",
+            "part": {
+              "kind": "pause"
+            },
+            "body": {
+              "kind": "text",
+              "title": null,
+              "lines": []
             }
           }
         ]
@@ -59,12 +122,75 @@ expression: state
       "slides": [
         {
           "key": "v1#0@0",
-          "label": "v1",
+          "part": {
+            "kind": "section",
+            "section": {
+              "kind": "verse",
+              "number": 1,
+              "suffix": null,
+              "label": null
+            },
+            "piece": 0
+          },
           "body": {
             "kind": "lyrics",
             "lines": [
               "Kiedy ranne wstają zorze,"
             ]
+          }
+        },
+        {
+          "key": "o1#1@0",
+          "part": {
+            "kind": "section",
+            "section": {
+              "kind": "other",
+              "number": 1,
+              "suffix": null,
+              "label": "Alleluja"
+            },
+            "piece": 1
+          },
+          "body": {
+            "kind": "lyrics",
+            "lines": [
+              "Alleluja"
+            ]
+          }
+        },
+        {
+          "key": "t#0",
+          "part": {
+            "kind": "page",
+            "number": 1
+          },
+          "body": {
+            "kind": "text",
+            "title": null,
+            "lines": [
+              "Ogłoszenie"
+            ]
+          }
+        },
+        {
+          "key": "img#0",
+          "part": {
+            "kind": "picture"
+          },
+          "body": {
+            "kind": "image",
+            "asset_id": "0f0f.png"
+          }
+        },
+        {
+          "key": "blank#0",
+          "part": {
+            "kind": "pause"
+          },
+          "body": {
+            "kind": "text",
+            "title": null,
+            "lines": []
           }
         }
       ]

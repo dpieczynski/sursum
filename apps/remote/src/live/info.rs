@@ -2,7 +2,7 @@
 //! What the remote says about the program, derived from the snapshot only (no decisions: the
 //! server already decided what is live and what "next" does; this just puts it into words).
 
-use sursum_protocol::{NextStep, Overlay, RemoteState, Slide, SlideBody};
+use sursum_protocol::{NextStep, Overlay, RemoteState, Slide, SlideBody, SlidePart};
 
 use crate::messages::{Msg, pl, section_title};
 
@@ -93,7 +93,7 @@ pub fn live_position(state: &RemoteState) -> Option<String> {
     let slide = live.deck.slides.get(live.slide_index as usize)?;
     let count = live.deck.slides.len();
     let counter = format!("{} {} z {count}", pl(Msg::SlideOf), live.slide_index + 1);
-    let numbered_page = slide.key.as_str().starts_with("t#");
+    let numbered_page = matches!(slide.part, SlidePart::Page { .. });
     Some(match slide_name(slide).filter(|_| !numbered_page) {
         Some(name) => format!("{name} · {counter}"),
         None => capitalized(&counter),
@@ -107,24 +107,16 @@ fn capitalized(text: &str) -> String {
 }
 
 /// The tile label of a slide: "Zwrotka 1", "Refren (2)" for the second slide of a section,
-/// "Obraz" for a picture; `None` for slides without a section (announcements).
+/// "Slajd 2" for an announcement page, "Obraz" for a picture; `None` for an empty slide.
 pub fn slide_name(slide: &Slide) -> Option<String> {
-    if matches!(slide.body, SlideBody::Image { .. }) {
-        return Some(pl(Msg::Picture).to_owned());
-    }
-    if slide.label.is_empty() || slide.label == "–" {
-        return None;
-    }
-    // Announcement pages: keys `t#0`, `t#1`, labels "1", "2".
-    if slide.key.as_str().starts_with("t#") {
-        return Some(format!("{} {}", pl(Msg::SlideN), slide.label));
-    }
-    let name = section_title(&slide.label);
-    // Keys look like `c#1@0`: section, part within the section, occurrence in the order.
-    let part = slide.key.as_str().split('#').nth(1).and_then(|rest| rest.split('@').next());
-    match part.and_then(|part| part.parse::<u32>().ok()) {
-        Some(part) if part > 0 => Some(format!("{name} ({})", part + 1)),
-        _ => Some(name),
+    match &slide.part {
+        SlidePart::Section { section, piece } => {
+            let name = section_title(section);
+            Some(if *piece > 0 { format!("{name} ({})", piece + 1) } else { name })
+        }
+        SlidePart::Page { number } => Some(format!("{} {number}", pl(Msg::SlideN))),
+        SlidePart::Picture => Some(pl(Msg::Picture).to_owned()),
+        SlidePart::Pause => None,
     }
 }
 
@@ -216,12 +208,12 @@ mod tests {
     use super::*;
     use sursum_protocol::*;
 
-    fn slide(key: &str, label: &str, line: &str) -> Slide {
-        Slide {
-            key: SlideKey::from(key),
-            label: label.into(),
-            body: SlideBody::Lyrics { lines: vec![line.into()] },
-        }
+    fn slide(key: &str, part: SlidePart, line: &str) -> Slide {
+        Slide { key: SlideKey::from(key), part, body: SlideBody::Lyrics { lines: vec![line.into()] } }
+    }
+
+    fn section(kind: SectionKind, number: Option<u32>, piece: u32) -> SlidePart {
+        SlidePart::Section { section: SectionName { kind, number, suffix: None, label: None }, piece }
     }
 
     fn deck(item: &str, title: &str) -> Deck {
@@ -230,7 +222,11 @@ mod tests {
             fit_group: item.into(),
             item_id: ItemId::from(item),
             title: title.into(),
-            slides: vec![slide("v1#0@0", "v1", "a"), slide("c#0@0", "c", "b"), slide("c#1@0", "c", "c")],
+            slides: vec![
+                slide("v1#0@0", section(SectionKind::Verse, Some(1), 0), "a"),
+                slide("c#0@0", section(SectionKind::Chorus, None, 0), "b"),
+                slide("c#1@0", section(SectionKind::Chorus, None, 1), "c"),
+            ],
         }
     }
 
@@ -311,7 +307,7 @@ mod tests {
     fn announcement_pages_are_counted_not_named_twice() {
         let mut page = state(Some(("i1", 0, false)), NextStep::Item);
         if let Some(live) = page.program.live.as_mut() {
-            live.deck.slides = vec![slide("t#0", "1", "Zapraszamy")];
+            live.deck.slides = vec![slide("t#0", SlidePart::Page { number: 1 }, "Zapraszamy")];
         }
         assert_eq!(live_position(&page).as_deref(), Some("Slajd 1 z 1"));
     }
@@ -321,9 +317,10 @@ mod tests {
         let on_refrain = state(Some(("i1", 2, false)), NextStep::Item);
         assert_eq!(live_heading(&on_refrain).as_deref(), Some("1. Barka"));
         assert_eq!(live_position(&on_refrain).as_deref(), Some("Refren (2) · slajd 3 z 3"));
-        assert_eq!(slide_name(&slide("v2#0@1", "v2", "x")).as_deref(), Some("Zwrotka 2"));
-        assert_eq!(slide_name(&slide("t#1", "2", "x")).as_deref(), Some("Slajd 2"));
-        assert_eq!(slide_name(&slide("blank#0", "–", "")), None);
+        let second_verse = section(SectionKind::Verse, Some(2), 0);
+        assert_eq!(slide_name(&slide("v2#0@1", second_verse, "x")).as_deref(), Some("Zwrotka 2"));
+        assert_eq!(slide_name(&slide("t#1", SlidePart::Page { number: 2 }, "x")).as_deref(), Some("Slajd 2"));
+        assert_eq!(slide_name(&slide("blank#0", SlidePart::Pause, "")), None);
     }
 
     #[test]

@@ -17,6 +17,8 @@ expression: "(summary, versions, KeepVersion { version: \"cd\".repeat(32) })"
         "version": "abababababababababababababababababababababababababababababababab",
         "shown": true,
         "title": "Pieśń",
+        "number": "12",
+        "presentation": "V1 C V1",
         "lyrics": "[V1]\nPierwsza linia"
       }
     ]

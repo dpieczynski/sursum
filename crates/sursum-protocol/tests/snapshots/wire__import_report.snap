@@ -1,0 +1,74 @@
+---
+source: crates/sursum-protocol/tests/wire.rs
+expression: report
+---
+{
+  "inserted": 3,
+  "updated": 1,
+  "unchanged": 0,
+  "failed": 1,
+  "sets": 1,
+  "to_review": [
+    "Pieśń poprawiona w sursum"
+  ],
+  "problems": [
+    {
+      "file": "Barka",
+      "line": 3,
+      "code": {
+        "kind": "duplicate_section",
+        "section": "V1"
+      }
+    },
+    {
+      "file": "Barka",
+      "line": 5,
+      "code": {
+        "kind": "unexpected_line_start",
+        "character": "/"
+      }
+    },
+    {
+      "file": "Uszkodzona",
+      "line": null,
+      "code": {
+        "kind": "invalid_xml",
+        "detail": "unexpected end"
+      }
+    },
+    {
+      "file": "Sets/Niedziela",
+      "line": null,
+      "code": {
+        "kind": "song_not_found",
+        "song": "Pieśń"
+      }
+    },
+    {
+      "file": "Sets/Niedziela",
+      "line": null,
+      "code": {
+        "kind": "ambiguous_song",
+        "song": "Barka",
+        "count": 2,
+        "used": "Barka"
+      }
+    },
+    {
+      "file": "Sets/Niedziela",
+      "line": null,
+      "code": {
+        "kind": "unsupported_group",
+        "group": "Obrazek",
+        "group_type": "image"
+      }
+    },
+    {
+      "file": "",
+      "line": null,
+      "code": {
+        "kind": "storage_failed"
+      }
+    }
+  ]
+}

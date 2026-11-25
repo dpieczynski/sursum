@@ -22,8 +22,25 @@ pub struct ImportedSet {
     /// The file name inside `Sets/`; re-importing the same file replaces the set.
     pub file_name: String,
     pub entries: Vec<SetEntry>,
-    /// Groups that were skipped, one line each.
-    pub skipped: Vec<String>,
+    /// Groups that were skipped, and why.
+    pub skipped: Vec<SkippedGroup>,
+}
+
+/// A slide group of a set that was not imported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkippedGroup {
+    /// The group's `name` attribute.
+    pub group: String,
+    pub reason: SkipReason,
+}
+
+/// Why a slide group was skipped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkipReason {
+    /// A custom or scripture group with no slides.
+    NoSlides,
+    /// A group type sursum does not import (e.g. `image`), as the file names it.
+    Unsupported(String),
 }
 
 /// One slide group of a set.
@@ -126,12 +143,15 @@ pub fn parse_set(bytes: &[u8], file_name: &str) -> Result<ImportedSet, SetError>
                     .map(|body| body.lines().map(str::trim_end).collect::<Vec<_>>().join("\n"))
                     .collect();
                 if pages.is_empty() {
-                    set.skipped.push(format!("{}: no slides", group.name));
+                    set.skipped.push(SkippedGroup { group: group.name, reason: SkipReason::NoSlides });
                 } else {
                     set.entries.push(SetEntry::Text { title, pages });
                 }
             }
-            other => set.skipped.push(format!("{}: {other} groups are not supported yet", group.name)),
+            other => {
+                let reason = SkipReason::Unsupported(other.to_owned());
+                set.skipped.push(SkippedGroup { group: group.name.clone(), reason });
+            }
         }
     }
     Ok(set)

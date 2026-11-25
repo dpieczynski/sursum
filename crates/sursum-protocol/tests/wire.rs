@@ -11,11 +11,49 @@ fn sample_deck() -> Deck {
         fit_group: "0123456789abcdef".to_owned(),
         item_id: ItemId::from("item-1"),
         title: "Kiedy ranne wstają zorze".to_owned(),
-        slides: vec![Slide {
-            key: SlideKey::from("v1#0@0"),
-            label: "v1".to_owned(),
-            body: SlideBody::Lyrics { lines: vec!["Kiedy ranne wstają zorze,".to_owned()] },
-        }],
+        slides: vec![
+            Slide {
+                key: SlideKey::from("v1#0@0"),
+                part: SlidePart::Section {
+                    section: SectionName {
+                        kind: SectionKind::Verse,
+                        number: Some(1),
+                        suffix: None,
+                        label: None,
+                    },
+                    piece: 0,
+                },
+                body: SlideBody::Lyrics { lines: vec!["Kiedy ranne wstają zorze,".to_owned()] },
+            },
+            Slide {
+                key: SlideKey::from("o1#1@0"),
+                part: SlidePart::Section {
+                    section: SectionName {
+                        kind: SectionKind::Other,
+                        number: Some(1),
+                        suffix: None,
+                        label: Some("Alleluja".to_owned()),
+                    },
+                    piece: 1,
+                },
+                body: SlideBody::Lyrics { lines: vec!["Alleluja".to_owned()] },
+            },
+            Slide {
+                key: SlideKey::from("t#0"),
+                part: SlidePart::Page { number: 1 },
+                body: SlideBody::Text { title: None, lines: vec!["Ogłoszenie".to_owned()] },
+            },
+            Slide {
+                key: SlideKey::from("img#0"),
+                part: SlidePart::Picture,
+                body: SlideBody::Image { asset_id: AssetId::from("0f0f.png") },
+            },
+            Slide {
+                key: SlideKey::from("blank#0"),
+                part: SlidePart::Pause,
+                body: SlideBody::Text { title: None, lines: vec![] },
+            },
+        ],
     }
 }
 
@@ -199,6 +237,38 @@ fn merge_report() {
     insta::assert_json_snapshot!(report);
 }
 
+/// An OpenSong import's report: problems are codes with data, worded by the remote.
+#[test]
+fn import_report() {
+    let problem = |file: &str, line, code| ImportProblem { file: file.into(), line, code };
+    let report = ImportReport {
+        inserted: 3,
+        updated: 1,
+        unchanged: 0,
+        failed: 1,
+        sets: 1,
+        to_review: vec!["Pieśń poprawiona w sursum".into()],
+        problems: vec![
+            problem("Barka", Some(3), ImportProblemCode::DuplicateSection { section: "V1".into() }),
+            problem("Barka", Some(5), ImportProblemCode::UnexpectedLineStart { character: '/' }),
+            problem("Uszkodzona", None, ImportProblemCode::InvalidXml { detail: "unexpected end".into() }),
+            problem("Sets/Niedziela", None, ImportProblemCode::SongNotFound { song: "Pieśń".into() }),
+            problem(
+                "Sets/Niedziela",
+                None,
+                ImportProblemCode::AmbiguousSong { song: "Barka".into(), count: 2, used: "Barka".into() },
+            ),
+            problem(
+                "Sets/Niedziela",
+                None,
+                ImportProblemCode::UnsupportedGroup { group: "Obrazek".into(), group_type: "image".into() },
+            ),
+            problem("", None, ImportProblemCode::StorageFailed),
+        ],
+    };
+    insta::assert_json_snapshot!(report);
+}
+
 /// Pairing and first setup go over REST; old remotes must still read the session (new fields
 /// default to false).
 #[test]
@@ -304,6 +374,8 @@ fn song_review() {
             version: "ab".repeat(32),
             shown: true,
             title: "Pieśń".into(),
+            number: Some("12".into()),
+            presentation: "V1 C V1".into(),
             lyrics: "[V1]\nPierwsza linia".into(),
         }],
     };
@@ -327,6 +399,7 @@ fn set_review() {
                 item_id: ItemId::from("item-1"),
                 title: "Pieśń".into(),
                 kind: SetItemKind::Song,
+                song_number: Some("12".into()),
                 missing_elsewhere: true,
             }],
         }],
