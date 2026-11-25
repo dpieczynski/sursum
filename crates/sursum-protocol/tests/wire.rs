@@ -75,6 +75,7 @@ fn client_messages() {
         },
         ClientMsg::Cmd { seq: 9, base_rev: Rev(7), cmd: Command::DeleteSet { set_id: SetId::from("old") } },
         ClientMsg::Cmd { seq: 10, base_rev: Rev(7), cmd: Command::UndoDeleteSet },
+        ClientMsg::Cmd { seq: 16, base_rev: Rev(7), cmd: Command::UndoRemoveLogo },
         ClientMsg::Cmd {
             seq: 10,
             base_rev: Rev(7),

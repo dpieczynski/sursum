@@ -333,6 +333,7 @@ pub fn spawn(
         calibrating_by: None,
         display_power: DisplayPowerState::Unknown,
         logo,
+        removed_logo: None,
         screen_connected: false,
         end_of_item,
         transition_ms: config.transition_ms,
@@ -535,6 +536,9 @@ struct AppState {
     display_power: DisplayPowerState,
     /// The parish logo for the logo overlay.
     logo: Option<sursum_protocol::AssetId>,
+    /// The logo removed last, while `UndoRemoveLogo` can still bring it back: until another logo
+    /// is set or the server stops. Never persisted, like the set store's undo.
+    removed_logo: Option<sursum_protocol::AssetId>,
     /// True while a screen is connected.
     screen_connected: bool,
     /// What "next" does after an item's last slide (a device setting).
@@ -547,8 +551,8 @@ struct AppState {
 
 impl AppState {
     /// Pictures that must stay: the logo, every picture in any version of any set in the
-    /// database (other churches' and those in review too), what can still be undone, and what is
-    /// on screen (a frozen copy may outlive its item).
+    /// database (other churches' and those in review too), what can still be undone (a removed
+    /// logo too), and what is on screen (a frozen copy may outlive its item).
     fn pictures_in_use(&self) -> anyhow::Result<std::collections::HashSet<sursum_protocol::AssetId>> {
         let live = self.program.live.iter().flat_map(|live| &live.deck.slides);
         let on_screen = live.filter_map(|slide| match &slide.body {
@@ -556,7 +560,8 @@ impl AppState {
             _ => None,
         });
         let mut in_use = self.database.pictures_in_sets()?;
-        in_use.extend(self.logo.iter().chain(self.sets.pictures()).chain(on_screen).cloned());
+        let logos = self.logo.iter().chain(&self.removed_logo);
+        in_use.extend(logos.chain(self.sets.pictures()).chain(on_screen).cloned());
         Ok(in_use)
     }
 
@@ -622,6 +627,7 @@ impl AppState {
                 Err(error) => stored(Err(error), "a song's deletion").map(|()| None),
             },
             Command::SetLogo { asset_id } => self.set_logo(asset_id.as_ref()),
+            Command::UndoRemoveLogo => self.undo_remove_logo(),
             Command::Calibrate { on } => {
                 self.calibrating_by = on.then(|| actor.clone());
                 Ok(None)
@@ -665,8 +671,8 @@ impl AppState {
         }
     }
 
-    /// Sets or (with `None`) removes the parish logo. A removed picture stays stored until the
-    /// next clean-up of unused pictures, so the remote's "undo" can set it again.
+    /// Sets or (with `None`) removes the parish logo. A removed logo is remembered for
+    /// `UndoRemoveLogo`; setting any logo forgets it, so undo never replaces a newer logo.
     fn set_logo(
         &mut self,
         asset_id: Option<&sursum_protocol::AssetId>,
@@ -675,14 +681,25 @@ impl AppState {
             return Err(ErrorCode::NotFound);
         }
         stored(self.database.set_setting(LOGO_KEY, &asset_id), "the logo")?;
-        self.logo = asset_id.cloned();
-        // The logo cover without a logo already shows black; calling it black keeps a logo
-        // uploaded later from appearing on screen without anyone pressing LOGO.
-        if self.logo.is_none() && self.program.overlay == Overlay::Logo {
-            self.program.overlay = Overlay::Black;
+        let previous = std::mem::replace(&mut self.logo, asset_id.cloned());
+        if asset_id.is_some() {
+            self.removed_logo = None;
+        } else if previous.is_some() {
+            self.removed_logo = previous;
+        }
+        if self.program.settle_cover(self.logo.as_ref()) {
             self.save_program();
         }
         Ok(None)
+    }
+
+    /// Brings back the logo removed last. The cover stays as it is: removing the logo turned a
+    /// logo cover black, and undo does not put the logo back on screen by itself.
+    fn undo_remove_logo(&mut self) -> Result<Option<ServiceSet>, ErrorCode> {
+        // A picture gone meanwhile (say, with a restored backup) is refused by `set_logo` with
+        // `NotFound`, and undo is over.
+        let removed = self.removed_logo.take().ok_or(ErrorCode::NotFound)?;
+        self.set_logo(Some(&removed))
     }
 
     /// Fits a new screen profile to the stage, validates, applies and stores it.
@@ -947,7 +964,12 @@ impl AppState {
         let new_rev = self.rev.next();
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
-        let context = Context { set: self.sets.active(), deck_for: &deck_for, end_of_item: self.end_of_item };
+        let context = Context {
+            set: self.sets.active(),
+            deck_for: &deck_for,
+            end_of_item: self.end_of_item,
+            logo: self.logo.as_ref(),
+        };
         match self.program.execute(command, base_rev, actor, new_rev, &context) {
             Ok(Outcome::Changed) => {
                 self.rev = new_rev;
@@ -1129,11 +1151,12 @@ impl AppState {
 
     /// Restores the program position saved before the last stop (ADR 0003): after a process
     /// restart in the same boot everything comes back; after a reboot the position comes back
-    /// under the logo.
+    /// under the logo, or under black on a device without a logo.
     fn restore(&mut self, record: Option<RuntimeRecord>) {
         let Some(record) = record else { return };
         let same_boot = self.boot_id.is_some() && record.boot_id == self.boot_id;
         self.program.overlay = if same_boot { record.program.overlay } else { Overlay::Logo };
+        self.program.settle_cover(self.logo.as_ref());
         let saved = record.program;
         // The live item belongs to the set that was active when it went live.
         let item = saved.set_id.as_ref().and_then(|set_id| self.sets.get(set_id)).and_then(|set| {
@@ -1184,7 +1207,12 @@ impl AppState {
     fn remote_state(&self) -> RemoteState {
         let (songs, rules) = (&self.songs, self.rules);
         let deck_for = |item: &SetItem| compile_item(songs, rules, item);
-        let context = Context { set: self.sets.active(), deck_for: &deck_for, end_of_item: self.end_of_item };
+        let context = Context {
+            set: self.sets.active(),
+            deck_for: &deck_for,
+            end_of_item: self.end_of_item,
+            logo: self.logo.as_ref(),
+        };
         RemoteState {
             rev: self.rev,
             program: self.screen_state(),

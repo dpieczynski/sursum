@@ -12,8 +12,11 @@
 //!
 //! Commands that name what to show (`GoTo`, `GoToItemNumber`, `GoToSlide`) lift black or the
 //! logo; relative steps keep them, so a slide can be prepared under black (ADR 0004).
+//!
+//! The logo cover needs a logo (see [`Program::settle_cover`]): without one it is black, so a
+//! logo set later never appears on screen without anyone asking for it (hard rule 3).
 
-use sursum_protocol::{ClientId, Command, Deck, EndOfItem, ItemId, NextStep, Overlay, Rev};
+use sursum_protocol::{AssetId, ClientId, Command, Deck, EndOfItem, ItemId, NextStep, Overlay, Rev};
 
 use crate::model::{ItemKind, ServiceSet, SetItem};
 
@@ -39,6 +42,8 @@ impl Live {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Program {
     pub live: Option<Live>,
+    /// The cover over the slide. `Logo` only while a logo is set; [`Program::settle_cover`]
+    /// keeps it so.
     pub overlay: Overlay,
     /// Revision at which the program last changed (base for the `Stale` rule).
     pub updated_rev: Rev,
@@ -89,6 +94,8 @@ pub struct Context<'a> {
     pub deck_for: &'a dyn Fn(&SetItem) -> Option<Deck>,
     /// What "next" does after an item's last slide.
     pub end_of_item: EndOfItem,
+    /// The parish logo, if one is set: asking for the logo cover without one gives black.
+    pub logo: Option<&'a AssetId>,
 }
 
 /// Result of a successfully applied command.
@@ -158,6 +165,9 @@ impl Program {
             }
             Command::SetOverlay { overlay } => {
                 self.overlay = *overlay;
+                // Another remote may have removed the logo a moment ago: the operator meant to
+                // cover the screen, so cover it, with black.
+                self.settle_cover(context.logo);
                 Ok(())
             }
             Command::ToggleBlack => {
@@ -186,10 +196,24 @@ impl Program {
             | Command::Calibrate { .. }
             | Command::DisplayPower { .. }
             | Command::SetLogo { .. }
+            | Command::UndoRemoveLogo
             | Command::DeleteSong { .. }
             | Command::NameChurch { .. }
             | Command::UseChurch { .. } => Err(Rejection::NotAProgramCommand),
         }
+    }
+
+    /// Keeps the rule that the logo cover needs a logo: without one, `Logo` becomes `Black`. The
+    /// screen would show black anyway, but a logo set later (an upload, an undo, a restored
+    /// backup) would then appear on screen by itself. The server calls this whenever the cover or
+    /// the logo may change: on commands, after a reboot (ADR 0003) and when the logo is removed.
+    /// Returns whether the cover changed.
+    pub fn settle_cover(&mut self, logo: Option<&AssetId>) -> bool {
+        let empty = self.overlay == Overlay::Logo && logo.is_none();
+        if empty {
+            self.overlay = Overlay::Black;
+        }
+        empty
     }
 
     /// What "next" would show, without changing anything (for the remote's preview).
@@ -478,10 +502,14 @@ mod tests {
     // Tests read better with commands passed by value.
     #[allow(clippy::needless_pass_by_value)]
     fn run(program: &mut Program, set: &ServiceSet, command: Command) -> Result<(), Rejection> {
-        program.apply(
-            &command,
-            &Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Continue },
-        )
+        let logo = AssetId::from("logo.png");
+        let context = Context {
+            set: Some(set),
+            deck_for: &deck_for,
+            end_of_item: EndOfItem::Continue,
+            logo: Some(&logo),
+        };
+        program.apply(&command, &context)
     }
 
     fn position(program: &Program) -> (String, usize) {
@@ -548,7 +576,8 @@ mod tests {
     #[test]
     fn no_set_means_no_navigation() {
         let mut program = Program::default();
-        let context = Context { set: None, deck_for: &deck_for, end_of_item: EndOfItem::Continue };
+        let context =
+            Context { set: None, deck_for: &deck_for, end_of_item: EndOfItem::Continue, logo: None };
         assert_eq!(program.apply(&Command::NextItem, &context), Err(Rejection::NoActiveSet));
     }
 
@@ -564,12 +593,15 @@ mod tests {
 
     fn with_gap(program: &mut Program, set: &ServiceSet, command: &Command) {
         program
-            .apply(command, &Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Gap })
+            .apply(
+                command,
+                &Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Gap, logo: None },
+            )
             .unwrap();
     }
 
     fn gap_context(set: &ServiceSet) -> Context<'_> {
-        Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Gap }
+        Context { set: Some(set), deck_for: &deck_for, end_of_item: EndOfItem::Gap, logo: None }
     }
 
     #[test]
@@ -652,6 +684,35 @@ mod tests {
     }
 
     #[test]
+    fn asking_for_the_logo_without_one_covers_the_screen_with_black() {
+        let set = set();
+        let context =
+            Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue, logo: None };
+        let mut program = Program::default();
+        let logo = Command::SetOverlay { overlay: Overlay::Logo };
+        let alice = ClientId::from("alice");
+        assert_eq!(program.execute(&logo, Rev(0), &alice, Rev(1), &context), Ok(Outcome::Changed));
+        assert_eq!(program.overlay, Overlay::Black);
+        // Already black: nothing changes, so no new revision.
+        assert_eq!(program.execute(&logo, Rev(1), &alice, Rev(2), &context), Ok(Outcome::Unchanged));
+    }
+
+    #[test]
+    fn the_logo_cover_settles_to_black_only_without_a_logo() {
+        let logo = AssetId::from("logo.png");
+        let mut program = Program { overlay: Overlay::Logo, ..Program::default() };
+        assert!(!program.settle_cover(Some(&logo)));
+        assert_eq!(program.overlay, Overlay::Logo);
+        assert!(program.settle_cover(None));
+        assert_eq!(program.overlay, Overlay::Black);
+        for overlay in [Overlay::None, Overlay::Black] {
+            let mut program = Program { overlay, ..Program::default() };
+            assert!(!program.settle_cover(None));
+            assert_eq!(program.overlay, overlay);
+        }
+    }
+
+    #[test]
     fn navigation_under_black_keeps_the_overlay() {
         let set = set();
         let mut program = Program::default();
@@ -664,7 +725,8 @@ mod tests {
     #[test]
     fn stale_rule_blocks_other_operators_but_not_the_last_actor() {
         let set = set();
-        let context = Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue };
+        let context =
+            Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue, logo: None };
         let (alice, bob) = (ClientId::from("alice"), ClientId::from("bob"));
         let mut program = Program::default();
         let first = program.execute(&Command::Next, Rev(0), &alice, Rev(1), &context);
@@ -706,7 +768,7 @@ mod tests {
         program
             .apply(
                 &Command::Next,
-                &Context { set: Some(&set), deck_for: &edited, end_of_item: EndOfItem::Continue },
+                &Context { set: Some(&set), deck_for: &edited, end_of_item: EndOfItem::Continue, logo: None },
             )
             .unwrap();
         let live = program.live.as_ref().unwrap();
@@ -757,8 +819,12 @@ mod tests {
     fn a_missing_song_is_stepped_over_in_both_directions() {
         let mut set = set();
         set.items.insert(1, song_item("gone", "missing"));
-        let context =
-            Context { set: Some(&set), deck_for: &deck_without_missing, end_of_item: EndOfItem::Continue };
+        let context = Context {
+            set: Some(&set),
+            deck_for: &deck_without_missing,
+            end_of_item: EndOfItem::Continue,
+            logo: None,
+        };
         let mut program = Program::default();
         program.apply(&Command::GoToItemNumber { number: 1 }, &context).unwrap();
         program.apply(&Command::GoToSlide { slide_index: 2 }, &context).unwrap();
@@ -786,8 +852,12 @@ mod tests {
         let old_deck = compile_song(&old, &ItemId::from("i1"), None, SlideRules::default());
         let mut program =
             Program { live: Some(Live::at(ItemId::from("i1"), old_deck, 2)), ..Program::default() };
-        let context =
-            Context { set: Some(&set), deck_for: &deck_without_missing, end_of_item: EndOfItem::Continue };
+        let context = Context {
+            set: Some(&set),
+            deck_for: &deck_without_missing,
+            end_of_item: EndOfItem::Continue,
+            logo: None,
+        };
         let outcome = program.execute(&Command::Next, Rev(0), &ClientId::from("c"), Rev(1), &context);
         assert_eq!(outcome, Ok(Outcome::Changed));
         assert_eq!(program.updated_rev, Rev(1));
@@ -826,7 +896,8 @@ mod tests {
     #[test]
     fn peek_next_does_not_mutate() {
         let set = set();
-        let context = Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue };
+        let context =
+            Context { set: Some(&set), deck_for: &deck_for, end_of_item: EndOfItem::Continue, logo: None };
         let mut program = Program::default();
         run(&mut program, &set, Command::GoToItemNumber { number: 1 }).unwrap();
         let before = program.clone();

@@ -128,6 +128,10 @@ pub enum Command {
     /// Set or remove the parish logo (an uploaded picture, `POST /api/assets`). Removing it
     /// while the logo is up turns the cover into black, so a later upload never appears by itself.
     SetLogo { asset_id: Option<AssetId> },
+    /// Bring back the logo removed last (the remote offers it right after removing). The screen
+    /// stays as it is (black if the logo was up). `NotFound` once another logo was set, after a
+    /// restart, or if the picture is gone.
+    UndoRemoveLogo,
     /// Switch the projector or monitor on, or to standby (ADR 0012).
     DisplayPower { action: PowerAction },
 }

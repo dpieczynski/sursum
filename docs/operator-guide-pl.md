@@ -49,8 +49,8 @@ kafelka zwrotki od razu pokazuje ją wiernym. W zakładce Zestaw nic nie trafia 
 
 ![Zakładka Zestaw](images/remote/tablet-zestaw.png)
 
-Po starcie urządzenia ekran zawsze pokazuje najpierw **logo**, a pozycja w zestawie jest
-zachowana. Wystarczy dotknąć **Pokaż tekst** (albo dowolnej pozycji zestawu), żeby wrócić do
+Po starcie urządzenia ekran zawsze pokazuje najpierw **logo** (a bez wgranego logo jest czarny),
+a pozycja w zestawie jest zachowana. Wystarczy dotknąć **Pokaż tekst** (albo dowolnej pozycji zestawu), żeby wrócić do
 tekstu.
 
 ## W trakcie mszy
@@ -222,7 +222,7 @@ spróbuj za chwilę”). To normalne.
 | Czerwony pasek „Brak połączenia – ekran pokazuje ostatni slajd” | Przyciski są nieaktywne, a ekran nadal pokazuje ostatni slajd. Sprawdź Wi-Fi tabletu; pilot połączy się sam. |
 | Żółty pasek „Ekran nie jest połączony z sursum” | Ekran w kościele nie odpowiada; urządzenie spróbuje go uruchomić ponownie. Jeśli to trwa, sprawdź zasilanie urządzenia przy projektorze. |
 | Żółty pasek „Ekran jest uśpiony” | Dotknij **Włącz** na pasku. |
-| Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. Bez wgranego logo „logo” jest czarnym ekranem, więc pilot nazywa je „Ekran wygaszony”. |
+| Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. Bez wgranego logo ekran zamiast logo zostaje wygaszony („Ekran wygaszony”). |
 | Adres `http://sursum.local/` się nie otwiera | Wpisz adres IP urządzenia (np. `http://192.168.1.50/`; najlepiej ustawić go na stałe w routerze parafii). Nazwę `sursum.local` blokują często aplikacje VPN (np. Tailscale) – wyłącz je na tablecie – oraz Firefox zainstalowany jako Flatpak na Linuksie; Chrome i Chromium radzą sobie z nią. |
 | Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę. Wpisz PIN parafii. |
 | Tablet gaśnie w trakcie mszy | W ustawieniach Androida wydłuż czas wygaszania ekranu. |
@@ -238,8 +238,11 @@ spróbuj za chwilę”). To normalne.
   **Wgraj logo** ustawia logo (PNG, JPEG albo WebP) i zastępuje poprzednie. **Usuń logo** trzeba
   przytrzymać; zaraz potem można je przywrócić przyciskiem **Cofnij** w dymku na dole. Bez logo
   przycisk na pilocie mówi **Brak logo** i jest nieaktywny. Jeśli logo było właśnie na ekranie,
-  ekran zostaje wygaszony (czarny), a nie pokaże samo z siebie logo wgrane później. Usunięty
-  plik zostaje na urządzeniu do najbliższego **Usuń nieużywane obrazy**.
+  ekran zostaje wygaszony (czarny), a logo wgrane później nie pokaże się samo z siebie. **Cofnij**
+  też tylko przywraca logo: ekran zostaje czarny, aż ktoś dotknie **Pokaż logo**. Gdy w międzyczasie
+  ktoś wgrał inne logo, **Cofnij** go nie zastąpi. Usunięty plik zostaje na urządzeniu, dopóki nie
+  wgrasz innego logo albo urządzenie nie uruchomi się ponownie; potem skasuje go **Usuń nieużywane
+  obrazy**.
 - **Wyświetlanie**: czy po ostatnim slajdzie pieśni najpierw jest pusty ekran (domyślnie), czy od
   razu następna pozycja. Dotyczy wszystkich pilotów.
 - **To urządzenie**: strona przycisków (prawa lub lewa), wibracja, **Pełny ekran** (chowa paski
