@@ -17,3 +17,9 @@ Windows: system boot time). On start:
 ## Consequences
 No dependency on wall-clock time. Platform access goes through a small `Platform` trait so tests
 can inject boot ids.
+
+## Amendment (2026-11-25): no logo, black
+The logo cover needs a logo. On a device without one, a reboot restores the position under
+black instead. Otherwise a logo uploaded later would go on screen by itself, with nobody pressing
+LOGO (hard rule 3). The same rule turns `SetOverlay { logo }` without a logo into black, and
+removing the logo while it is up leaves black (`Program::settle_cover` in `sursum-core`).

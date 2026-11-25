@@ -86,7 +86,10 @@ Command = Next | Prev | NextItem | PrevItem                // relative: subject 
         | AddImage { title, asset_id } | AddBlank { title }      // pictures (POST /api/assets) and pauses
         | DisplayPower { action: "on"|"standby" }              // ADR 0012, runs outside the actor
         | SetScreenProfile { profile } | Calibrate { on }      // ADR 0008
-        | SetLogo { asset_id? } | DeleteSong { song_id }
+        | SetLogo { asset_id? }         // without asset_id: removes the logo; a logo cover
+                                        // turns black (`overlay` is "logo" only with a logo)
+        | UndoRemoveLogo                // brings back the logo removed last; the cover stays
+        | DeleteSong { song_id }
 ```
 
 ## Server → client

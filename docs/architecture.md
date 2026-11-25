@@ -66,7 +66,8 @@ program exactly as it was.
 
 `runtime_state` stores the program together with the OS `boot_id`. Same `boot_id` (only the
 process restarted) → full restore. Different `boot_id` (power cut, reboot) → restore the position
-with the logo overlay; one tap shows the slide again. No dependency on the clock.
+with the logo overlay (black on a device without a logo); one tap shows the slide again. No
+dependency on the clock.
 
 ## Rendering
 

@@ -343,9 +343,13 @@ away everywhere, and plain-text song entry (ADR 0017).
 - [x] ~~Admin mode counts down in the remote~~ (removed with admin mode, ADR 0024)
 - [x] Docs: ADR 0017, operator guide rewritten with screenshots (`docs/images/remote/`, from `just remote-sizes`)
 - [x] Review of the running remote (2026-11-18, ADR 0017 amendment): sheets leave the controls tappable and focus their field, the live strip fits one row on phones, the next-slide preview fits again after the tablet turns, green only for what is on screen, "Brak logo" without a logo, back gesture between views, editor actions always in view, local pairing dates and device-type names, equal admin rows, contrast of filled green and blue (e2e: `remote_live.rs`)
-- [ ] Removing the logo in Ustawienia → Ekran: the server already takes `SetLogo` without a
-  picture, but the remote can only set one (`picture.rs`), so a wrong or test logo stays until
-  another one is uploaded. Then "Brak logo" again and the logo button disabled
+- [x] Removing the logo in Ustawienia → Ekran: **Usuń logo** (hold, then undo in the toast)
+  sends `SetLogo` without a picture; "Brak logo" again and the logo button disabled. The logo
+  cover needs a logo (`Program::settle_cover`): removing the logo while it is up, LOGO pressed
+  without one and a reboot without one all give black, so a later upload never appears by itself
+  (ADR 0003 amendment). Undo is the server's `UndoRemoveLogo`: it brings back the logo removed
+  last, never over a newer one, and leaves the screen black; the clean-up of unused pictures keeps
+  that picture while undo can bring it back (e2e: `remote_live.rs`, `screen.rs`)
 
 ## M7 — Offline system updates
 

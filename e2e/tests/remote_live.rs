@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use sursum_e2e::{
     Browser, SCREEN_ROOT, Server, attribute, open_tab, shown_text, wait_for_slide, wait_until, with_engine,
 };
-use sursum_protocol::{Command, EndOfItem, SongId};
+use sursum_protocol::{Command, EndOfItem, Overlay, SongId};
 use thirtyfour::prelude::*;
 
 /// Window sizes and the least number of set rows that must be fully visible in the Msza view.
@@ -474,6 +474,71 @@ async fn the_next_slide_preview_fits_when_the_tablet_turns_upright() -> anyhow::
         })
         .await
         .context("the next slide keeps the size it got while hidden")?;
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_logo_on_screen_can_be_removed_and_brought_back() -> anyhow::Result<()> {
+    with_remote(1280, 800, async |server, screen, remote| {
+        let logo = image::RgbaImage::from_pixel(64, 64, image::Rgba([40, 60, 220, 255]));
+        let mut png = std::io::Cursor::new(Vec::new());
+        logo.write_to(&mut png, image::ImageFormat::Png)?;
+        let asset_id = server.upload_asset(png.get_ref()).await?;
+        let mut control = server.remote("admin").await?;
+        control.command(Command::SetLogo { asset_id: Some(asset_id) }).await?;
+        control.command(Command::SetOverlay { overlay: Overlay::Logo }).await?;
+        wait_until(Duration::from_secs(5), || async { screen.find(By::Css(".sursum-logo")).await.is_ok() })
+            .await
+            .context("the logo never reached the screen")?;
+
+        open_tab(remote, "ustawienia").await?;
+        let row = remote.query(By::Css("[data-testid=settings-logo]")).first().await?;
+        row.query(By::Css("[data-testid=logo-thumb]")).first().await?;
+        let button = remote.find(By::Css(".area-pad [data-testid=logo]")).await?;
+        let remove = row.find(By::Css("[data-testid=remove-logo]")).await?;
+        remote.action_chain().click_and_hold_element(&remove).perform().await?;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        remote.action_chain().release().perform().await?;
+        wait_until(Duration::from_secs(5), || async {
+            shown_text(&button).await.is_ok_and(|text| text == "Brak logo")
+        })
+        .await
+        .context("the LOGO button must say that there is no logo")?;
+        anyhow::ensure!(!button.is_enabled().await?, "the LOGO button stays enabled without a logo");
+        anyhow::ensure!(
+            shown_text(&row).await?.contains("nie wgrano"),
+            "the row must say that no logo is uploaded"
+        );
+        anyhow::ensure!(
+            row.find(By::Css("[data-testid=remove-logo]")).await.is_err(),
+            "nothing left to remove"
+        );
+        // The logo was on screen: the screen turns black, not empty logo cover.
+        wait_until(Duration::from_secs(5), || async {
+            attribute(screen, SCREEN_ROOT, "data-overlay").await == "black"
+                && screen.find(By::Css(".sursum-logo")).await.is_err()
+        })
+        .await
+        .context("the screen must go black when its logo is removed")?;
+
+        // The toast brings the same logo back; the screen stays black until LOGO is pressed.
+        remote.find(By::Css("[data-testid=toast-undo]")).await?.click().await?;
+        row.query(By::Css("[data-testid=logo-thumb]"))
+            .first()
+            .await
+            .context("undo did not bring the logo back")?;
+        wait_until(Duration::from_secs(5), || async {
+            shown_text(&button).await.is_ok_and(|text| text == "Pokaż logo")
+        })
+        .await?;
+        anyhow::ensure!(button.is_enabled().await?, "the LOGO button must work again");
+        anyhow::ensure!(
+            attribute(screen, SCREEN_ROOT, "data-overlay").await == "black",
+            "undo changed the screen"
+        );
         Ok(())
     })
     .await

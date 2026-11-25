@@ -8,6 +8,7 @@ mod church;
 mod device;
 mod display;
 mod library;
+mod logo;
 mod pictures;
 mod screen;
 mod update;

@@ -103,6 +103,14 @@ expression: messages
   },
   {
     "t": "cmd",
+    "seq": 16,
+    "base_rev": 7,
+    "cmd": {
+      "cmd": "undo_remove_logo"
+    }
+  },
+  {
+    "t": "cmd",
     "seq": 10,
     "base_rev": 7,
     "cmd": {
