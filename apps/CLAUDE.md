@@ -27,7 +27,7 @@ is our own axum app, not a Leptos SSR server). No Node, npm or TypeScript. Appli
 - Components ≲150 lines; logic outside `view!`; format with `leptosfmt`; `web-sys` instead of
   hand-written `wasm_bindgen` externs; no `unsafe`.
 - **Screen API contract (ADR 0015)**: the screen runs on WPE WebKit 2.54 on the device (ADR 0027),
-  and CI checks it on WPE (2.48 through cog for now). Allowed: WebAssembly, WebSocket, Web Animations, `document.fonts`, `img.decode()`,
+  and CI checks it on WPE 2.54 with headless MiniBrowser. Allowed: WebAssembly, WebSocket, Web Animations, `document.fonts`, `img.decode()`,
   WOFF2 fonts, CSS transforms/opacity/flexbox/grid, `white-space: pre`, CSS variables,
   `ResizeObserver`. Forbidden on the screen: `requestIdleCallback` (use `setTimeout` chunks),
   `scheduler.postTask`, `navigator.userAgentData`, CSS features missing in WebKit 2.48 (unless a

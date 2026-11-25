@@ -55,8 +55,9 @@ managed policies, Chromium's kiosk unit and `start.html`.
   is now ordered after the server only.
 - A dead web process is not restarted by MiniBrowser; the screen guard's grace (15 s) decides how
   long the screen shows black or the logo. Shortening it is a separate question.
-- The WebDriver screen tests still run WPE 2.48 through cog (ADR 0015), not 2.54 with
-  MiniBrowser; moving them is follow-up work. Chromium stays in the tests for the remote.
+- The WebDriver screen tests ran WPE 2.48 through cog (ADR 0015); they moved to 2.54 with
+  headless MiniBrowser the same day (ADR 0015 amendment of 2026-11-25). Chromium stays in the
+  tests for the remote.
 - Memory over time, measured after the decision on the same Pi (2026-11-25; never measured for
   Chromium): an idle screen does not grow. 2,000 slide changes with black and logo rounds took
   the kiosk from 228 MB to 269 MB, which then stayed flat for 53 minutes; even if that were all a
