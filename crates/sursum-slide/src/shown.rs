@@ -3,7 +3,7 @@
 //! screen draws an empty slide on the deck's background, so the congregation sees neither the
 //! old words nor the next song's.
 
-use sursum_protocol::{LiveSlide, Slide, SlideBody, SlideKey};
+use sursum_protocol::{LiveSlide, Slide, SlideBody, SlideKey, SlidePart};
 
 /// The slide to draw: the one at `slide_index`, or an empty slide during the gap. The gap's
 /// key differs from every real key, so moving into or out of the gap is a normal transition.
@@ -14,7 +14,7 @@ pub fn shown_slide(live: &LiveSlide) -> Option<Slide> {
     }
     Some(Slide {
         key: SlideKey(format!("{}~gap", slide.key.as_str())),
-        label: String::new(),
+        part: SlidePart::Pause,
         body: SlideBody::Text { title: None, lines: Vec::new() },
     })
 }
@@ -27,7 +27,7 @@ mod tests {
     fn live(gap: bool) -> LiveSlide {
         let slide = Slide {
             key: SlideKey("v1#0@0".into()),
-            label: "v1".into(),
+            part: SlidePart::Page { number: 1 },
             body: SlideBody::Lyrics { lines: vec!["a".into()] },
         };
         let deck = Deck {

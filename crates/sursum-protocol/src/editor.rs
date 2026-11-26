@@ -71,8 +71,65 @@ pub struct ImportReport {
     /// import (ADR 0025): both versions stay, the song waits for review.
     #[serde(default)]
     pub to_review: Vec<String>,
-    /// Warnings and failures, one line each (at most a few hundred).
-    pub problems: Vec<String>,
+    /// Warnings and failures (at most a few hundred), as codes the remote words.
+    pub problems: Vec<ImportProblem>,
+}
+
+/// One problem an import met: where, and what (as a code with its data, so the remote can word
+/// it in its language).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportProblem {
+    /// The file in the OpenSong folder: a song's path inside `Songs/` (e.g. `Maryjne/Barka`) or
+    /// `Sets/<name>`. Empty for a problem with the whole import.
+    pub file: String,
+    /// 1-based line of the song's lyrics, if the problem is on one line.
+    #[serde(default)]
+    pub line: Option<u32>,
+    pub code: ImportProblemCode,
+}
+
+/// What an [`ImportProblem`] is. Song warnings and set notes leave the file imported (the
+/// variant says what was done instead); failures skip the file or the set entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ImportProblemCode {
+    /// Lyrics before the first `[section]`; they became verse 1.
+    LinesBeforeFirstSection,
+    /// A lyric line that starts with `character` instead of a space; kept as text.
+    UnexpectedLineStart { character: char },
+    /// The same `[section]` twice; the second was appended to the first with a slide break.
+    DuplicateSection { section: String },
+    /// The song's presentation order names a section it does not have; skipped.
+    UnknownSectionInOrder { section: String },
+    /// Not UTF-8 and no other encoding declared; read as windows-1250 (the usual Polish one).
+    AssumedWindows1250,
+    /// Bytes invalid in the file's encoding were replaced with U+FFFD.
+    InvalidBytes,
+    /// An element that should appear once (e.g. `title`) appears again with other text; the
+    /// first was used.
+    RepeatedElement { element: String },
+    /// No `<title>`; the file name was used.
+    TitleFromFileName,
+    /// The song has no lyrics.
+    NoLyrics,
+    /// The file is not an OpenSong song (in `Songs/`) or set (in `Sets/`); skipped.
+    NotOpenSong,
+    /// The file is not valid XML; skipped. `detail` is the parser's (English) message.
+    InvalidXml { detail: String },
+    /// The file could not be read; skipped. `detail` is the system's message.
+    Unreadable { detail: String },
+    /// A set group with no slides; skipped.
+    EmptyGroup { group: String },
+    /// A set group of a kind sursum does not import (e.g. `image`); skipped.
+    UnsupportedGroup { group: String, group_type: String },
+    /// A set names a song that is not in the library; skipped.
+    SongNotFound { song: String },
+    /// Several songs have the name a set uses; the one at `used` (the shortest path) was taken.
+    AmbiguousSong { song: String, count: u32, used: String },
+    /// A set's order for `song` names a section the song does not have; skipped.
+    UnknownSectionInSetOrder { song: String, section: String },
+    /// Nothing could be stored (e.g. the disk is full); the import changed nothing.
+    StorageFailed,
 }
 
 /// What merging a `.sursum` library file does (or would do, in a dry run).
@@ -126,17 +183,24 @@ pub enum SaveOutcome {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SongVersions {
     pub song_id: SongId,
-    /// The version every device shows now comes first.
+    /// Best first, by the rule that picks the shown version (ADR 0025: more changes win): the
+    /// version every device shows now comes first, the others follow in the same order on every
+    /// device.
     pub versions: Vec<SongVersionView>,
 }
 
-/// One version of a song, as the comparison screen shows it.
+/// One version of a song, as the comparison screen shows it: every field the editor saves, so
+/// versions that differ only in the songbook number or the order do not look the same.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SongVersionView {
     pub version: String,
     /// True for the version every device shows now (the one with more changes).
     pub shown: bool,
     pub title: String,
+    /// Number in the songbook, if any.
+    pub number: Option<String>,
+    /// Presentation order as the editor shows it, e.g. `V1 C V2 C`; empty means "as written".
+    pub presentation: String,
     /// The lyrics in the editor's text form.
     pub lyrics: String,
 }
@@ -154,7 +218,8 @@ pub struct KeepVersion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetVersions {
     pub set_id: crate::ids::SetId,
-    /// The version every device shows now comes first.
+    /// Best first, like [`SongVersions::versions`]: the version every device shows now comes
+    /// first.
     pub versions: Vec<SetVersionView>,
 }
 
@@ -175,6 +240,9 @@ pub struct SetVersionItem {
     pub item_id: ItemId,
     pub title: String,
     pub kind: SetItemKind,
+    /// The song's number in its songbook, if any (as in [`crate::SetItemView`]).
+    #[serde(default)]
+    pub song_number: Option<String>,
     /// Another version lacks this item: the comparison offers "Dodaj" next to it.
     pub missing_elsewhere: bool,
 }

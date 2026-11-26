@@ -10,14 +10,14 @@ use anyhow::Context as _;
 use sha2::{Digest as _, Sha256};
 use sursum_core::model::{ItemKind, ServiceSet, SetItem, Song};
 use sursum_formats::opensong::{
-    ImportedSet, LibraryImport, SetEntry, add_file, add_set_file, is_skipped, presentation_for, read_library,
-    read_sets,
+    FileFailure, ImportedSet, LibraryImport, SetEntry, SkipReason, Warning, WarningKind, add_file,
+    add_set_file, is_skipped, presentation_for, read_library, read_sets,
 };
-use sursum_protocol::{ChurchId, ImportReport, ItemId, SetId, SongId};
+use sursum_protocol::{ChurchId, ImportProblem, ImportProblemCode, ImportReport, ItemId, SetId, SongId};
 
 use crate::db::{Database, SongImport};
 
-/// At most this many problem lines are reported back.
+/// At most this many problems are reported back.
 const MAX_PROBLEMS: usize = 500;
 
 /// Imports all songs from an OpenSong `Songs` folder, and the sets from `Sets` next to it.
@@ -125,7 +125,7 @@ fn store_in(
     let mut report = ImportReport { failed: count(library.failures.len()), ..ImportReport::default() };
     for (path, imported) in &library.songs {
         for warning in &imported.warnings {
-            push_problem(&mut report, format!("{path}: {warning}"));
+            push_problem(&mut report, song_problem(path, warning));
         }
         match database.import_song(&imported.song)? {
             SongImport::Created => report.inserted += 1,
@@ -134,8 +134,11 @@ fn store_in(
             SongImport::ToReview => report.to_review.push(imported.song.title().to_owned()),
         }
     }
-    for (path, reason) in &library.failures {
-        push_problem(&mut report, format!("{path}: {reason}"));
+    for (path, failure) in &library.failures {
+        push_problem(
+            &mut report,
+            ImportProblem { file: path.clone(), line: None, code: failure_code(failure) },
+        );
     }
     let mut sets = Vec::new();
     if !library.sets.is_empty() {
@@ -144,8 +147,9 @@ fn store_in(
         let finder = SongFinder::new(&songs);
         for imported in &library.sets {
             let (set, problems) = resolve_set(imported, &finder, church);
-            for problem in problems {
-                push_problem(&mut report, format!("Sets/{}: {problem}", imported.file_name));
+            for code in problems {
+                let file = format!("Sets/{}", imported.file_name);
+                push_problem(&mut report, ImportProblem { file, line: None, code });
             }
             database.save_set(&set)?;
             report.sets += 1;
@@ -174,15 +178,18 @@ impl<'a> SongFinder<'a> {
     /// By the recorded path, else by file name (OpenSong file name = title), else by title (songs
     /// typed in sursum's editor). With several candidates the one with the shortest path wins, so a
     /// song in the root folder is preferred; that choice is reported.
-    fn find(&self, entry: &SetEntry) -> Result<(&'a Song, Option<String>), String> {
-        let SetEntry::Song { name, .. } = entry else { return Err("not a song".into()) };
-        if let Some(id) = entry.song_path().and_then(|path| self.by_path.get(path.as_str()).copied()) {
+    fn find(
+        &self,
+        name: &str,
+        song_path: Option<String>,
+    ) -> Result<(&'a Song, Option<ImportProblemCode>), ImportProblemCode> {
+        if let Some(id) = song_path.and_then(|path| self.by_path.get(path.as_str()).copied()) {
             return Ok((&self.songs[id], None));
         }
         let mut candidates: Vec<(&str, &SongId)> = self
             .by_path
             .iter()
-            .filter(|(path, _)| path.rsplit('/').next() == Some(name.as_str()))
+            .filter(|(path, _)| path.rsplit('/').next() == Some(name))
             .map(|(path, id)| (*path, *id))
             .collect();
         if candidates.is_empty() {
@@ -195,11 +202,15 @@ impl<'a> SongFinder<'a> {
         }
         candidates.sort_by_key(|(path, id)| (path.len(), *path, id.as_str()));
         match candidates.as_slice() {
-            [] => Err(format!("song {name:?} is not in the library; skipped")),
+            [] => Err(ImportProblemCode::SongNotFound { song: name.to_owned() }),
             [(_, id)] => Ok((&self.songs[*id], None)),
             [(path, id), ..] => Ok((
                 &self.songs[*id],
-                Some(format!("{} songs are named {name:?}; used {path:?}", candidates.len())),
+                Some(ImportProblemCode::AmbiguousSong {
+                    song: name.to_owned(),
+                    count: count(candidates.len()),
+                    used: (*path).to_owned(),
+                }),
             )),
         }
     }
@@ -212,23 +223,40 @@ fn resolve_set(
     imported: &ImportedSet,
     finder: &SongFinder<'_>,
     church: Option<&ChurchId>,
-) -> (ServiceSet, Vec<String>) {
+) -> (ServiceSet, Vec<ImportProblemCode>) {
     let church_part = church.map(ChurchId::as_str).unwrap_or_default();
     let digest = Sha256::digest(format!("{church_part}/{}", imported.file_name).as_bytes());
     let hex: String = digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect();
     let set_id = SetId(format!("opensong-set-{hex}"));
-    let mut problems = imported.skipped.clone();
+    let mut problems: Vec<ImportProblemCode> = imported
+        .skipped
+        .iter()
+        .map(|skipped| match &skipped.reason {
+            SkipReason::NoSlides => ImportProblemCode::EmptyGroup { group: skipped.group.clone() },
+            SkipReason::Unsupported(group_type) => ImportProblemCode::UnsupportedGroup {
+                group: skipped.group.clone(),
+                group_type: group_type.clone(),
+            },
+        })
+        .collect();
     let mut items = Vec::new();
     for (index, entry) in imported.entries.iter().enumerate() {
         let kind = match entry {
             SetEntry::Text { title, pages } => ItemKind::Text { title: title.clone(), slides: pages.clone() },
-            SetEntry::Song { presentation, .. } => match finder.find(entry) {
+            SetEntry::Song { name, presentation, .. } => match finder.find(name, entry.song_path()) {
                 Ok((song, note)) => {
                     problems.extend(note);
                     let order_override = presentation.as_deref().map(|text| {
                         let (order, warnings) = presentation_for(song, text);
-                        problems
-                            .extend(warnings.iter().map(|warning| format!("{}: {warning}", song.title())));
+                        problems.extend(warnings.iter().filter_map(|warning| match &warning.kind {
+                            WarningKind::UnknownSectionInPresentation(section) => {
+                                Some(ImportProblemCode::UnknownSectionInSetOrder {
+                                    song: song.title().to_owned(),
+                                    section: section.clone(),
+                                })
+                            }
+                            _ => None,
+                        }));
                         order
                     });
                     ItemKind::Song { song_id: song.id.clone(), order_override }
@@ -247,9 +275,43 @@ fn resolve_set(
     )
 }
 
-fn push_problem(report: &mut ImportReport, line: String) {
+fn push_problem(report: &mut ImportReport, problem: ImportProblem) {
     if report.problems.len() < MAX_PROBLEMS {
-        report.problems.push(line);
+        report.problems.push(problem);
+    }
+}
+
+/// A warning about a song file, as the report carries it.
+fn song_problem(path: &str, warning: &Warning) -> ImportProblem {
+    let code = match &warning.kind {
+        WarningKind::LinesBeforeFirstSection => ImportProblemCode::LinesBeforeFirstSection,
+        WarningKind::UnexpectedLineStart(character) => {
+            ImportProblemCode::UnexpectedLineStart { character: *character }
+        }
+        WarningKind::DuplicateSection(section) => {
+            ImportProblemCode::DuplicateSection { section: section.clone() }
+        }
+        WarningKind::UnknownSectionInPresentation(section) => {
+            ImportProblemCode::UnknownSectionInOrder { section: section.clone() }
+        }
+        WarningKind::AssumedWindows1250 => ImportProblemCode::AssumedWindows1250,
+        WarningKind::InvalidBytes => ImportProblemCode::InvalidBytes,
+        WarningKind::RepeatedElement(element) => {
+            ImportProblemCode::RepeatedElement { element: element.clone() }
+        }
+        WarningKind::TitleFromFileName => ImportProblemCode::TitleFromFileName,
+        WarningKind::NoLyrics => ImportProblemCode::NoLyrics,
+    };
+    let line = warning.line.and_then(|line| u32::try_from(line).ok());
+    ImportProblem { file: path.to_owned(), line, code }
+}
+
+/// Why a file was not imported, as the report carries it.
+fn failure_code(failure: &FileFailure) -> ImportProblemCode {
+    match failure {
+        FileFailure::NotOpenSong => ImportProblemCode::NotOpenSong,
+        FileFailure::InvalidXml(detail) => ImportProblemCode::InvalidXml { detail: detail.clone() },
+        FileFailure::Unreadable(detail) => ImportProblemCode::Unreadable { detail: detail.clone() },
     }
 }
 
@@ -272,7 +334,12 @@ mod tests {
         let mut database = Database::in_memory().unwrap();
         let first = import_opensong(&mut database, &fixtures(), "Przykładowy").unwrap();
         assert_eq!((first.inserted, first.failed), (3, 1));
-        assert!(first.problems.iter().any(|line| line.starts_with("Synthetic Broken")));
+        let broken = first.problems.iter().find(|problem| problem.file == "Synthetic Broken");
+        assert!(
+            broken.is_some_and(|problem| matches!(problem.code, ImportProblemCode::InvalidXml { .. })),
+            "{:?}",
+            first.problems
+        );
         let second = import_opensong(&mut database, &fixtures(), "Przykładowy").unwrap();
         assert_eq!((second.inserted, second.updated, second.unchanged), (0, 0, 3));
         assert_eq!(database.load_songs().unwrap().len(), 3);
@@ -404,12 +471,22 @@ mod tests {
         let mut database = Database::in_memory().unwrap();
         let first = import_opensong(&mut database, &fixtures(), "Przykładowy").unwrap();
         assert_eq!(first.sets, 1);
+        let set_problems: Vec<&ImportProblemCode> = first
+            .problems
+            .iter()
+            .filter(|problem| problem.file.starts_with("Sets/"))
+            .map(|problem| &problem.code)
+            .collect();
         assert!(
-            first.problems.iter().any(|line| line.contains("Pieśń której nie ma")),
-            "{:?}",
-            first.problems
+            set_problems.iter().any(|code| matches!(code,
+                ImportProblemCode::SongNotFound { song } if song == "Pieśń której nie ma")),
+            "{set_problems:?}"
         );
-        assert!(first.problems.iter().any(|line| line.contains("image")), "{:?}", first.problems);
+        assert!(
+            set_problems.iter().any(|code| matches!(code,
+                ImportProblemCode::UnsupportedGroup { group_type, .. } if group_type == "image")),
+            "{set_problems:?}"
+        );
         let sets = database.load_sets().unwrap();
         let set = &sets[0];
         assert_eq!(set.name, "Syntetyczna niedziela");

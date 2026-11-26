@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use super::set::{ImportedSet, parse_set};
-use super::song::{ImportedSong, parse_song};
+use super::set::{ImportedSet, SetError, parse_set};
+use super::song::{ImportedSong, SongError, parse_song};
 
 /// Everything found in a `Songs/` folder.
 #[derive(Debug, Default)]
@@ -14,7 +14,40 @@ pub struct LibraryImport {
     /// Sets found in a `Sets/` folder next to `Songs/`.
     pub sets: Vec<ImportedSet>,
     /// Files that could not be imported, with the reason.
-    pub failures: Vec<(String, String)>,
+    pub failures: Vec<(String, FileFailure)>,
+}
+
+/// Why a song or set file was not imported. A type rather than a message, so the import report
+/// can carry it as a code the remote words in its language.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum FileFailure {
+    /// Not an OpenSong song (in `Songs/`) or set (in `Sets/`).
+    #[error("not an OpenSong song or set")]
+    NotOpenSong,
+    /// Not valid XML; the parser's message.
+    #[error("invalid XML: {0}")]
+    InvalidXml(String),
+    /// The file could not be read; the system's message.
+    #[error("unreadable: {0}")]
+    Unreadable(String),
+}
+
+impl From<SongError> for FileFailure {
+    fn from(error: SongError) -> Self {
+        match error {
+            SongError::NotASong => FileFailure::NotOpenSong,
+            SongError::InvalidXml(detail) => FileFailure::InvalidXml(detail),
+        }
+    }
+}
+
+impl From<SetError> for FileFailure {
+    fn from(error: SetError) -> Self {
+        match error {
+            SetError::NotASet => FileFailure::NotOpenSong,
+            SetError::InvalidXml(detail) => FileFailure::InvalidXml(detail),
+        }
+    }
 }
 
 /// File extensions that are never songs (images, databases) and are skipped silently.
@@ -25,7 +58,7 @@ const SKIPPED_EXTENSIONS: &[&str] =
 pub fn add_file(import: &mut LibraryImport, relative: String, bytes: &[u8], songbook: &str) {
     match parse_song(bytes, &relative, songbook) {
         Ok(song) => import.songs.push((relative, song)),
-        Err(error) => import.failures.push((relative, error.to_string())),
+        Err(error) => import.failures.push((relative, error.into())),
     }
 }
 
@@ -33,7 +66,7 @@ pub fn add_file(import: &mut LibraryImport, relative: String, bytes: &[u8], song
 pub fn add_set_file(import: &mut LibraryImport, file_name: &str, bytes: &[u8]) {
     match parse_set(bytes, file_name) {
         Ok(set) => import.sets.push(set),
-        Err(error) => import.failures.push((format!("Sets/{file_name}"), error.to_string())),
+        Err(error) => import.failures.push((format!("Sets/{file_name}"), error.into())),
     }
 }
 
@@ -51,7 +84,10 @@ pub fn read_sets(import: &mut LibraryImport, sets_dir: &Path) -> std::io::Result
         }
         match std::fs::read(&file) {
             Ok(bytes) => add_set_file(import, &name, &bytes),
-            Err(error) => import.failures.push((format!("Sets/{name}"), error.to_string())),
+            Err(error) => {
+                let failure = FileFailure::Unreadable(error.to_string());
+                import.failures.push((format!("Sets/{name}"), failure));
+            }
         }
     }
     Ok(())
@@ -72,8 +108,8 @@ pub fn read_library(songs_dir: &Path, songbook: &str) -> std::io::Result<Library
     for file in files {
         let relative = relative_path(songs_dir, &file);
         let result = std::fs::read(&file)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| parse_song(&bytes, &relative, songbook).map_err(|error| error.to_string()));
+            .map_err(|error| FileFailure::Unreadable(error.to_string()))
+            .and_then(|bytes| parse_song(&bytes, &relative, songbook).map_err(FileFailure::from));
         match result {
             Ok(song) => import.songs.push((relative, song)),
             Err(reason) => import.failures.push((relative, reason)),

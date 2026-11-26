@@ -775,10 +775,12 @@ async fn a_song_changed_in_two_places_waits_for_review_until_one_version_is_kept
     let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let tulce = start(dir_a.path(), "boot-1").await;
     let gowarzewo = start(dir_b.path(), "boot-1").await;
-    let draft =
-        SongDraft {
-            title: "Pieśń wspólna".into(), lyrics: "[V1]\n Wspólna".into(), ..SongDraft::default()
-        };
+    let draft = SongDraft {
+        title: "Pieśń wspólna".into(),
+        number: Some("12".into()),
+        lyrics: "[V1]\n Wspólna".into(),
+        ..SongDraft::default()
+    };
     let SaveOutcome::Saved { song_id, .. } = serde_json::from_str(
         &http_post(&tulce, "/api/songs/save", &serde_json::to_string(&draft).unwrap()).await,
     )
@@ -811,6 +813,7 @@ async fn a_song_changed_in_two_places_waits_for_review_until_one_version_is_kept
     assert!(versions.versions[0].shown && versions.versions[0].lyrics.contains("druga poprawka"));
     let other = versions.versions[1].clone();
     assert!(other.lyrics.contains("Gowarzewa"), "{other:?}");
+    assert_eq!(other.number.as_deref(), Some("12"), "every field the editor saves is compared");
 
     // "Zostaw tę" on the other version: it becomes the text everywhere once the file travels.
     let keep = serde_json::to_string(&KeepVersion { version: other.version.clone() }).unwrap();

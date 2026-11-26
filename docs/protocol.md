@@ -9,15 +9,16 @@ they cannot drift apart within one build.
 - `GET /ws/screen`: read-only, no authentication, loopback and LAN only.
 - `GET /ws/remote`: requires the device cookie set during PIN pairing; `Origin` and `Host` are
   validated on upgrade (protection against cross-site WebSocket hijacking and DNS rebinding).
-- REST under `/api/…` for large or on-demand data: search, song drafts and preview, import,
-  library export/merge, pairing, the device list and application updates.
+- REST under `/api/…` for large or on-demand data: search, song drafts and preview, the
+  versions to review, import, library export/merge, pictures, backups, pairing, the device list
+  and system updates.
 
 ### Rights (ADRs 0016, 0024)
 
 | Who | May |
 |---|---|
 | anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/healthz/trial` (503 unless the state actor answers within 2 s and the kiosk's screen is connected; the system update's trial checks it), `/licenses` |
-| paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
+| paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/sets/{id}/versions`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
 
 There is one level of rights (ADR 0024): a paired remote may do everything. Without a PIN nobody
 may control the screen: `/api/session` says `setup_needed`, and `POST /api/setup { pin, name, church }`
@@ -90,6 +91,8 @@ Command = Next | Prev | NextItem | PrevItem                // relative: subject 
                                         // turns black (`overlay` is "logo" only with a logo)
         | UndoRemoveLogo                // brings back the logo removed last; the cover stays
         | DeleteSong { song_id }
+        | NameChurch { name } | UseChurch { church_id }        // ADR 0025
+        | KeepSetVersion { set_id, version, add }             // the set review's "Zostaw tę"
 ```
 
 ## Server → client
@@ -100,10 +103,22 @@ Screen    { state: ScreenState { rev, live?: { deck, slide_index, gap }, upcomin
             transition_ms, layout: ScreenLayout, calibration?: ScreenProfile, logo? } }
 Remote    { state: RemoteState { rev, program: ScreenState, next?, active_set?: SetView, sets,
             can_undo, display_power, screen_profile, screen_connected,
-            next_step: "slide"|"gap"|"item"|"start"|"end", end_of_item: "gap"|"continue" } }
+            next_step: "slide"|"gap"|"item"|"start"|"end", end_of_item: "gap"|"continue",
+            songs_to_review, church?, churches } }
 CmdResult { seq, outcome: Applied{rev} | Stale{rev} | Rejected{code} }
 Pong      { }
+
+Deck      { deck_id, fit_group, item_id, title, slides: [Slide { key, part, body }] }
+part      = section { section: { kind, number?, suffix?, label? }, piece }  // kind: verse, chorus,
+          | page { number } | picture | pause           // bridge, pre_chorus, ending, intro, other
+body      = lyrics { lines } | text { title?, lines } | image { asset_id }
 ```
+
+`Slide.part` says which part of its item a slide shows, so the remote names tiles and the live
+position ("Zwrotka 2 (2)", "Slajd 3", "Obraz") without reading the slide key, which is an
+opaque identity (the screen compares it to decide whether to redraw). `piece` counts the slides
+of one section from 0 (a long verse is split). A section with a name of its own (`[Alleluja]`)
+carries it as `label`.
 
 `Rejected.code` is one of `not_found`, `no_active_set`, `forbidden`, `unsupported`,
 `invalid_profile`, `display_unreachable`, `display_busy`, `display_auth_failed`, `set_on_screen`,
@@ -112,12 +127,16 @@ the remote words them in Polish. There is no `Notice` message and no server or c
 the handshake. How text looks (font, colour, size range) is not on the wire: it is one fixed style
 in `sursum-slide` (`theme.rs`).
 
-**Changing the snapshot types** (removing a field, or adding one without `#[serde(default)]`): a
-screen page from the previous build cannot read the new snapshots, keeps its last slide and,
-because it reloads only at a moment with no text on screen, never notices. On a device the
-kiosk must restart once after such an update (a system update or a reboot does it). Removed on
+**Changing the snapshot types** (removing a field, or adding one without `#[serde(default)]`)
+raises `PROTOCOL_VERSION`: a screen page from the previous build cannot read the new snapshots,
+and the other version in `Welcome` makes it reload at once (see Reconnect). Without the raise it
+would keep its last slide and never notice. Pages from before `PROTOCOL_VERSION` 2 waited for a
+moment with no text on screen even then, so a device whose screen page is older needs one kiosk
+restart after the update (a system update or a reboot does it). Removed on
 2026-11-19: `ScreenState.theme`, `RemoteState.sections`, `ClientMsg::Log`; on 2026-11-20:
-`Deck.background` and the image `fit` (pictures are always whole, on black).
+`Deck.background` and the image `fit` (pictures are always whole, on black); on 2026-11-25:
+`Slide.label` (a section code the remote had to parse) became `Slide.part`, with
+`PROTOCOL_VERSION` 2.
 
 ## Snapshots, not patches
 
@@ -128,13 +147,13 @@ restart after a server restart, so clients apply every snapshot instead of compa
 
 ## Conflict rules
 
-- **Relative navigation** (`Next`, `Prev`, `NextItem`, `PrevItem`) carries `baseRev`. Applied if
-  `baseRev == program.updatedRev` or the last program change came from the same client (fast
-  repeated presses work); otherwise `Stale`. Two operators pressing "next" at once advance once.
+- **Relative navigation** (`Next`, `Prev`, `NextItem`, `PrevItem`) carries `base_rev`. Applied if
+  `base_rev` is at least the revision of the last program change, or that change came from the
+  same client (fast repeated presses work); otherwise `Stale`. Two operators pressing "next" at once advance once.
 - **Absolute commands** (`GoTo…`, `SetOverlay`, `ShowNow`) always apply; last writer wins.
   `GoTo`, `GoToItemNumber`, `GoToSlide` and `ShowNow` also lift black or the logo (ADR 0004);
   relative steps keep them, so a slide can be prepared under black.
-- **The gap**: with `endOfItem = gap` (the default), `Next` on an item's last slide shows an empty
+- **The gap**: with `end_of_item = gap` (the default), `Next` on an item's last slide shows an empty
   slide (`live.gap = true`, same item) before the next item; `Prev` leaves it. Not after a pause
   item; `NextItem`/`PrevItem` and absolute commands never stop in it.
 - **Set operations** address items by stable IDs; a missing ID returns `Rejected(NotFound)`.
@@ -158,7 +177,12 @@ restart after a server restart, so clients apply every snapshot instead of compa
   files are refused.
 - **OpenSong import** (`POST /api/import/opensong`) answers `ImportReport { inserted, updated,
   unchanged, failed, sets, to_review, problems }`; `to_review` names songs whose file text met a
-  correction made in sursum since the last import (both versions stay, ADR 0025).
+  correction made in sursum since the last import (both versions stay, ADR 0025). Each problem
+  is `ImportProblem { file, line?, code }`: the file in the OpenSong folder (empty for the whole
+  import), the lyrics line, and an `ImportProblemCode` with its data (e.g.
+  `duplicate_section { section }`, `song_not_found { song }`, `invalid_xml { detail }`,
+  `storage_failed`), which the remote words in Polish. Only `detail` is untranslated (a parser
+  or system message). The command line `sursum-server import-opensong` prints them as JSON.
 - **Churches** (ADR 0025): `RemoteState.church` is the church this device serves (named at
   setup; in the desktop program the church whose sets it lists, `None` until one is chosen),
   `RemoteState.churches` every church it knows; commands `NameChurch { name }` (create or
@@ -167,11 +191,12 @@ restart after a server restart, so clients apply every snapshot instead of compa
 - **Review** of songs changed in two places: `RemoteState.songs_to_review` counts them and
   `SongSummary.review` marks them in search results; `GET /api/songs/review` lists them,
   `GET /api/songs/{id}/versions` answers `SongVersions` (every live version in the editor's text
-  form, the shown one first), and `POST /api/songs/{id}/keep { version }` keeps one version,
+  form with its title, songbook number and order, best first by the rule that picks the shown
+  version: the shown one first, then the others in the same order on every device), and `POST /api/songs/{id}/keep { version }` keeps one version,
   replacing the others (`SaveOutcome`; `Conflict` if that version is gone).
 - **Review** of sets changed in two places: `SetSummary.review` and `SetView.review` mark them;
   `GET /api/sets/{id}/versions` answers `SetVersions` (every live version with its name, date and
-  items, the shown one first; `SetVersionItem.missing_elsewhere` marks items another version
+  items, best first like the songs'; `SetVersionItem.missing_elsewhere` marks items another version
   lacks), and the command `KeepSetVersion { set_id, version, add }` keeps one version with the
   items `add` from the others, each after the item it follows there (or at the end); `NotFound`
   if that version is gone. Like any set edit it never changes the program (ADR 0005).
@@ -180,18 +205,22 @@ restart after a server restart, so clients apply every snapshot instead of compa
 
 ## Reconnect
 
-`Hello` → `Welcome` + full snapshot. The screen compares `deck.deckId` and the slide key with what
+`Hello` → `Welcome` + full snapshot. The screen compares `deck.deck_id` and the slide key with what
 it shows; if equal, it redraws nothing (no transition). Backoff 250 ms → 5 s with jitter; ping
-every 5 s; no pong for 15 s → reconnect. A different `protocol` or `buildId` makes the page reload
-(the screen waits until it shows an overlay or the program changes).
+every 5 s; no pong for 15 s → reconnect. A different `protocol` or `build_id` in `Welcome` makes the
+page reload. With another `protocol` the server closes the socket right after `Welcome` and sends no
+snapshot, so the screen reloads at once (over the black background of its `index.html`, after
+`/healthz` answers). With the same `protocol` and another `build_id` snapshots keep coming, and the
+screen waits until nothing is visible to the congregation: no live slide, or black or the logo on
+top. The remote reloads at once in both cases.
 
 ## Type notes
 
-- In `sursum-protocol`: messages, commands, snapshots, `Deck`/`Slide`, `Theme`, `Overlay`,
+- In `sursum-protocol`: messages, commands, snapshots, `Deck`/`Slide`/`SlidePart`, `Overlay`,
   `ScreenLayout`, `ScreenProfile`, `Rect`, `DisplayPowerState`, REST DTOs, error codes.
   Not in it (server only): DB rows, parser AST, the internal `Program`, any logic.
-- The crate depends only on `serde` (plus e.g. `uuid` with the `serde` feature) so it compiles for
-  `wasm32-unknown-unknown` without tokio or `getrandom`; CI builds it for both targets.
+- The crate depends only on `serde` so it compiles for `wasm32-unknown-unknown` without tokio or
+  `getrandom`; CI builds it for both targets.
 - `insta` JSON snapshots of every message guard the wire format: after an update, a screen may
   still run old code until it reloads, so field renames must be deliberate.
 - The pseudo-code above is abridged; the Rust structs are authoritative.

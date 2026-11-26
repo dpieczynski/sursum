@@ -18,8 +18,9 @@ mod update;
 
 pub use backup::{BackupSummary, RestoreOutcome, RestoreRefusal};
 pub use editor::{
-    DraftPreview, ImportReport, KeepVersion, MarkupWarning, MarkupWarningCode, MergeReport, SaveOutcome,
-    SetVersionItem, SetVersionView, SetVersions, SongDraft, SongVersionView, SongVersions,
+    DraftPreview, ImportProblem, ImportProblemCode, ImportReport, KeepVersion, MarkupWarning,
+    MarkupWarningCode, MergeReport, SaveOutcome, SetVersionItem, SetVersionView, SetVersions, SongDraft,
+    SongVersionView, SongVersions,
 };
 pub use ids::{AssetId, ChurchId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
 pub use layout::{
@@ -30,7 +31,7 @@ pub use message::{
 };
 pub use pairing::{DeviceView, Installation, PairOutcome, PairRequest, SessionInfo};
 pub use pictures::{PictureCleanup, PictureCleanupRequest};
-pub use slide::{Deck, Slide, SlideBody};
+pub use slide::{Deck, SectionKind, SectionName, Slide, SlideBody, SlidePart};
 pub use state::{
     ChurchView, DisplayPowerState, EndOfItem, LiveSlide, NextStep, Overlay, RemoteState, ScreenState,
     SetItemKind, SetItemView, SetSummary, SetView, SongSummary,

@@ -90,6 +90,39 @@ async fn last_slide_stays_while_the_server_is_down_and_reconnect_has_no_transiti
 
 #[tokio::test]
 #[ignore = "needs a WebDriver server (just e2e)"]
+async fn a_server_with_another_protocol_reloads_the_screen_even_with_a_slide_live() -> anyhow::Result<()> {
+    // A server with another protocol answers `Welcome` and closes the socket without a snapshot.
+    // Waiting for black or the logo would freeze the live slide forever, so the screen reloads.
+    let mut server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
+    with_browser(WIDTH, HEIGHT, async |driver| {
+        driver.goto(server.url("/screen/")).await?;
+        server.remote("organist").await?.command(Command::Next).await?;
+        wait_for_slide(driver, "v1#").await?;
+        driver.execute("window.sursumBeforeChange = true;", Vec::new()).await?;
+
+        let other = (sursum_protocol::PROTOCOL_VERSION + 1).to_string();
+        server.restart_with(&["--protocol-version", &other]).await?;
+        // Reloading drops the mark, onto the screen page itself and not a browser error page.
+        // (A script may fail while a page is loading; ask again.)
+        let reloaded = wait_until(Duration::from_secs(15), || async {
+            let script = "return window.sursumBeforeChange !== true && location.pathname === '/screen/' \
+                          && document.querySelector('.sursum-screen') !== null;";
+            let mark = driver.execute(script, Vec::new()).await;
+            mark.is_ok_and(|mark| mark.json().as_bool() == Some(true))
+        })
+        .await;
+        anyhow::ensure!(reloaded.is_ok(), "the screen kept the live slide instead of reloading");
+        // Not checked: switching back to this release's protocol. The page keeps reloading (at
+        // most every 5 s) while the server disagrees, and killing the server between `/healthz`
+        // and a reload leaves the browser on its own error page (on a device the screen guard
+        // restarts the kiosk then). A real update serves pages of its own protocol.
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs a WebDriver server (just e2e)"]
 async fn one_font_size_for_all_slides_of_a_song() -> anyhow::Result<()> {
     let server = Server::start_with(&[], Some("transition_ms = 0\n")).await?;
     with_browser(WIDTH, HEIGHT, async |driver| {

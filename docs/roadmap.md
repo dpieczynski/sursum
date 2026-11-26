@@ -126,8 +126,12 @@ An external review of main was checked claim by claim; what held up is fixed in 
   database restored, and no copy was left behind either time
 - [x] Release and licence (actions pinned by SHA, no SSH key in public images, package manifest
   and written offer for GPL sources)
-- [ ] Protocol cleanup (slide part info, version views with number and order, import problem
-  codes) and docs/CI hygiene
+- [x] Protocol cleanup (slide part info, version views with number and order, import problem
+  codes) and docs/CI hygiene: `Slide.part` (section kind, number and piece, page, picture,
+  pause) replaces the label code the remote parsed together with the slide key; song versions
+  in the review carry the songbook number and the order, and versions come best first;
+  `ImportReport.problems` are `ImportProblem` codes worded by the remote; `docs/protocol.md`
+  corrected (snake_case names, missing commands and fields, the stale check)
 - [x] The screen showed Chromium's "This site can't be reached" page whenever the kiosk started
   while the server did not answer (seen during the failed trial on the pilot Pi; also after a
   server crash or a slow boot), against hard rule 3. The kiosk now opens a black page on the

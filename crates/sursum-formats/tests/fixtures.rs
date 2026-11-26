@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use sursum_formats::opensong::{WarningKind, read_library};
+use sursum_formats::opensong::{SkipReason, WarningKind, read_library};
 
 fn library() -> sursum_formats::opensong::LibraryImport {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/opensong/Songs");
@@ -101,5 +101,5 @@ fn set_file_lists_songs_texts_and_skipped_groups() {
     assert!(matches!(&set.entries[3], SetEntry::Text { pages, .. } if pages.len() == 1));
     assert_eq!(set.entries[4].song_path().as_deref(), Some("Inne/Pieśń której nie ma"));
     assert_eq!(set.skipped.len(), 1);
-    assert!(set.skipped[0].contains("image"), "{:?}", set.skipped);
+    assert_eq!(set.skipped[0].reason, SkipReason::Unsupported("image".into()), "{:?}", set.skipped);
 }

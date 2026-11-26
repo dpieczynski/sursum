@@ -5,7 +5,7 @@ expression: messages
 [
   {
     "t": "hello",
-    "protocol": 1,
+    "protocol": 2,
     "role": "remote",
     "client_id": "c1",
     "build_id": "b"

@@ -43,6 +43,11 @@ struct Args {
     /// Test-only: delay serving WebAssembly (needs the `e2e-hooks` feature).
     #[arg(long, default_value_t = 0, hide = true)]
     wasm_delay_ms: u64,
+    /// Test-only: speak another protocol version on the WebSocket, like a server from another
+    /// release (needs the `e2e-hooks` feature).
+    #[cfg(feature = "e2e-hooks")]
+    #[arg(long, hide = true)]
+    protocol_version: Option<u16>,
     #[command(subcommand)]
     command: Option<Task>,
 }
@@ -130,8 +135,9 @@ async fn main() -> anyhow::Result<()> {
         let mut database = sursum_server::db::Database::open(&args.data_dir)?;
         database.backup(&args.data_dir, "before-import")?;
         let report = sursum_server::import::import_opensong(&mut database, songs_dir, songbook)?;
-        for line in &report.problems {
-            eprintln!("{line}");
+        // The remote words the problems in Polish; the command line shows the codes as JSON.
+        for problem in &report.problems {
+            eprintln!("{}", serde_json::to_string(problem)?);
         }
         println!(
             "imported: {} new, {} updated, {} unchanged, {} failed, {} sets",
@@ -153,6 +159,10 @@ async fn main() -> anyhow::Result<()> {
     }
     config.allowed_origins.extend(args.allow_origins);
     config.wasm_delay_ms = args.wasm_delay_ms;
+    #[cfg(feature = "e2e-hooks")]
+    if let Some(protocol) = args.protocol_version {
+        config.protocol_version = protocol;
+    }
     if args.open_without_pin {
         config.access = sursum_server::auth::AccessMode::Local;
     }

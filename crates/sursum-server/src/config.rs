@@ -31,6 +31,9 @@ pub struct Config {
     pub installation: sursum_protocol::Installation,
     /// Test-only: delay serving WebAssembly by this many milliseconds (`e2e-hooks` feature).
     pub wasm_delay_ms: u64,
+    /// The protocol version the WebSocket sessions speak: always `PROTOCOL_VERSION`, except in
+    /// browser tests (`e2e-hooks` feature) that play a server from another release.
+    pub protocol_version: u16,
     /// How the server switches the display on and off (ADR 0012).
     pub display_power: DisplayPowerConfig,
     /// What to do when the screen stays disconnected (restart the kiosk); off when `None`.
@@ -74,6 +77,7 @@ impl Config {
             access: crate::auth::AccessMode::Pin,
             installation: sursum_protocol::Installation::Screen,
             wasm_delay_ms: 0,
+            protocol_version: sursum_protocol::PROTOCOL_VERSION,
             display_power: DisplayPowerConfig::None,
             screen_guard: None,
             update_key: crate::signing::trusted_key(),

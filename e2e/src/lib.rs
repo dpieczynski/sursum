@@ -4,7 +4,7 @@
 //!
 //! Environment:
 //! - `SURSUM_SERVER_BIN`: server binary (default: `target/debug/sursum-server`; build it with
-//!   `--features e2e-hooks` for the first-frame test);
+//!   `--features e2e-hooks` for the first-frame and protocol-change tests);
 //! - `SURSUM_E2E_BROWSER`: `chromium` (default) or `wpe`, the engine under test (the screen's);
 //! - `SURSUM_E2E_REMOTE_BROWSER`: `chromium` (default) or `webkitgtk`, the remotes' engine (the
 //!   remote on WebKit, ADR 0021: the desktop program's Linux window is WebKitGTK);
@@ -105,7 +105,7 @@ impl Server {
         let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
         let mut server =
             Server { addr: SocketAddr::from(([127, 0, 0, 1], port)), data_dir, extra_args, child: None };
-        server.spawn().await?;
+        server.spawn(&[]).await?;
         Ok(server)
     }
 
@@ -129,17 +129,24 @@ impl Server {
 
     /// Starts the process again on the same port and data directory.
     pub async fn restart(&mut self) -> anyhow::Result<()> {
-        self.kill();
-        self.spawn().await
+        self.restart_with(&[]).await
     }
 
-    async fn spawn(&mut self) -> anyhow::Result<()> {
+    /// Starts the process again with `more_args` for this run only (e.g. a test-only flag that
+    /// plays a server from another release).
+    pub async fn restart_with(&mut self, more_args: &[&str]) -> anyhow::Result<()> {
+        self.kill();
+        self.spawn(more_args).await
+    }
+
+    async fn spawn(&mut self, more_args: &[&str]) -> anyhow::Result<()> {
         let child = Process::new(server_binary())
             .arg("--data-dir")
             .arg(self.data_dir.path())
             .arg("--listen")
             .arg(self.addr.to_string())
             .args(&self.extra_args)
+            .args(more_args)
             .stdout(Stdio::null())
             .stderr(std::fs::File::create(self.log_path())?)
             .spawn()

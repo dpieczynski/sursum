@@ -99,9 +99,28 @@ impl Client {
     }
 }
 
-/// True if the server runs another protocol or build; the page should reload.
-pub fn needs_reload(message: &ServerMsg) -> bool {
-    matches!(message, ServerMsg::Welcome { protocol, build_id } if *protocol != PROTOCOL_VERSION || build_id != BUILD_ID)
+/// How the server that answered `Welcome` differs from the one this page was built for. Either
+/// way the page should reload; the two differ in what the connection does meanwhile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerChange {
+    /// Another protocol version: the server closes the connection right after `Welcome` and
+    /// never sends a snapshot, so a page waiting for one would wait forever. Reload now.
+    Protocol,
+    /// The same protocol from another build: snapshots keep coming, so the page may wait for a
+    /// moment nobody notices (the screen waits for black, the logo or no live slide).
+    Build,
+}
+
+/// What changed on the server, if `message` is a `Welcome` from another protocol or build.
+pub fn server_change(message: &ServerMsg) -> Option<ServerChange> {
+    let ServerMsg::Welcome { protocol, build_id } = message else { return None };
+    if *protocol != PROTOCOL_VERSION {
+        Some(ServerChange::Protocol)
+    } else if build_id != BUILD_ID {
+        Some(ServerChange::Build)
+    } else {
+        None
+    }
 }
 
 fn open(inner: &Rc<Inner>) {
@@ -248,6 +267,27 @@ fn now_ms() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn welcome(protocol: u16, build_id: &str) -> ServerMsg {
+        ServerMsg::Welcome { protocol, build_id: build_id.to_owned() }
+    }
+
+    #[test]
+    fn another_protocol_is_a_protocol_change_whatever_the_build() {
+        assert_eq!(server_change(&welcome(PROTOCOL_VERSION + 1, BUILD_ID)), Some(ServerChange::Protocol));
+        assert_eq!(server_change(&welcome(PROTOCOL_VERSION + 1, "other")), Some(ServerChange::Protocol));
+    }
+
+    #[test]
+    fn another_build_of_the_same_protocol_is_a_build_change() {
+        assert_eq!(server_change(&welcome(PROTOCOL_VERSION, "other")), Some(ServerChange::Build));
+    }
+
+    #[test]
+    fn the_same_server_or_another_message_is_no_change() {
+        assert_eq!(server_change(&welcome(PROTOCOL_VERSION, BUILD_ID)), None);
+        assert_eq!(server_change(&ServerMsg::Pong), None);
+    }
 
     #[test]
     fn backoff_doubles_and_caps() {

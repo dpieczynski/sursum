@@ -15,9 +15,7 @@ use axum::http::HeaderMap;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
-use sursum_protocol::{
-    ClientId, ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, Role, ServerMsg,
-};
+use sursum_protocol::{ClientId, ClientMsg, CmdOutcome, Command, ErrorCode, Role, ServerMsg};
 use tokio::sync::watch;
 
 use crate::BUILD_ID;
@@ -34,6 +32,8 @@ pub struct Guard {
     pub presence: crate::screen_guard::ScreenPresence,
     /// True for a screen on this machine (the kiosk); only those are counted.
     pub local_peer: bool,
+    /// The protocol version this server speaks (`PROTOCOL_VERSION` outside browser tests).
+    pub protocol: u16,
 }
 
 impl Guard {
@@ -86,9 +86,12 @@ pub async fn session(socket: WebSocket, state: StateHandle, endpoint: Role, guar
     if role != endpoint {
         return;
     }
-    let welcome = ServerMsg::Welcome { protocol: PROTOCOL_VERSION, build_id: BUILD_ID.to_owned() };
-    if send(&mut sender, &welcome).await.is_err() || protocol != PROTOCOL_VERSION {
-        // A client with another protocol version reloads itself after reading `Welcome`.
+    // Only a browser-test build may speak another version than its own.
+    let own = if cfg!(feature = "e2e-hooks") { guard.protocol } else { sursum_protocol::PROTOCOL_VERSION };
+    let welcome = ServerMsg::Welcome { protocol: own, build_id: BUILD_ID.to_owned() };
+    if send(&mut sender, &welcome).await.is_err() || protocol != own {
+        // A client with another protocol version reloads itself at once after reading
+        // `Welcome`: no snapshot follows, the socket closes here.
         return;
     }
     tracing::debug!(%client_id, ?role, "client connected");

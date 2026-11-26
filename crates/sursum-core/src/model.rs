@@ -118,8 +118,8 @@ impl Verse {
         }
     }
 
-    /// Label code for jump buttons: the custom label if any, otherwise the verse name (`v1`,
-    /// `c`). The remote turns codes into localized text; the server never sends UI text.
+    /// The custom label if any, otherwise the verse name (`v1`, `c`). The remote gets sections
+    /// as [`sursum_protocol::SectionName`] (see `slides::section_name`) and words them itself.
     pub fn display_label(&self) -> String {
         self.label.clone().unwrap_or_else(|| self.name.0.clone())
     }

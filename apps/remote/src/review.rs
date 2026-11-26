@@ -10,7 +10,7 @@ use sursum_protocol::{
 };
 
 use crate::api::{get_json, post_json};
-use crate::messages::{Msg, pl, songs_to_review};
+use crate::messages::{Msg, pl, song_version_details, songs_to_review};
 use crate::ui::{Sheet, Toasts};
 
 /// "Pieśni do przejrzenia: 2", shown only while there are some; opens the list.
@@ -115,6 +115,7 @@ fn version_column(
 ) -> impl IntoView {
     let toasts = expect_context::<Toasts>();
     let label = if version.shown { pl(Msg::VersionShown) } else { pl(Msg::VersionOther) };
+    let details = song_version_details(version.number.as_deref(), &version.presentation);
     let request = KeepVersion { version: version.version };
     let keep = move |_| {
         let (song_id, request) = (song_id.clone(), request.clone());
@@ -134,6 +135,9 @@ fn version_column(
         <section class="review-version" class:shown=version.shown data-testid="review-version">
             <h3 class="review-label">{label}</h3>
             <p class="card-title">{version.title}</p>
+            <p class="review-details" data-testid="version-details">
+                {details}
+            </p>
             <pre class="review-lyrics">{version.lyrics}</pre>
             <button class="btn btn--primary" data-testid="keep-version" on:click=keep>
                 {pl(Msg::KeepThis)}
