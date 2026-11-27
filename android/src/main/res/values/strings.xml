@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Polish only (hard rule 6); these appear only on the find-the-device screen. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="pl">
+    <string name="app_name">sursum</string>
+    <string name="searching">Szukam urządzenia sursum w tej sieci…</string>
+    <string name="connecting">Łączę z %1$s…</string>
+    <string name="cannot_connect">Nie udało się połączyć z %1$s. Próbuję dalej…</string>
+    <string name="bad_address">To nie wygląda na adres. Wpisz np. 192.168.1.20.</string>
+    <string name="address_hint">Adres, np. 192.168.1.20</string>
+    <string name="connect">Połącz</string>
+    <string name="same_network">Tablet i urządzenie muszą być w tej samej sieci.</string>
+    <string name="downloading">Pobieranie: %1$s</string>
+    <string name="no_file_picker">Brak aplikacji do wybierania plików.</string>
+</resources>

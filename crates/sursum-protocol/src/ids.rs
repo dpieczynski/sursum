@@ -65,6 +65,14 @@ string_id!(
     /// Random identity a client picks for itself (used for the `Stale` rule and presence).
     ClientId
 );
+string_id!(
+    /// Random identity of one sursum server (the device next to the projector), created at its
+    /// first start and kept for good. It lets the Android launcher recognise the device it is
+    /// paired with after DHCP gave it another address. It is public and proves nothing: the
+    /// launcher only moves its pairing after the server proved it holds the pairing
+    /// ([`crate::PairingProof`]). Not to be confused with a paired remote's `device_id`.
+    ServerId
+);
 
 /// Monotonic revision of the server state; increases on every client-visible change.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

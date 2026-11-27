@@ -305,6 +305,21 @@ fn pairing() {
     assert!(!old.setup_needed && old.installation == Installation::Screen);
 }
 
+/// The server's identity and the pairing proof (ADR 0028). The Android launcher reads them with
+/// its own JSON code, so their names must not change.
+#[test]
+fn identity() {
+    use sursum_protocol::{PairingProof, PairingProofRequest, ServerId, ServerIdentity};
+    let identity = ServerIdentity { server_id: ServerId::from("server-1") };
+    let request = PairingProofRequest { key: "ab".repeat(32), nonce: "01".repeat(16) };
+    let proof = PairingProof {
+        server_id: ServerId::from("server-1"),
+        address: "192.168.1.20:80".into(),
+        proof: "cd".repeat(32),
+    };
+    insta::assert_json_snapshot!((identity, request, proof));
+}
+
 /// Updates go over REST. The remote that uploads an update reloads into the new build, so these
 /// only have to stay readable within one release.
 #[test]

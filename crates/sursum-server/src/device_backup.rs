@@ -6,8 +6,9 @@
 //! Restoring replaces everything, which the running state actor cannot do under its own feet.
 //! An upload is therefore only checked and **staged** in `restore/`, and the server restarts; the
 //! next start moves the staged database into place before opening it ([`apply_staged`]). The
-//! device keeps its own PIN and paired remotes: a backup never carries them (they are removed on
-//! export) and restoring never replaces them, so the remote that restored stays paired.
+//! device keeps its own PIN, paired remotes and server identity: a backup never carries them
+//! (they are removed on export) and restoring never replaces them, so the remote that restored
+//! stays paired and tablets still recognise the device (ADR 0028).
 //!
 //! Format: a ZIP with `manifest.json` ([`Manifest`]), `sursum.db` and `assets/<id>` per picture.
 
@@ -333,6 +334,7 @@ mod tests {
     fn device(dir: &Path, pin: &str, device_token: &str, songs: &[&str]) -> Database {
         let mut database = Database::open(dir).unwrap();
         database.set_setting(crate::auth::PIN_SETTING, &pin).unwrap();
+        crate::identity::load_or_create(&database).unwrap();
         database.add_device(device_token, "Tablet", device_token).unwrap();
         for title in songs {
             database.save_song(&song(title), crate::db::Base::Current).unwrap();
@@ -376,7 +378,10 @@ mod tests {
         let pins: i64 = connection
             .query_row("SELECT count(*) FROM settings WHERE key = 'pin'", [], |row| row.get(0))
             .unwrap();
-        assert_eq!((devices, pins), (0, 0));
+        let identities: i64 = connection
+            .query_row("SELECT count(*) FROM settings WHERE key = 'server_id'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!((devices, pins, identities), (0, 0, 0));
         assert!(
             std::fs::read_dir(dir.path())
                 .unwrap()
@@ -385,14 +390,16 @@ mod tests {
     }
 
     #[test]
-    fn a_restored_backup_replaces_the_data_but_keeps_this_devices_pin_and_remotes() {
+    fn a_restored_backup_replaces_the_data_but_keeps_this_devices_pin_remotes_and_identity() {
         let old = tempfile::tempdir().unwrap();
         drop(device(old.path(), "old-pin", "old-token", &["Alfa", "Beta"]));
         crate::assets::store(old.path(), PNG).unwrap();
         let backup = backup_of(old.path());
 
         let new = tempfile::tempdir().unwrap();
-        drop(device(new.path(), "new-pin", "new-token", &["Gamma"]));
+        let new_device = device(new.path(), "new-pin", "new-token", &["Gamma"]);
+        let new_identity = crate::identity::load_or_create(&new_device).unwrap();
+        drop(new_device);
         let summary = stage(new.path(), &backup).unwrap();
         assert_eq!((summary.songs, summary.pictures), (2, 1));
         assert_eq!(crate::assets::list(new.path()).unwrap().len(), 1, "pictures are added at once");
@@ -409,6 +416,11 @@ mod tests {
         assert_eq!(titles, ["Alfa", "Beta"]);
         assert_eq!(database.setting::<String>(crate::auth::PIN_SETTING).unwrap().as_deref(), Some("new-pin"));
         assert_eq!(database.device_token_hashes().unwrap().len(), 1);
+        assert_eq!(
+            crate::identity::load_or_create(&database).unwrap(),
+            new_identity,
+            "the device stays the one its tablets know"
+        );
         assert!(!new.path().join(STAGED_DIR).exists());
         let replaced = std::fs::read_dir(new.path().join("backups"))
             .unwrap()

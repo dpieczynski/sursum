@@ -1,0 +1,19 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Announces the remote over DNS-SD so the Android launcher (android/) finds the device without
+     anyone typing its address. A dedicated type, not _http._tcp, so the app never offers a
+     printer or a router. The name must stay %h (the host name): the app loads the remote from
+     "<name>.local" first, so the pairing cookie survives a new IP address on tablets that
+     resolve .local names. Where they do not, the app recognises the device by its identity
+     (GET /api/identity) and moves the pairing after the device proved it holds it (ADR 0028),
+     so this file, the same on every Pi, needs nothing per device. The port is the one in
+     deploy/systemd/sursum.service. -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_sursum._tcp</type>
+    <port>80</port>
+    <txt-record>path=/remote/</txt-record>
+  </service>
+</service-group>

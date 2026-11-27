@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Pairing a remote with the PIN, and the device list. A paired device holds a cookie and may do
-//! everything (ADR 0024); the screen needs none.
+//! everything (ADR 0024); the screen needs none. Also the server's identity, with which the
+//! Android launcher keeps its pairing when the device gets a new address (ADR 0028).
 
 use serde::{Deserialize, Serialize};
+
+use crate::ServerId;
 
 /// What a page needs to know before connecting.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,4 +77,39 @@ pub enum PairOutcome {
     Locked {
         retry_after_s: u32,
     },
+}
+
+/// `GET /api/identity` (open to the local network): which sursum server answers here. The
+/// Android launcher remembers it with the address it loaded the remote from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerIdentity {
+    pub server_id: ServerId,
+}
+
+/// `POST /api/identity/proof` (open to the local network): asks the server to prove that it
+/// holds a pairing, before the launcher moves that pairing's cookie to the server's new address.
+/// Neither field is secret: a host that only pretends to be the device learns nothing it could
+/// use from them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingProofRequest {
+    /// Names the pairing without revealing it: lowercase hex of
+    /// SHA-256(`"sursum-pairing-key\n"` ‖ token hash), where the token hash is the lowercase hex
+    /// SHA-256 of the cookie's value (what the server stores).
+    pub key: String,
+    /// Fresh random lowercase hex from the launcher (32 to 128 characters), so an old answer
+    /// cannot be replayed.
+    pub nonce: String,
+}
+
+/// Answer to [`PairingProofRequest`] (404 when no paired remote has that key).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingProof {
+    pub server_id: ServerId,
+    /// The address and port the request reached, as the server saw it (`192.168.1.20:80`,
+    /// `[fd00::5]:80`). The launcher accepts the proof only for the address it connected to,
+    /// so a host that relays the question to the real device cannot reuse the answer.
+    pub address: String,
+    /// Lowercase hex HMAC-SHA256, keyed with the token hash (as ASCII hex), of
+    /// `"sursum-pairing-proof\n" ‖ server_id ‖ "\n" ‖ address ‖ "\n" ‖ nonce`.
+    pub proof: String,
 }

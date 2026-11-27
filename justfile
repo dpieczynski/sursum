@@ -224,3 +224,91 @@ try host: cross-pi
         sudo systemctl daemon-reload
         sudo systemctl restart sursum'
     echo "{{host}} runs this checkout's server ($SURSUM_BUILD_ID) until it restarts"
+
+# Debug APK of the Android launcher for tablets (android/, spike): built in a container with a
+# JDK, the Android SDK and Gradle (android/build.Containerfile), so nothing Android is installed
+# here. Gradle's cache and the debug signing key live in ~/.cache/sursum-android, outside the
+# checkout, so `cargo clean` does not change the key (a tablet refuses an update signed with
+# another one). Writes target/android/sursum-debug.apk.
+android:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    podman build -q -t localhost/sursum-android-builder -f android/build.Containerfile android >/dev/null
+    home="${XDG_CACHE_HOME:-$HOME/.cache}/sursum-android"
+    mkdir -p "$home" target/android
+    podman run --rm --userns=keep-id --security-opt label=disable -v "$PWD:/src" -v "$home:/home/builder" \
+        -e HOME=/home/builder -e GRADLE_USER_HOME=/home/builder/gradle \
+        -e ANDROID_USER_HOME=/home/builder/.android localhost/sursum-android-builder \
+        gradle --no-daemon --quiet --project-cache-dir /src/target/android/gradle assembleDebug lintDebug
+    cp target/android/build/outputs/apk/debug/*-debug.apk target/android/sursum-debug.apk
+    ls -lh target/android/sursum-debug.apk
+
+# Install the debug APK on a tablet connected over USB or `adb connect` (keeps its data and the
+# pairing cookie).
+android-install: android
+    adb install -r target/android/sursum-debug.apk
+
+# Create the Android release key (PKCS#12, alias `sursum`, valid 100 years) at `path`, asking
+# for its password. Do it once: Google Play signs the app with this key (Play App Signing) and
+# it is registered for developer verification; losing it means no updates for any tablet. Keep an
+# offline copy of the file and its password; never put either in the repository. Prints the
+# SHA-256 fingerprint to register.
+android-key path:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    key="$(realpath -m "{{path}}")"
+    test ! -e "$key" || { echo "$key exists; it is not overwritten" >&2; exit 1; }
+    read -rsp "Password for the new key (at least 6 characters): " password; echo
+    read -rsp "The same password again: " again; echo
+    test "$password" = "$again" || { echo "the passwords differ" >&2; exit 1; }
+    mkdir -p "$(dirname "$key")"
+    podman build -q -t localhost/sursum-android-builder -f android/build.Containerfile android >/dev/null
+    SURSUM_ANDROID_KEYSTORE_PASSWORD="$password" podman run --rm --userns=keep-id \
+        --security-opt label=disable -v "$(dirname "$key"):/keys" -e SURSUM_ANDROID_KEYSTORE_PASSWORD \
+        localhost/sursum-android-builder keytool -genkeypair -keystore "/keys/$(basename "$key")" \
+        -storetype PKCS12 -alias sursum -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=sursum" \
+        -storepass:env SURSUM_ANDROID_KEYSTORE_PASSWORD -keypass:env SURSUM_ANDROID_KEYSTORE_PASSWORD
+    chmod 600 "$key"
+    echo "Created $key. Back it up offline now, with its password."
+    SURSUM_ANDROID_KEYSTORE_PASSWORD="$password" just android-fingerprint "$key"
+
+# Print the SHA-256 certificate fingerprint of the release key at `path`, the value Google's
+# console asks for (uses SURSUM_ANDROID_KEYSTORE_PASSWORD, or asks for the password).
+android-fingerprint path:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    key="$(realpath "{{path}}")"
+    if [ -z "${SURSUM_ANDROID_KEYSTORE_PASSWORD:-}" ]; then
+        read -rsp "Password of $key: " SURSUM_ANDROID_KEYSTORE_PASSWORD; echo
+        export SURSUM_ANDROID_KEYSTORE_PASSWORD
+    fi
+    podman run --rm --userns=keep-id --security-opt label=disable -v "$key:/keys/release.p12:ro" \
+        -e SURSUM_ANDROID_KEYSTORE_PASSWORD localhost/sursum-android-builder keytool -list -v \
+        -keystore /keys/release.p12 -storetype PKCS12 -alias sursum \
+        -storepass:env SURSUM_ANDROID_KEYSTORE_PASSWORD | grep "SHA256:"
+
+# Release builds signed with the release key, for parish tablets: target/android/sursum.apk
+# (the Pi's page, GitHub releases, adb) and target/android/sursum.aab (the App Bundle uploaded
+# to Google Play). Needs SURSUM_ANDROID_KEYSTORE (path of the key from
+# `just android-key`) and SURSUM_ANDROID_KEYSTORE_PASSWORD. Prints the signer's fingerprint,
+# which must be the registered one.
+android-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    test -f "${SURSUM_ANDROID_KEYSTORE:-}" || { echo "set SURSUM_ANDROID_KEYSTORE (path of the release key)" >&2; exit 1; }
+    test -n "${SURSUM_ANDROID_KEYSTORE_PASSWORD:-}" || { echo "set SURSUM_ANDROID_KEYSTORE_PASSWORD" >&2; exit 1; }
+    podman build -q -t localhost/sursum-android-builder -f android/build.Containerfile android >/dev/null
+    home="${XDG_CACHE_HOME:-$HOME/.cache}/sursum-android"
+    mkdir -p "$home" target/android
+    podman run --rm --userns=keep-id --security-opt label=disable -v "$PWD:/src" -v "$home:/home/builder" \
+        -v "$(realpath "$SURSUM_ANDROID_KEYSTORE"):/keys/release.p12:ro" \
+        -e HOME=/home/builder -e GRADLE_USER_HOME=/home/builder/gradle \
+        -e ANDROID_USER_HOME=/home/builder/.android -e SURSUM_ANDROID_KEYSTORE=/keys/release.p12 \
+        -e SURSUM_ANDROID_KEYSTORE_PASSWORD localhost/sursum-android-builder \
+        gradle --no-daemon --quiet --project-cache-dir /src/target/android/gradle assembleRelease \
+        bundleRelease
+    cp target/android/build/outputs/apk/release/*-release.apk target/android/sursum.apk
+    cp target/android/build/outputs/bundle/release/*-release.aab target/android/sursum.aab
+    podman run --rm --security-opt label=disable -v "$PWD/target/android:/apk:ro" localhost/sursum-android-builder \
+        /opt/android-sdk/build-tools/36.0.0/apksigner verify --print-certs /apk/sursum.apk | grep "SHA-256"
+    ls -lh target/android/sursum.apk target/android/sursum.aab
