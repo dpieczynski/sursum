@@ -17,7 +17,7 @@ they cannot drift apart within one build.
 
 | Who | May |
 |---|---|
-| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/healthz`, `/healthz/trial` (503 unless the state actor answers within 2 s and the kiosk's screen is connected; the system update's trial checks it), `/licenses` |
+| anyone on the LAN | `/screen/`, `/ws/screen`, `/assets/{id}`, `/api/session`, `/api/pair`, `/api/setup` (only while no PIN is set), `/api/identity`, `/api/identity/proof`, `/healthz`, `/healthz/trial` (503 unless the state actor answers within 2 s and the kiosk's screen is connected; the system update's trial checks it), `/licenses` |
 | paired remote | everything else: `/ws/remote` and all its commands, `/api/songs*`, `/api/sets/{id}/versions`, `/api/assets`, `/api/assets/cleanup`, `/api/library/export`, `/api/library/merge`, `/api/import/opensong`, `/api/backup`, `/api/backup/restore`, `/api/update/status`, `/api/system/update`, `/api/devices`, `/api/devices/{id}/revoke` |
 
 There is one level of rights (ADR 0024): a paired remote may do everything. Without a PIN nobody
@@ -30,6 +30,27 @@ device closes its WebSocket and refuses its reconnects with 401, so an idle remo
 `forbidden`: after every lost or refused connection it asks `/api/session` and reloads into the
 pairing form when that says `paired: false` (a network error leaves it waiting to reconnect).
 
+The Android launcher keeps its pairing when the device gets a new IP address (ADR 0028). Each
+server has a random identity, created at its first start and kept in its database like the PIN
+(a device backup does not carry it; restoring keeps the device's own). `GET /api/identity`
+answers `ServerIdentity { server_id }`. `POST /api/identity/proof` with
+`PairingProofRequest { key, nonce }` answers `PairingProof { server_id, address, proof }`, or 404
+when no paired remote has that key (400 for a malformed key or nonce):
+
+- `token_hash` = lowercase hex SHA-256 of the cookie's value (what the server stores);
+- `key` = lowercase hex SHA-256 of `"sursum-pairing-key\n" + token_hash`;
+- `nonce` = 32 to 128 lowercase hex characters, fresh for every question;
+- `address` = the server's address and port that the request reached, IPv4-mapped addresses
+  written as IPv4 (`192.168.1.20:80`, `[fd00::5]:80`);
+- `proof` = lowercase hex HMAC-SHA256 with the key `token_hash` (its 64 ASCII characters) over
+  `"sursum-pairing-proof\n" + server_id + "\n" + address + "\n" + nonce`.
+
+The launcher moves its cookie only if `server_id` is the one it remembered and `address` is the
+address it connected to. Example (pinned in `crates/sursum-server/src/identity.rs`): cookie value
+`tablet-token` → `token_hash` `6fe728b3…8fa9cc9e`, `key` `7c7f2294…74275918`; with `server_id`
+`server-1`, `address` `192.168.1.20:80` and `nonce` `00112233445566778899aabbccddeeff`, `proof` is
+`41b3ff232498bf28c6322eb82cbe888c1e35be462fc404e866c1b18817aeeec8`.
+
 The desktop program (ADR 0020) runs the server in the *local* access mode: it listens on loopback
 only (the server refuses to start otherwise), there is no PIN and no pairing, and every request is
 allowed. The development flag `--open-without-pin` (used by `just dev` and the tests) is the same
@@ -41,7 +62,8 @@ are; before one is chosen every set is listed), the library file and the backup 
 browser tests.
 
 Whole-device backups (ADR 0018): `GET /api/backup` streams a `.sursum-backup` file (ZIP:
-`manifest.json`, `sursum.db` without the PIN and paired devices, `assets/<id>`).
+`manifest.json`, `sursum.db` without the PIN, the paired devices and the server's identity,
+`assets/<id>`).
 `POST /api/backup/restore` (`X-Sursum-Upload`) answers `RestoreOutcome`:
 `restored { summary: BackupSummary { created_unix, build, songs, sets, pictures } }`, after which
 the server restarts and the next start puts the backup in place, or `refused { reason }` with

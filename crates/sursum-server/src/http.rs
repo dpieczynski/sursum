@@ -6,6 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::connect_info::Connected;
 use axum::extract::{ConnectInfo, Path, Query, Request, State, WebSocketUpgrade};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
@@ -13,7 +14,11 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use rust_embed::Embed;
 use serde::Deserialize;
-use sursum_protocol::{DeviceView, PairOutcome, PairRequest, Role, SessionInfo};
+use sursum_protocol::{
+    DeviceView, PairOutcome, PairRequest, PairingProof, PairingProofRequest, Role, ServerId, ServerIdentity,
+    SessionInfo,
+};
+use tokio::net::TcpListener;
 
 use crate::actor::StateHandle;
 use crate::auth::{self, Access, PinCheck};
@@ -36,11 +41,27 @@ struct RemoteAssets;
 const SCREEN_FALLBACK: &str = "<!doctype html><html style=\"background:#000\"><head><meta charset=\"utf-8\">\
 <style>html,body{margin:0;background:#000;cursor:none}</style></head><body></body></html>";
 
+/// Both ends of a request's TCP connection: who asked, and which of this device's addresses
+/// they reached (the pairing proof is bound to it; ADR 0028).
+#[derive(Debug, Clone, Copy)]
+pub struct Connection {
+    pub peer: SocketAddr,
+    /// None only if the system could not say, which no request on a working socket meets.
+    pub local: Option<SocketAddr>,
+}
+
+impl Connected<axum::serve::IncomingStream<'_, TcpListener>> for Connection {
+    fn connect_info(stream: axum::serve::IncomingStream<'_, TcpListener>) -> Self {
+        Connection { peer: *stream.remote_addr(), local: stream.io().local_addr().ok() }
+    }
+}
+
 #[derive(Clone)]
 struct App {
     state: StateHandle,
     data_dir: Arc<std::path::PathBuf>,
     access: Arc<Access>,
+    server_id: ServerId,
     allowed_origins: Arc<Vec<String>>,
     allowed_hosts: Arc<Vec<String>>,
     power: crate::display_power::PowerHandle,
@@ -87,6 +108,7 @@ pub fn router(
     state: StateHandle,
     config: &Config,
     access: Arc<Access>,
+    server_id: ServerId,
     power: crate::display_power::PowerHandle,
     presence: crate::screen_guard::ScreenPresence,
     maintenance: Maintenance,
@@ -97,6 +119,7 @@ pub fn router(
         state,
         data_dir: Arc::new(config.data_dir.clone()),
         access,
+        server_id,
         allowed_origins: Arc::new(config.allowed_origins.clone()),
         allowed_hosts: Arc::new(config.allowed_hosts.clone()),
         allow_public_clients: config.allow_public_clients,
@@ -160,6 +183,8 @@ pub fn router(
         .route("/healthz/trial", get(trial_health))
         .route("/licenses", get(|| async { axum::response::Html(crate::licenses::PAGE.as_str()) }))
         .route("/api/session", get(session))
+        .route("/api/identity", get(identity))
+        .route("/api/identity/proof", axum::routing::post(pairing_proof))
         .route("/api/pair", axum::routing::post(pair))
         .route("/api/setup", axum::routing::post(setup))
         .route("/ws/screen", get(screen_socket))
@@ -196,6 +221,33 @@ async fn session(State(app): State<App>, headers: HeaderMap) -> Response {
     axum::Json(info).into_response()
 }
 
+/// `GET /api/identity`: which sursum server answers here (ADR 0028).
+async fn identity(State(app): State<App>) -> Response {
+    axum::Json(ServerIdentity { server_id: app.server_id.clone() }).into_response()
+}
+
+/// `POST /api/identity/proof`: proves that this server holds the pairing named by `key`, bound
+/// to the launcher's nonce and to the address the request reached (ADR 0028). 404 when no
+/// paired remote has that key: then the tablet must pair again anyway.
+async fn pairing_proof(
+    State(app): State<App>,
+    ConnectInfo(connection): ConnectInfo<Connection>,
+    axum::Json(request): axum::Json<PairingProofRequest>,
+) -> Response {
+    if !crate::identity::valid_key(&request.key) || !crate::identity::valid_nonce(&request.nonce) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let Some(local) = connection.local else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let Some(token_hash) = app.access.token_hash_for_key(&request.key) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let address = crate::identity::canonical_address(local);
+    let proof = crate::identity::proof(&token_hash, &app.server_id, &address, &request.nonce);
+    axum::Json(PairingProof { server_id: app.server_id.clone(), address, proof }).into_response()
+}
+
 /// `GET /api/devices`: paired remotes.
 async fn list_devices(State(app): State<App>, headers: HeaderMap) -> Response {
     let this_device = app.access.device(&headers);
@@ -228,10 +280,10 @@ async fn revoke_device(State(app): State<App>, Path(device_id): Path<String>) ->
 /// `POST /api/pair`: pairs this browser with the PIN (rate-limited per address).
 async fn pair(
     State(app): State<App>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    ConnectInfo(connection): ConnectInfo<Connection>,
     axum::Json(request): axum::Json<PairRequest>,
 ) -> Response {
-    match app.access.check_pin(peer.ip(), &request.pin, std::time::Instant::now()) {
+    match app.access.check_pin(connection.peer.ip(), &request.pin, std::time::Instant::now()) {
         PinCheck::Correct => {}
         PinCheck::Wrong => {
             return (StatusCode::UNAUTHORIZED, axum::Json(PairOutcome::WrongPin)).into_response();
@@ -764,11 +816,11 @@ async fn save_song(
 
 async fn screen_socket(
     State(app): State<App>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    ConnectInfo(connection): ConnectInfo<Connection>,
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    socket(app, &headers, upgrade, Role::Screen, peer.ip().is_loopback())
+    socket(app, &headers, upgrade, Role::Screen, connection.peer.ip().is_loopback())
 }
 
 async fn remote_socket(State(app): State<App>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {
@@ -884,7 +936,7 @@ fn host_allowed(host: &str, allowed: &[String]) -> bool {
 
 async fn local_network_only(
     State(app): State<App>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    ConnectInfo(Connection { peer, .. }): ConnectInfo<Connection>,
     request: Request,
     next: Next,
 ) -> Response {

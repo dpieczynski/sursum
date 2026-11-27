@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- The device serves plain HTTP on the local network (ADR 0007). A domain-config cannot name
+     IP ranges and the device's address is not known in advance, so cleartext is allowed for
+     every host. The app only ever opens the device's own pages; other links go to the
+     system browser. -->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
+</network-security-config>

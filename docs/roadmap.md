@@ -407,6 +407,24 @@ was prepared without hardware on 2026-11-18 and taken out of scope a day later: 
 - [x] ADR 0021: the remote joins the WebKit API contract of ADR 0015
 - Removed with ADR 0023: the minimum iPadOS version, the iPad Simulator workflow (written, never run), the real-device checklist and the guide section
 
+## A1 — Android launcher (spike, 2026-11-25)
+
+A small Android app (`android/`, plain Java, no libraries) that finds the device by DNS-SD and
+opens the remote full screen. Whether it replaces plan §11.2's rejection of "option E" waits for
+the tablet checklist in `android/README.md`, then an ADR.
+
+- [x] Launcher: DNS-SD discovery (`_sursum._tcp`, Avahi file in the image), typed address as a
+  fallback, find screen, immersive, screen kept on, Back between the remote's views, file
+  pickers and downloads; `just android`, `just android-install`, release key and Google Play
+  internal testing (`just android-key`, `just android-release`); privacy policy
+  (`docs/privacy.md`). Checked in an emulator (2026-11-26) and on a Pixel 10 Pro, Android 17
+  (2026-11-27): `.local` names do not resolve in its WebView
+- [x] The pairing survives a new device address (ADR 0028, proposed): server identity kept like
+  the PIN, `GET /api/identity`, `POST /api/identity/proof` bound to the reached address; the
+  launcher moves its cookie only after the proof. Server tests pass; ⚠ not yet checked on a phone
+  (simulator steps with several IP addresses in `android/README.md`)
+- [ ] The tablet checklist on a real parish tablet, then the launcher ADR
+
 ## Later
 
 M6 optional HTTPS (device CA) + PWA + wake lock · an x86_64 mini-PC image (`mkosi` +

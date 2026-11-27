@@ -22,6 +22,10 @@ pub use churches::{Church, church_name};
 pub use sets::{set_body, set_from_body};
 pub use songs::{Base, SongImport, SongSave, song_body, song_from_body};
 
+/// Settings that belong to this device, not to its content, as an SQL list: the PIN hash and the
+/// server's identity. A device backup leaves them out and restoring keeps the device's own.
+const CREDENTIAL_SETTINGS: &str = "'pin', 'server_id'";
+
 /// Schema versions start above this (`user_version` = this + the number of migrations
 /// applied). Databases of earlier builds have 1 to 5 and are refused, never converted: nobody
 /// used them in a church (ADR 0025). Old releases, in turn, refuse these as newer.
@@ -234,9 +238,10 @@ impl Database {
     }
 
     /// Writes a consistent copy of the database in `data_dir` to `target` for a device backup,
-    /// without what lets anyone in (the PIN hash and the paired devices): a backup file may be
-    /// carried around on a stick, and restoring keeps the device's own credentials anyway.
-    /// Works through a plain connection, so it is safe while the server runs.
+    /// without what belongs to this device rather than to its content (the PIN hash, the paired
+    /// devices and the server's identity): a backup file may be carried around on a stick, and
+    /// restoring keeps the device's own credentials anyway. Works through a plain connection, so
+    /// it is safe while the server runs.
     pub(crate) fn copy_without_credentials(data_dir: &Path, target: &Path) -> anyhow::Result<Contents> {
         let live = Connection::open(data_dir.join(DATABASE_FILE))?;
         live.busy_timeout(std::time::Duration::from_secs(5))?;
@@ -244,8 +249,7 @@ impl Database {
         drop(live);
         let copy = Connection::open(target)?;
         copy.execute_batch(&format!(
-            "DELETE FROM devices; DELETE FROM settings WHERE key = '{}'; VACUUM;",
-            crate::auth::PIN_SETTING
+            "DELETE FROM devices; DELETE FROM settings WHERE key IN ({CREDENTIAL_SETTINGS}); VACUUM;"
         ))?;
         contents(&copy)
     }
@@ -277,12 +281,13 @@ impl Database {
         contents(&connection).map_err(|_| Unreadable::Damaged)
     }
 
-    /// Replaces this database's PIN and paired devices with those of the database at `live`
-    /// (if there is one), so restoring a backup never locks out the remote that restored it.
+    /// Replaces this database's PIN, paired devices and server identity with those of the
+    /// database at `live` (if there is one), so restoring a backup never locks out the remote
+    /// that restored it, and the device stays the one its tablets know (ADR 0028).
     pub(crate) fn adopt_credentials(&mut self, live: &Path) -> anyhow::Result<()> {
         let transaction = self.connection.transaction()?;
         transaction.execute("DELETE FROM devices", [])?;
-        transaction.execute("DELETE FROM settings WHERE key = ?1", [crate::auth::PIN_SETTING])?;
+        transaction.execute(&format!("DELETE FROM settings WHERE key IN ({CREDENTIAL_SETTINGS})"), [])?;
         transaction.commit()?;
         if !live.exists() {
             return Ok(());
@@ -292,9 +297,9 @@ impl Database {
             "BEGIN;
              INSERT INTO main.devices (id, name, token_hash, created_at, revoked_at)
                  SELECT id, name, token_hash, created_at, revoked_at FROM live.devices;
-             INSERT INTO main.settings (key, json) SELECT key, json FROM live.settings WHERE key = '{}';
-             COMMIT;",
-            crate::auth::PIN_SETTING
+             INSERT INTO main.settings (key, json)
+                 SELECT key, json FROM live.settings WHERE key IN ({CREDENTIAL_SETTINGS});
+             COMMIT;"
         ));
         if copied.is_err() {
             let _ = self.connection.execute_batch("ROLLBACK");
@@ -700,6 +705,13 @@ mod tests {
         assert!(!dir.path().join("corrupt").exists(), "the live database stays where it is");
         assert_eq!(Database::schema_version(dir.path()).unwrap(), 999);
         assert!(Database::backup_file(dir.path(), "before-x").unwrap().is_some());
+    }
+
+    #[test]
+    fn credential_settings_name_the_pin_and_the_server_identity() {
+        for key in [crate::auth::PIN_SETTING, crate::identity::SERVER_ID_SETTING] {
+            assert!(CREDENTIAL_SETTINGS.contains(&format!("'{key}'")), "{key}");
+        }
     }
 
     #[test]

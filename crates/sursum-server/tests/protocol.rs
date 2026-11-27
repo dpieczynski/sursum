@@ -632,6 +632,132 @@ async fn a_new_device_is_closed_until_the_first_remote_sets_the_pin() {
     server.stop().await.unwrap();
 }
 
+/// The Android launcher's move to a new address (ADR 0028): the identity is public and stays the
+/// same across restarts; the proof is only given for a pairing the server holds, bound to the
+/// launcher's nonce and to the address the request reached.
+#[tokio::test]
+async fn the_server_proves_it_holds_a_pairing_for_the_address_it_was_reached_at() {
+    use sursum_server::identity;
+    let dir = tempfile::tempdir().unwrap();
+    let server = start_with_pin(dir.path(), "246813").await;
+    let identity: sursum_protocol::ServerIdentity =
+        serde_json::from_str(&http_get(&server, "/api/identity").await).unwrap();
+    let cookie = session_cookie(&pair_with(&server, "246813").await);
+    let token = cookie.strip_prefix("sursum_device=").unwrap();
+    let token_hash = sursum_server::auth::token_hash(token);
+    let nonce = "0123456789abcdef0123456789abcdef";
+    let ask = |key: String, nonce: &str| {
+        serde_json::to_string(&sursum_protocol::PairingProofRequest { key, nonce: nonce.into() }).unwrap()
+    };
+
+    let answer =
+        http_post(&server, "/api/identity/proof", &ask(identity::pairing_key(&token_hash), nonce)).await;
+    let proof: sursum_protocol::PairingProof = serde_json::from_str(&answer).unwrap();
+    assert_eq!(proof.server_id, identity.server_id);
+    assert_eq!(proof.address, server.addr.to_string(), "the address the request reached");
+    assert_eq!(proof.proof, identity::proof(&token_hash, &identity.server_id, &proof.address, nonce));
+
+    let stranger = sursum_server::auth::token_hash("not paired here");
+    let (unknown, _) =
+        http_post_with_status(&server, "/api/identity/proof", &ask(identity::pairing_key(&stranger), nonce))
+            .await;
+    assert_eq!(unknown, 404, "no proof for a pairing this server does not hold");
+    let (bad, _) = http_post_with_status(
+        &server,
+        "/api/identity/proof",
+        &ask(identity::pairing_key(&token_hash), "abc"),
+    )
+    .await;
+    assert_eq!(bad, 400, "a short nonce is refused");
+    server.stop().await.unwrap();
+
+    let server = start_with_pin(dir.path(), "246813").await;
+    let again: sursum_protocol::ServerIdentity =
+        serde_json::from_str(&http_get(&server, "/api/identity").await).unwrap();
+    assert_eq!(again, identity, "the identity survives a restart");
+    server.stop().await.unwrap();
+}
+
+/// On a server listening on every interface the proof names the address the request actually
+/// reached, never `0.0.0.0`; a malformed key is refused and a revoked pairing has no proof.
+#[tokio::test]
+async fn the_proof_names_the_reached_address_and_ends_with_the_pairing() {
+    use sursum_server::identity;
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let database = sursum_server::db::Database::open(dir.path()).unwrap();
+        let pin = sursum_server::auth::PinHash::new("246813").unwrap();
+        database.set_setting(sursum_server::auth::PIN_SETTING, &pin).unwrap();
+    }
+    let mut config = Config::with_data_dir(dir.path());
+    config.listen = "0.0.0.0:0".parse().unwrap();
+    let server = sursum_server::start(config, &FixedPlatform(Some("boot-1".to_owned()))).await.unwrap();
+    let reached = std::net::SocketAddr::from(([127, 0, 0, 1], server.addr.port()));
+    let send = |request: String| async move {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = TcpStream::connect(reached).await.unwrap();
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await.unwrap();
+        let status: u16 = response.split(' ').nth(1).and_then(|code| code.parse().ok()).unwrap_or(0);
+        (status, response)
+    };
+    let post = |path: &str, cookie: &str, body: &str| {
+        format!(
+            "POST {path} HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    };
+    let pair_body = serde_json::to_string(&sursum_protocol::PairRequest {
+        pin: "246813".into(),
+        name: "Tablet".into(),
+        church: String::new(),
+    })
+    .unwrap();
+    let (_, paired) = send(post("/api/pair", "", &pair_body)).await;
+    let cookie = session_cookie(&paired);
+    let token_hash = sursum_server::auth::token_hash(cookie.strip_prefix("sursum_device=").unwrap());
+    let nonce = "0123456789abcdef0123456789abcdef";
+    let ask = |key: String| {
+        serde_json::to_string(&sursum_protocol::PairingProofRequest { key, nonce: nonce.into() }).unwrap()
+    };
+
+    let (status, response) =
+        send(post("/api/identity/proof", "", &ask(identity::pairing_key(&token_hash)))).await;
+    assert_eq!(status, 200, "{response}");
+    let proof: sursum_protocol::PairingProof =
+        serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(proof.address, reached.to_string(), "the reached address, not 0.0.0.0");
+
+    let (status, _) = send(post("/api/identity/proof", "", &ask("AB".repeat(32)))).await;
+    assert_eq!(status, 400, "a key must be lowercase hex");
+
+    let (_, listed) = send(format!(
+        "GET /api/devices HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\nConnection: close\r\n\r\n"
+    ))
+    .await;
+    let devices: Vec<sursum_protocol::DeviceView> =
+        serde_json::from_str(listed.split_once("\r\n\r\n").unwrap().1).unwrap();
+    let (status, _) = send(post(&format!("/api/devices/{}/revoke", devices[0].device_id), &cookie, "")).await;
+    assert_eq!(status, 204);
+    let (status, _) = send(post("/api/identity/proof", "", &ask(identity::pairing_key(&token_hash)))).await;
+    assert_eq!(status, 404, "a revoked pairing cannot be moved");
+    server.stop().await.unwrap();
+}
+
+async fn http_post_with_status(server: &RunningServer, path: &str, body: &str) -> (u16, String) {
+    let response = http_raw(
+        server,
+        &format!(
+            "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    )
+    .await;
+    let status = response.split(' ').nth(1).and_then(|code| code.parse().ok()).unwrap_or(0);
+    (status, response.split_once("\r\n\r\n").map(|(_, body)| body.to_owned()).unwrap_or_default())
+}
+
 #[tokio::test]
 async fn with_a_pin_only_paired_remotes_may_control_and_the_screen_stays_open() {
     let dir = tempfile::tempdir().unwrap();

@@ -4,10 +4,11 @@
 # X-Env-Layer-Category: app
 # X-Env-Layer-Desc: The sursum server and the device around it (ADR 0013, ADR 0022): the server
 #  in the read-only system, its user and unit, /var/lib/sursum shared by both system slots, the
-#  persistent partition grown to fill the card, mDNS
-#  (sursum.local), a local-network-only firewall, the hardware watchdog, a small persistent
-#  journal, a silent black boot and Ethernet only. Hooks run in the image source directory
-#  (image/), so ../deploy is the repository's deploy folder: one copy of every unit.
+#  persistent partition grown to fill the card, mDNS (sursum.local and the _sursum._tcp
+#  service the Android launcher looks for), a local-network-only firewall, the hardware
+#  watchdog, a small persistent journal, a silent black boot and Ethernet only. Hooks run in
+#  the image source directory (image/), so ../deploy is the repository's deploy folder: one
+#  copy of every unit.
 #
 # X-Env-VarPrefix: sursum
 #

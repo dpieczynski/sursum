@@ -11,5 +11,6 @@ while IFS= read -r file; do
   fi
 done < <(git ls-files --cached --others --exclude-standard \
   '*.rs' '*.css' '*.html' '*.sh' '*.ps1' '*.sql' '*.toml' 'justfile' '*Containerfile' '*.yml' \
+  '*.java' '*.kts' '*.properties' 'android/*.xml' '*.service' \
   | grep -v -E '^(Cargo\.lock|fixtures/)')
 exit "$missing"

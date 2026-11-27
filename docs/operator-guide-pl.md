@@ -223,7 +223,7 @@ spróbuj za chwilę”). To normalne.
 | Żółty pasek „Ekran nie jest połączony z sursum” | Ekran w kościele nie odpowiada; urządzenie spróbuje go uruchomić ponownie. Jeśli to trwa, sprawdź zasilanie urządzenia przy projektorze. |
 | Żółty pasek „Ekran jest uśpiony” | Dotknij **Włącz** na pasku. |
 | Ekran czarny, choć powinien być tekst | Napis stanu mówi „Ekran wygaszony” albo „Na ekranie: logo”: dotknij **Pokaż tekst**. „Przerwa – pusty ekran” znaczy, że pieśń się skończyła: **Dalej ▶**. Bez wgranego logo ekran zamiast logo zostaje wygaszony („Ekran wygaszony”). |
-| Adres `http://sursum.local/` się nie otwiera | Wpisz adres IP urządzenia (np. `http://192.168.1.50/`; najlepiej ustawić go na stałe w routerze parafii). Nazwę `sursum.local` blokują często aplikacje VPN (np. Tailscale) – wyłącz je na tablecie – oraz Firefox zainstalowany jako Flatpak na Linuksie; Chrome i Chromium radzą sobie z nią. |
+| Adres `http://sursum.local/` się nie otwiera | Wpisz adres IP urządzenia (np. `http://192.168.1.50/`; najlepiej ustawić go na stałe w routerze parafii, zob. „Stały adres w routerze” w Ustawieniach). Nazwę `sursum.local` blokują często aplikacje VPN (np. Tailscale) – wyłącz je na tablecie – oraz Firefox zainstalowany jako Flatpak na Linuksie; Chrome i Chromium radzą sobie z nią. |
 | Pilot prosi o PIN | To urządzenie odłączono albo wyczyszczono przeglądarkę. Wpisz PIN parafii. |
 | Tablet gaśnie w trakcie mszy | W ustawieniach Androida wydłuż czas wygaszania ekranu. |
 | Nic nie pomaga | Plan B: dotychczasowy komputer z OpenSong. Zapisz, co się stało, i zgłoś. |
@@ -306,3 +306,9 @@ wymianie karty wpisz tę samą nazwę, a urządzenie będzie tym samym kościoł
 można poprawić w **Ustawienia → Kościół**. Pilot, z którego to zrobiono, zostaje od razu
 sparowany, więc można dalej konfigurować (import, kalibracja, logo). Instalator może też ustawić
 PIN poleceniem `sursum-server set-pin <PIN>`; nazwę kościoła wpisuje się wtedy w Ustawieniach.
+
+**Stały adres w routerze:** przy instalacji ustaw w routerze parafii (w każdym kościele) stały
+adres IP dla urządzenia sursum („rezerwacja DHCP” dla jego adresu MAC). Aplikacja sursum na
+Androida i tak znajdzie urządzenie pod nowym adresem i przeniesie parowanie bez pytania o PIN, ale
+stały adres to dodatkowe zabezpieczenie: zakładki w przeglądarkach i wpisany ręcznie adres IP
+działają wtedy zawsze, a tablety bez aplikacji nie muszą ponownie podawać PIN-u.

@@ -22,14 +22,17 @@ pub use editor::{
     MarkupWarningCode, MergeReport, SaveOutcome, SetVersionItem, SetVersionView, SetVersions, SongDraft,
     SongVersionView, SongVersions,
 };
-pub use ids::{AssetId, ChurchId, ClientId, DeckId, ItemId, Rev, SetId, SlideKey, SongId};
+pub use ids::{AssetId, ChurchId, ClientId, DeckId, ItemId, Rev, ServerId, SetId, SlideKey, SongId};
 pub use layout::{
     ExclusionZone, Insets, MaskMode, Rect, SCENE_HEIGHT, SCENE_WIDTH, ScreenLayout, ScreenProfile,
 };
 pub use message::{
     ClientMsg, CmdOutcome, Command, ErrorCode, PROTOCOL_VERSION, PowerAction, Role, ServerMsg,
 };
-pub use pairing::{DeviceView, Installation, PairOutcome, PairRequest, SessionInfo};
+pub use pairing::{
+    DeviceView, Installation, PairOutcome, PairRequest, PairingProof, PairingProofRequest, ServerIdentity,
+    SessionInfo,
+};
 pub use pictures::{PictureCleanup, PictureCleanupRequest};
 pub use slide::{Deck, SectionKind, SectionName, Slide, SlideBody, SlidePart};
 pub use state::{

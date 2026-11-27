@@ -17,6 +17,7 @@ pub mod display_power;
 pub mod durable;
 pub mod editor;
 pub mod http;
+pub mod identity;
 pub mod import;
 pub mod library;
 pub mod licenses;
@@ -101,6 +102,7 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         }
     }
     let access = std::sync::Arc::new(auth::Access::new(pin, database.device_token_hashes()?, config.access));
+    let server_id = identity::load_or_create(&database).context("loading the server's identity")?;
     let state = actor::spawn(&config, database, platform)?;
     let power = display_power::spawn(&config.display_power, state.clone());
     let state_for_watchdog = state.clone();
@@ -118,13 +120,13 @@ pub async fn start(config: Config, platform: &dyn Platform) -> anyhow::Result<Ru
         ),
     };
     let restart = maintenance.restart.clone();
-    let router = http::router(state, &config, access, power, presence, maintenance);
+    let router = http::router(state, &config, access, server_id, power, presence, maintenance);
     let listener =
         TcpListener::bind(config.listen).await.with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;
     let (shutdown, shutdown_signal) = oneshot::channel::<()>();
     let task = tokio::spawn(async move {
-        axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
+        axum::serve(listener, router.into_make_service_with_connect_info::<http::Connection>())
             .with_graceful_shutdown(async move {
                 let _ = shutdown_signal.await;
             })

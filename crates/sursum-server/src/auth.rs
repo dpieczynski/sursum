@@ -234,6 +234,13 @@ impl Access {
     pub fn add_token(&self, hash: String) {
         self.tokens.write().expect("not poisoned").insert(hash);
     }
+
+    /// The token hash of the paired device whose pairing key ([`crate::identity::pairing_key`])
+    /// is `key`, so the server can prove to the Android launcher that it holds that pairing.
+    pub fn token_hash_for_key(&self, key: &str) -> Option<String> {
+        let tokens = self.tokens.read().expect("not poisoned");
+        tokens.iter().find(|hash| crate::identity::pairing_key(hash) == key).cloned()
+    }
 }
 
 /// Whether an attempt compared a PIN, for the global failure count.
@@ -370,6 +377,17 @@ mod tests {
         assert_eq!(access.check_pin(address, "1234", much_later), PinCheck::Correct);
         // Another address is not affected.
         assert_eq!(access.check_pin("192.168.1.21".parse().unwrap(), "1234", now), PinCheck::Correct);
+    }
+
+    #[test]
+    fn a_pairing_is_found_by_its_key_until_it_is_revoked() {
+        let (_, hash) = new_token().unwrap();
+        let access = Access::new(Some(PinHash::new("1234").unwrap()), vec![hash.clone()], AccessMode::Pin);
+        let key = crate::identity::pairing_key(&hash);
+        assert_eq!(access.token_hash_for_key(&key).as_deref(), Some(hash.as_str()));
+        assert_eq!(access.token_hash_for_key(&hash), None, "the hash itself is not a key");
+        access.revoke(&hash);
+        assert_eq!(access.token_hash_for_key(&key), None);
     }
 
     #[test]
